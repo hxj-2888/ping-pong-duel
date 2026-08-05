@@ -330,7 +330,7 @@
         ? (PPD.app.snapB && PPD.app.snapB.sb === 1)
         : (PPD.app.engine && PPD.app.engine.players[serveSide].serveAimBlocked);
       if (blocked) {
-        PPD.showPoint('该位置无法发球，请移动鼠标/手指调整瞄准');
+        PPD.showPoint(PPD.isTouch ? '该位置无法发球，请移动鼠标/手指调整瞄准' : '该位置无法发球，请移动鼠标调整瞄准');
         return;
       }
       if (isTouchEv) {

@@ -100,7 +100,7 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'WASD 移动（W/S 前后）· <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下可接贴地球）· ↑/↓ 推球/扣球 · 发球：<b>移动鼠标瞄准落点后单击发球</b> · 对打：<b>左键推球 / 右键扣球</b>';
+      'WASD 移动（W/S 前后）· <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下可接贴地球）· ↑/↓ 推球/扣球 · 发球：<b>移动鼠标瞄准落点后单击</b>（右键扣球式发球）· 对打：<b>左键推球 / 右键扣球</b> · Esc 暂停';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML =
         '左下摇杆全方位移动 · 右下<b>蹲</b>按钮（可接贴地球）· 发球：<b>点一下屏幕开始瞄准，移动手指调整轨迹，再点一下发球</b> · 对打：单击推球 / 双击扣球';
@@ -122,7 +122,7 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'P1（红）：A/D 左右 · W 向前 · S 向后 · <b>Shift 跑步 / Ctrl 蹲下</b>　|　P2（蓝）：←/→ 左右 · ↑ 推球 · ↓ 扣球　|　发球：移动鼠标瞄准落点后单击发球 · 对打：<b>左键推球 / 右键扣球</b>';
+      'P1（红）：A/D 左右 · W 向前 · S 向后 · <b>Shift 跑步 / Ctrl 蹲下</b>　|　P2（蓝）：←/→ 左右 · ↑ 推球 · ↓ 扣球　|　发球：移动鼠标瞄准落点后单击（左键推球 / 右键扣球）· 对打：<b>左键推球 / 右键扣球</b> · Esc 暂停';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML = '左下摇杆全方位移动 · 右下<b>蹲</b>按钮 · 发球：点一下开始瞄准，移动手指调整轨迹，再点一下发球（左半屏 P1，右半屏 P2）· 对打：单击推球 / 双击扣球';
     }
@@ -156,7 +156,7 @@
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
     PPD.ui.hintBar.innerHTML =
-      `A/D 或 ←/→ 左右移动 · W/S 前后移动 · <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下可接贴地球）· 发球：<b>移动鼠标瞄准落点后单击发球</b> · 对打：<b>左键推球 / 右键扣球</b> · 电脑难度：${L.name}`;
+      `A/D 或 ←/→ 左右移动 · W/S 前后移动 · <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下可接贴地球）· 发球：<b>移动鼠标瞄准落点后单击左键</b>（右键扣球式发球）· 对打：<b>左键推球 / 右键扣球</b> · Esc 暂停 · 电脑难度：${L.name}`;
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML =
         `左下摇杆全方位移动 · 右下<b>蹲</b>按钮 · 发球：<b>点一下开始瞄准，移动手指调整轨迹，再点一下发球</b> · 对打：单击推球 / 双击扣球 · 电脑难度：${L.name}`;

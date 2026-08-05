@@ -83,7 +83,8 @@ const ELEMENT_IDS = [
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
 ];
 
-function boot() {
+function boot(opts) {
+  opts = opts || {};
   const elements = new Map();
   for (const id of ELEMENT_IDS) elements.set(id, makeElement(id));
   elements.get('nameInput').value = '测试员';
@@ -119,14 +120,15 @@ function boot() {
   const sandbox = {
     console, setTimeout, clearTimeout, setInterval, clearInterval,
     performance: perf,
-    location: { protocol: 'http:', host: '127.0.0.1:8781' },
+    location: { protocol: 'http:', host: '127.0.0.1:8781', search: opts.search || '' },
     document: { getElementById: (id) => elements.get(id) },
-    navigator: { userAgent: 'smoke' },
+    navigator: { userAgent: 'smoke', maxTouchPoints: opts.touch ? 5 : 0 },
+    matchMedia: opts.touch ? () => ({ matches: true }) : undefined,
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
     cancelAnimationFrame: () => {},
     WebSocket: FakeWebSocket,
-    innerWidth: 1280,
-    innerHeight: 720,
+    innerWidth: opts.width || 1280,
+    innerHeight: opts.height || 720,
     addEventListener(type, fn) { (winHandlers[type] = winHandlers[type] || []).push(fn); },
     Math, JSON, Object, Array, Number, String, Boolean, Date, RegExp, Error, Promise,
     isFinite, isNaN, parseInt, parseFloat,
@@ -572,9 +574,30 @@ async function main() {
     t.runFrames(300);
     check('AI 模式渲染 300 帧无异常', true);
     check('AI 模式难度显示', t.elements.get('netInfo').textContent.indexOf('人机对战') === 0);
+    // 桌面操作说明：WASD/A-D 键位、左键推球/右键扣球，且不含手机端"摇杆/按钮"
+    check('桌面操作说明：键位齐全且无摇杆/蹲按钮',
+      t.elements.get('hintBar').innerHTML.indexOf('左键推球') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('右键扣球') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('Ctrl 蹲下') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('摇杆') === -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('按钮') === -1);
     t.key('KeyD'); t.runFrames(30);
     check('AI 模式：P1 按键移动', t.app.engine.players[0].x > 0.2);
     t.key('KeyD', false);
+
+    // 设备判定矩阵：触屏+大窗口=桌面；手机尺寸+触屏=手机端；?touch=1 强制手机；?desktop=1 强制桌面
+    {
+      const enterAI = (tt) => { tt.click('btnAI'); return tt.elements.get('hintBar').innerHTML; };
+      const hA = enterAI(await boot({ touch: true })); // 触屏但 1280px 宽窗口 → 桌面
+      check('触屏+大窗口：按桌面判定（键位齐全、无摇杆/蹲按钮）',
+        hA.indexOf('摇杆') === -1 && hA.indexOf('按钮') === -1 && hA.indexOf('左键推球') !== -1);
+      const hB = enterAI(await boot({ touch: true, search: '?touch=1' })); // 强制手机端
+      check('?touch=1 强制手机端：显示摇杆/蹲按钮', hB.indexOf('摇杆') !== -1 && hB.indexOf('蹲') !== -1);
+      const hC = enterAI(await boot({ touch: true, search: '?desktop=1' })); // 触屏+强制桌面
+      check('?desktop=1 强制桌面端：无摇杆', hC.indexOf('摇杆') === -1 && hC.indexOf('左键推球') !== -1);
+      const hD = enterAI(await boot({ width: 390, height: 844, touch: true })); // 手机尺寸+触屏 → 手机端
+      check('手机尺寸+触屏：显示手机端说明', hD.indexOf('摇杆') !== -1);
+    }
 
     // 右上角工具：难度切换 / 暂停 / 继续
     check('AI 模式：难度按钮显示', t.elements.get('btnDiff').style.display !== 'none');

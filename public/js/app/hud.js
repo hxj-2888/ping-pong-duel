@@ -214,12 +214,14 @@
       if (PPD.app.lastPhase === 3) PPD.hideGameOver(); // 比赛结束 8 秒自动重开时关闭结算屏
       PPD.app.lastPhase = phId;
       const text = phId === 0 ? '发球' : phId === 1 ? '对打' : phId === 2 ? '得分' : '比赛结束';
+      // 发球瞄准提示按设备区分：桌面只提鼠标，触屏才提"鼠标/手指"
+      const aimHint = PPD.isTouch ? '移动鼠标/手指瞄准落点' : '移动鼠标瞄准落点';
       if (phId === 0 && PPD.app.mode === 'online') {
-        showPhase(server === PPD.app.side ? '你的发球 · 移动鼠标/手指瞄准落点' : '对方发球');
+        showPhase(server === PPD.app.side ? `你的发球 · ${aimHint}` : '对方发球');
       } else if (phId === 0 && PPD.app.mode === 'ai') {
-        showPhase(server === 0 ? '你的发球 · 移动鼠标/手指瞄准落点' : '电脑发球');
+        showPhase(server === 0 ? `你的发球 · ${aimHint}` : '电脑发球');
       } else if (phId === 0 && PPD.app.mode === 'local') {
-        showPhase(`${server === 0 ? 'P1' : 'P2'} 发球 · 移动鼠标/手指瞄准落点`);
+        showPhase(`${server === 0 ? 'P1' : 'P2'} 发球 · ${aimHint}`);
       } else if (phId === 0 && PPD.app.mode === 'aivai') {
         showPhase(`${server === 0 ? '红方' : '蓝方'} 发球`);
       } else if (phId !== 2) {

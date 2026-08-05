@@ -101,10 +101,16 @@
     }
     return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   }
-  // 触屏设备检测（触控按钮只在这些设备上显示）
-  const isTouch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
-    'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0 ||
-    /[?&]touch=1/.test(location.search); // 桌面调试：?touch=1 强制显示
+  // 触屏设备检测（触控按钮只在这些设备上显示）：
+  // 必须同时满足"粗指针/触屏事件" 且 窗口宽度为手机尺寸（≤1024px，仅按宽度——
+  // 现代手机竖屏/横屏都窄，触摸屏笔记本/桌面浏览器（如 IAB 预览）窗口宽则判定为桌面）；
+  // ?touch=1 强制手机端（桌面调试）、?desktop=1 强制桌面端
+  const q = (s) => !!(window.matchMedia && window.matchMedia(s).matches);
+  const coarse = q('(pointer: coarse)') || 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+  const phoneSize = window.innerWidth <= 1024;
+  const isTouch = /[?&]touch=1/.test(location.search)
+    ? !/[?&]desktop=1/.test(location.search)
+    : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
