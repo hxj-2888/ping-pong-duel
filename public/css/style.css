@@ -263,8 +263,9 @@ canvas#game { touch-action: none; }
   min-width: 260px;
 }
 .pause-card h2 { color: #ffd166; letter-spacing: 3px; }
-/* AI 观战：主页红/蓝双难度行 */
-.aivai-row { justify-content: center; gap: 14px; }
+/* AI 观战：主页红/蓝双难度行（缩进防出框：允许换行 + 选择框限宽，窄窗口也不溢出卡片） */
+.aivai-row { justify-content: center; gap: 14px; flex-wrap: wrap; padding: 0 10px; }
+.aivai-row .ai-label select { max-width: 100%; min-width: 0; box-sizing: border-box; }
 /* AI 观战：暂停面板内双方难度调整 */
 .pause-aivai {
   display: flex; flex-direction: row; gap: 14px; flex-wrap: wrap;

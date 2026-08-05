@@ -36,25 +36,47 @@
   let musicLevel = 0;       // 紧张强度：0=常规 1=胶着 2=赛点/终局
 
   // raw 游戏音乐（audio/music.mp4，可能含视频轨的视频容器）：
-  // 用 <audio> 元素播放其音频轨，作为真实背景音乐，随音乐按钮开始/暂停；
-  // 元素缺失（如测试环境/页面未放标签）时回退到下方合成音乐
-  let bgmEl = null;
+  // 优先 WebAudio 解码 → AudioBufferSourceNode.loop=true（**零间隙无缝循环**）；
+  // 解码失败（如带视频轨无法 decodeAudioData）回退 <audio> 元素 loop 播放；
+  // 都没有 → 合成音乐兜底
+  let bgmBuf = null;      // WebAudio 解码缓冲
+  let bgmLoading = false;
+  let bgmEl = null;       // <audio> 元素兜底
+  let bgmSource = null;   // 当前 AudioBufferSourceNode
 
-  // 查找并挂接 raw 音乐元素（每次 ensure 调用一次；找不到就继续用合成音乐）
+  // 挂接 raw 音乐：元素兜底 + （ctx 就绪后）WebAudio 解码（幂等，可反复调用）
   function loadBGM() {
-    if (bgmEl || typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
-    try {
-      const el = document.getElementById('bgmAudio');
-      if (!el) return;
-      el.src = 'audio/music.mp4';
-      el.loop = true;
-      el.volume = 0.3; // 与合成音乐 musicGain 音量一致
-      el.preload = 'auto';
-      bgmEl = el;
-    } catch (e) { bgmEl = null; }
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    // <audio> 元素兜底（无需 AudioContext，进游戏即可播放）
+    if (!bgmEl) {
+      try {
+        const el = document.getElementById('bgmAudio');
+        if (!el) return;
+        el.src = 'audio/music.mp4';
+        el.loop = true;
+        el.volume = 0.3; // 与合成音乐 musicGain 音量一致
+        el.preload = 'auto';
+        bgmEl = el;
+      } catch (e) { bgmEl = null; }
+    }
+    // WebAudio 解码（需要 ctx；成功后 loop=true 零间隙循环，解码完成自动无缝切换）
+    if (ctx && !bgmBuf && !bgmLoading && typeof fetch === 'function') {
+      bgmLoading = true;
+      fetch('audio/music.mp4')
+        .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+        .then((ab) => ctx.decodeAudioData(ab))
+        .then((buf) => {
+          bgmBuf = buf;
+          // 解码完成：停掉元素兜底再启零间隙循环，避免双音
+          if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
+          startMusic();
+        })
+        .catch(() => { /* 解码失败：保留 <audio> 兜底 */ })
+        .finally(() => { bgmLoading = false; });
+    }
   }
 
-  function musicMode() { return bgmEl ? 'raw' : 'synth'; }
+  function musicMode() { return (bgmBuf || bgmEl) ? 'raw' : 'synth'; }
 
   // 体育赛事风格 16 步循环（2 小节，约 115 BPM）：
   // 鼓组：底鼓 1/3 拍，军鼓 2/4 拍，踩镲 八分音符（强度越高越密）
@@ -71,7 +93,7 @@
   }
 
   function ensure() {
-    loadBGM(); // raw 游戏音乐走 <audio>，不依赖 AudioContext；幂等
+    loadBGM(); // raw 音乐挂接（元素兜底 + ctx 就绪时触发 WebAudio 解码）
     if (ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -86,7 +108,8 @@
     noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    loadApplause(); // 预加载真实掌声 WAV
+    loadBGM();       // ctx 就绪后再触发 WebAudio 解码（零间隙无缝循环路径）
+    loadApplause();  // 预加载真实掌声 WAV
     if (musicOn) startMusic();
   }
 
@@ -169,6 +192,17 @@
   }
 
   function startMusic() {
+    // 优先 WebAudio 解码缓冲：AudioBufferSourceNode.loop=true → 零间隙无缝循环
+    if (bgmBuf && ctx) {
+      if (bgmSource) return;
+      const src = ctx.createBufferSource();
+      src.buffer = bgmBuf;
+      src.loop = true; // 无缝循环（结束时零间隙回到开头）
+      src.connect(musicGain);
+      src.start();
+      bgmSource = src;
+      return;
+    }
     if (bgmEl) {
       if (!bgmEl.paused) return;
       try { bgmEl.play(); } catch (e) { /* ignore */ }
@@ -179,6 +213,12 @@
   }
 
   function stopMusic() {
+    if (bgmSource) {
+      try { bgmSource.stop(); } catch (e) { /* ignore */ }
+      bgmSource.disconnect();
+      bgmSource = null;
+      return;
+    }
     if (bgmEl) {
       try { bgmEl.pause(); } catch (e) { /* ignore */ }
       return;
