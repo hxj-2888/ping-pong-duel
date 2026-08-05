@@ -12,3 +12,6 @@ Thumbs.db
 
 # æœ¬åœ°é…ç½®
 .env
+
+# wrangler ±¾µØ»º´æ
+.wrangler/
