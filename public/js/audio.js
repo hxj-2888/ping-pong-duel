@@ -230,7 +230,7 @@
   }
 
   function musicTick() {
-    if (!ctx || !musicOn) return;
+    if (!ctx || !musicOn || ctx.state === 'suspended') return; // 挂起时别堆音符（自动播放拦截期）
     const now = ctx.currentTime + 0.05;
     const st = musicStep % 16;
     // 鼓组
@@ -261,7 +261,10 @@
     }
     if (bgmEl) {
       if (!bgmEl.paused) return;
-      try { bgmEl.play(); } catch (e) { /* ignore */ }
+      try {
+        const p = bgmEl.play();
+        if (p && p.catch) p.catch(() => { /* 自动播放策略拦截：等首次交互后由 autoplayMusic 重试 */ });
+      } catch (e) { /* ignore */ }
       return;
     }
     if (!ctx || musicTimer) return;
@@ -468,8 +471,36 @@
     }
   }
 
+  // 页面打开即播：浏览器「自动播放策略」会拦截带声音的自动播放。
+  // 先直接尝试启动；若被拦截（AudioContext 处于 suspended / <audio> 未能播放），
+  // 挂在第一次用户交互（任意点击/按键/触摸）上立即恢复出声，无需再点 🎵。
+  function autoplayMusic() {
+    ensure(); // 建 AudioContext + 挂接 raw 音乐（musicOn 时内部已尝试启动）
+    const blocked = (ctx && ctx.state === 'suspended') || (bgmEl && bgmEl.paused && musicOn);
+    if (!blocked) return; // 已出声（localhost/放行环境）：无需挂接
+    const resume = () => {
+      if (ctx && ctx.state === 'suspended' && ctx.resume) {
+        try { ctx.resume(); } catch (e) { /* ignore */ }
+      }
+      if (!musicOn) return;
+      if (bgmBuf && !bgmSource) startMusic();                        // WebAudio：resume 后补启
+      else if (bgmEl && bgmEl.paused) { try { bgmEl.play(); } catch (e) { /* ignore */ } }
+      else if (!bgmBuf && !bgmEl && !musicTimer) startMusic();       // 合成兜底：恢复后启节拍器
+    };
+    const firstGesture = () => {
+      resume();
+      for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
+        try { window.removeEventListener(t, firstGesture); } catch (e) { /* ignore */ }
+      }
+    };
+    for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
+      try { window.addEventListener(t, firstGesture, { once: true, passive: true }); } catch (e) { /* ignore */ }
+    }
+  }
+
   return {
     ensure,
+    autoplayMusic,
     setMuted(m) {
       muted = m;
       if (master) master.gain.value = m ? 0 : 0.5;

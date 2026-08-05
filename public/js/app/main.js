@@ -97,6 +97,8 @@
   // ---------- 启动 ----------
   // 各难度下拉的地狱选项：按解锁状态全量同步（人机 + AI 观战主页/暂停面板）
   PPD.syncHellOptions();
+  // 背景音乐：页面打开即播（浏览器自动播放策略拦截时，首次交互立即恢复出声）
+  PPD.GameAudio.autoplayMusic();
   // 通关记录：进入主菜单时拉取后端并渲染（失败静默）
   if (PPD.refreshRecords) PPD.refreshRecords();
   // 调试：?auto=ai 自动进入人机对战（便于截图/自动化验证）

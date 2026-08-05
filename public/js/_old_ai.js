@@ -18,14 +18,13 @@
 
   const LEVELS = [
     // catchProb：该难度能接到的来球比例（其余为"漏接"——不挥拍让球飞过），
-    // 是档位间最直观的差距来源（中等明显漏接、困难几乎不漏、地狱留 5% 保持可战胜）。
+    // 是档位间最直观的差距来源（中等明显漏接、困难几乎不漏、地狱故意漏 12% 保持可战胜）。
     // lowShotProb：刻意打低球（低平快球）的概率——困难 1/5、地狱 1/2，逼玩家蹲下或失误。
     { name: '简单', react: 0.30, err: 0.26, agility: 0.45, smashY: 1.45, smashProb: 0, catchProb: 0.55, lowShotProb: 0 },
     { name: '中等', react: 0.18, err: 0.16, agility: 0.75, smashY: 1.22, smashProb: 0.55, catchProb: 0.78, lowShotProb: 0 },
     { name: '困难', react: 0.05, err: 0.04, agility: 1.00, smashY: 1.10, smashProb: 1, catchProb: 0.90, lowShotProb: 0.20 },
-    // 地狱：反应/站位/扣杀全面拉满 + 快球预判（control 内 level 3 生效），
-    // 接球率 95%（5% 刻意漏接，保留可战胜）；一半回球是低平快球
-    { name: '地狱', react: 0.01, err: 0.01, agility: 1.00, smashY: 0.95, smashProb: 1, catchProb: 0.95, lowShotProb: 0.50 },
+    // 地狱：反应/站位/扣杀全面拉满，接球率 88%（有 12% 刻意漏接，保持可战胜）；一半回球是低平快球
+    { name: '地狱', react: 0.02, err: 0.015, agility: 1.00, smashY: 1.05, smashProb: 1, catchProb: 0.88, lowShotProb: 0.50 },
   ];
 
   // 每个引擎实例、每个方位各一份 AI 状态（确定性种子随机，便于测试）。
@@ -87,7 +86,6 @@
     const s = getState(engine, side);
     s.level = level;
     const L = LEVELS[level] || LEVELS[1];
-    const hell = level === 3; // 地狱：快球预判 + 快速发球（其余档位行为不变）
     const t = tune || {};
     // 有效参数：基准 × 倍率（反应越大越快=延迟越小；其余越大越强），并夹取安全范围
     const react = L.react / (t.reactMul == null ? 1 : t.reactMul);
@@ -112,8 +110,7 @@
       if (engine.server === side && b.inHand) {
         // 发球：脉冲按键（引擎要求上升沿触发，失败后 0.4s 重试）
         if (s.serveCd <= 0) {
-          if (hell) sm = 1; // 地狱：快速发球（type 2 → fast serve），发球即抢攻
-          else pu = 1;
+          pu = 1;
           s.serveCd = 0.40;
         }
         s.serveCd -= dt;
@@ -130,10 +127,6 @@
       const zc = p.z + f * 0.42;
       const incoming = b.vel.z * f < 0;
       const cross = predictCrossing(b, zc, 1.4);
-      const R = T.RULES;
-      // 快球预判（仅地狱）：预测球将在短时窗（<0.14s）内进入接球箱 → 提前起手，
-      // 修复"球进箱后已来不及起手、高速扣球必漏"的漏洞（玩家快球不再白拿分）
-      const crossNear = !!(hell && cross && cross.t < 0.14);
 
       // 移动目标
       let targetX = p.x;
@@ -153,11 +146,9 @@
       if (dzF > 0.10) fwd = 1;
       else if (dzF < -0.10) back = 1;
 
-      // 蹲下（与玩家 Ctrl 蹲下相同）：当前或预测将到的球很低 → 提前压低接球箱（可接贴地快球）
+      // 蹲下（与玩家 Ctrl 蹲下相同）：来球很低且接近时压低接球箱，可接贴地球
       const ballNear = Math.hypot(b.pos.x - p.x, b.pos.y - 1.0, b.pos.z - zc);
-      const lowNow = b.pos.y < 0.95 && ballNear < 1.6;
-      const lowSoon = crossNear && cross.y < 0.95;
-      crouch = incoming && (lowNow || lowSoon) ? 1 : 0;
+      crouch = incoming && b.pos.y < 0.95 && ballNear < 1.6 ? 1 : 0;
 
       // 移动输出（敏捷度 = 移动占空比，简单难度明显更慢；追远球时跑步加速）
       const dx = targetX - p.x;
@@ -171,18 +162,15 @@
       run = (Math.abs(dx) > 0.9 || Math.abs(dz) > 0.9) ? 1 : 0;
 
       // 击球判断：与玩家同一碰撞箱（进箱即命中；蹲下时用蹲下箱，可接贴地球）
+      const R = T.RULES;
       const yTop = crouch ? R.CROUCH_HITBOX_Y_TOP : R.HITBOX_Y_TOP;
       const yBottom = crouch ? R.CROUCH_HITBOX_Y_BOTTOM : R.HITBOX_Y_BOTTOM;
       const inBox = Math.abs(b.pos.x - p.x) < R.HITBOX_HX &&
         Math.abs(b.pos.z - zc) < R.HITBOX_HZ &&
         b.pos.y > yBottom && b.pos.y < yTop;
-      // 预测将进箱（地狱）：交叉点在短时窗内、预测高度在箱内、预测横向在箱宽内
-      const predictedInBox = crossNear &&
-        Math.abs(cross.x - p.x) < R.HITBOX_HX &&
-        cross.y > yBottom && cross.y < yTop;
-      const hittable = incoming && engine.mayHit[side] && (inBox || predictedInBox);
+      const hittable = incoming && engine.mayHit[side] && inBox;
       if (hittable) {
-        // 每球只掷一次"接/漏"：catchProb 定义的接球概率（地狱=95%，可微调）
+        // 每球只掷一次"接/漏"：catchProb 定义的接球概率（地狱=88%，可微调）
         if (!s.catchRolled) {
           s.catchRolled = true;
           s.catchOk = (catchProb == null) || (rnd(s) < catchProb);
@@ -196,10 +184,8 @@
           }
           s.hitDelay += dt;
           if (s.hitDelay >= react) {
-            // 预判起手时按预测到箱高度决定扣/推（球尚未进箱，当前高度不代表到箱高度）
-            const hitY = crossNear ? cross.y : b.pos.y;
             if (s.lowThisBall) lp = 1;
-            else if (hitY >= L.smashY && rnd(s) < smashProb) sm = 1;
+            else if (b.pos.y >= L.smashY && rnd(s) < smashProb) sm = 1;
             else pu = 1;
           }
         }

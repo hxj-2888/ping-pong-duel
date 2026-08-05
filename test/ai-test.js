@@ -132,6 +132,50 @@ const DT = 1 / 120;
   check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次）`, aiLow >= 3 && aiLow <= aiHits);
 }
 
+// ---------- 2c. 地狱强化：数值拉满 + 快球预判（修"快球必漏"，仅地狱生效） ----------
+{
+  const L3 = AIC.LEVELS[3];
+  check('地狱数值拉满：catch 0.95 / react 0.01 / smashY 0.95 / err 0.01',
+    L3.catchProb === 0.95 && L3.react === 0.01 && L3.smashY === 0.95 && L3.err === 0.01);
+  // 高速扣球级来球（22m/s）：地狱能接住（预判起手 + 蹲下），困难（无预判）接不住
+  const fastCatch = (level, ballY) => {
+    const e = TT.createEngine();
+    e.phase = 'play'; e.serveStage = 'rally';
+    e.mayHit = [true, true];
+    e.ball.inHand = false;
+    e.ball.pos = { x: 0, y: ballY, z: -0.5 };
+    e.ball.vel = { x: 0, y: -0.5, z: 22 };
+    e.ball.spin = { x: 0, y: 0, z: 0 };
+    e.ball.hitBy = 0; e.ball.lastBounce = 0;
+    let hit = false;
+    for (let i = 0; i < 60; i++) {
+      AIC.control(e, 1, DT, level);
+      TT.step(e, DT);
+      if (e.ball.hitBy === 1) { hit = true; break; }
+      if (e.phase !== 'play') break;
+    }
+    return hit;
+  };
+  check('地狱快球预判：22m/s 高球接住', fastCatch(3, 1.35));
+  check('地狱快球预判：22m/s 低球（蹲下）接住', fastCatch(3, 0.95));
+  check('困难无预判：22m/s 高球接不住', !fastCatch(2, 1.35));
+  // 地狱快速发球：发球即抢攻（fast serve）
+  const e2 = TT.createEngine();
+  e2.server = 1; e2.startServer = 1;
+  e2.ball.pos = { x: 0, y: 1.0, z: e2.players[1].z + e2.players[1].facing * 0.22 };
+  let fastServe = false, served2 = false;
+  for (let i = 0; i < 2400; i++) {
+    AIC.control(e2, 1, DT, 3);
+    TT.step(e2, DT);
+    if (e2.phase === 'play') {
+      served2 = true;
+      fastServe = Math.hypot(e2.ball.vel.x, e2.ball.vel.y, e2.ball.vel.z) > 6.0;
+      break;
+    }
+  }
+  check(`地狱快速发球（出球速度${served2 ? Math.hypot(e2.ball.vel.x, e2.ball.vel.y, e2.ball.vel.z).toFixed(1) : '未发'}m/s > 6）`, served2 && fastServe);
+}
+
 // ---------- 5. 难度档位配置 ----------
 {
   const names = AIC.LEVELS.map((l) => l.name).join('/');

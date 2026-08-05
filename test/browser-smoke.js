@@ -101,10 +101,14 @@ function boot(opts) {
   const bgm = elements.get('bgmAudio');
   Object.assign(bgm, {
     _paused: true, src: '', volume: 0, loop: false, preload: '',
-    get paused() { return this._paused; },
-    set paused(v) { this._paused = v; },
     play() { this._paused = false; },
     pause() { this._paused = true; },
+  });
+  // paused 用访问器（Object.assign 会把 getter 求值成粘滞的数据属性，导致
+  // play()/pause() 后 paused 不变——真实 <audio> 的 paused 是随播放状态实时变化的）
+  Object.defineProperty(bgm, 'paused', {
+    get() { return this._paused; },
+    set(v) { this._paused = v; },
   });
 
   const winHandlers = {};
@@ -516,6 +520,15 @@ async function main() {
       G.setMusicOn(!on0);
       check('raw 音乐：音乐按钮切换 → ' + (on0 ? '暂停' : '播放'), bgm.paused === on0);
       G.setMusicOn(on0);
+    }
+
+    // 页面打开即播：主菜单加载后自动尝试播放；被自动播放策略拦截（沙盒无 AudioContext
+    // 等价于浏览器拦截）时，挂接首次交互立即恢复出声，无需再点 🎵
+    {
+      const t4 = await boot();
+      check('页面打开即播：尝试播放被拦截时保持待播（等首次交互）', t4.elements.get('bgmAudio').paused === true);
+      for (const fn of t4.winHandlers.pointerdown || []) fn({ preventDefault() {} }); // 模拟首次点击
+      check('页面打开即播：首次交互立即恢复播放', t4.elements.get('bgmAudio').paused === false);
     }
 
     // 键盘 W/S 已改为前后移动（推球/扣球改用鼠标单击/双击）
