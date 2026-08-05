@@ -100,6 +100,8 @@
   PPD.GameAudio.autoplayMusic();
   // 通关记录：进入主菜单时拉取后端并渲染（失败静默）
   if (PPD.refreshRecords) PPD.refreshRecords();
+  // 解锁判定兜底：从持久化记录推导地狱解锁/通关（localStorage 被清也不会上锁）
+  if (PPD.syncUnlocksFromRecords) PPD.syncUnlocksFromRecords();
   // 调试：?auto=ai 自动进入人机对战（便于截图/自动化验证）
   if (/[?&]auto=ai/.test(location.search)) PPD.startAI();
   // 调试：?net=public 强制联机走公网（桌面端自动化验证用，网页版本就同域 /ws）

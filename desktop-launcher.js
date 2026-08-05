@@ -163,7 +163,12 @@ async function main() {
     }
   }
 
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ppd-app-'));
+  // 浏览器数据（localStorage 等）持久化目录：桌面应用使用**固定**配置目录而非临时目录，
+  // 否则每次启动都会清空 localStorage → 地狱解锁/通关、判定虚线、音乐/音效记忆全部丢失。
+  // PP_PROFILE 环境变量可覆盖（测试用）。
+  const profile = process.env.PP_PROFILE ||
+    path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'PingPongDuel', 'edge-profile');
+  try { fs.mkdirSync(profile, { recursive: true }); } catch (e) { /* 目录创建失败则用系统临时目录兜底 */ }
   const args = [
     '--user-data-dir=' + profile,
     '--no-first-run',
@@ -183,13 +188,19 @@ async function main() {
     args.unshift('--app=http://127.0.0.1:' + urlPort + '/');
   }
 
-  log('启动浏览器: ' + browser + '  URL=http://127.0.0.1:' + urlPort + '/');
+  log('启动浏览器: ' + browser + '  URL=http://127.0.0.1:' + urlPort + '/  profile=' + profile);
   const appWin = spawn(browser, args, { stdio: 'ignore' });
   appWin.on('error', (err) => log('浏览器进程错误: ' + err.message));
 
   const cleanup = () => {
     if (server) { try { server.kill(); } catch (e) { /* ignore */ } }
-    try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+    // 持久化配置目录不删除（localStorage 跨会话保留）；仅清理旧的临时配置目录
+    try {
+      const oldTmp = path.join(os.tmpdir(), 'ppd-app-');
+      for (const d of fs.readdirSync(oldTmp)) {
+        if (d.startsWith('ppd-app-')) fs.rmSync(path.join(oldTmp, d), { recursive: true, force: true });
+      }
+    } catch (e) { /* ignore */ }
   };
 
   appWin.on('exit', (code) => {

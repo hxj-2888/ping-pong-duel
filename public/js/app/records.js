@@ -37,6 +37,22 @@
 
   const DIFF = ['简单', '中等', '困难', '地狱'];
 
+  // 解锁判定兜底：从**持久化的后端记录**推导——人机获胜且难度≥困难=解锁地狱、
+  // =地狱=地狱通关。即使浏览器 localStorage 被清空（桌面旧临时配置/清缓存），
+  // 只要记录还在（records.json / Cloudflare DO），地狱与 AI 观战就不会上锁。
+  async function syncUnlocksFromRecords() {
+    const list = await fetchRecords(200);
+    let beatHard = false, beatHell = false;
+    for (const r of list) {
+      if (r && r.mode === 'ai' && r.winner === 0 && typeof r.difficulty === 'number') {
+        if (r.difficulty >= 2) beatHard = true;
+        if (r.difficulty === 3) beatHell = true;
+      }
+    }
+    if (beatHard && PPD.unlockHell) PPD.unlockHell();     // 内部会全量同步 5 个难度下拉
+    if (beatHell && PPD.markHellCleared) PPD.markHellCleared();
+  }
+
   // 渲染到主菜单 #recordsPanel（最近 5 条）
   async function refreshRecords() {
     const el = PPD.ui.recordsPanel;
@@ -60,4 +76,5 @@
   PPD.saveRecord = saveRecord;
   PPD.fetchRecords = fetchRecords;
   PPD.refreshRecords = refreshRecords;
+  PPD.syncUnlocksFromRecords = syncUnlocksFromRecords;
 })();

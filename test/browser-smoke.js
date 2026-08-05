@@ -766,6 +766,29 @@ async function main() {
     check('返回主菜单：记录面板重新拉取', getCalls >= 1);
   }
 
+  // ---------- 2.75 解锁判定兜底：从持久化记录推导（localStorage 被清也不上锁） ----------
+  {
+    const t = await boot({
+      fetch: () => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          ok: true,
+          records: [
+            { id: 'a1', name: '你', mode: 'ai', winner: 0, score: [11, 5], difficulty: 2, ts: Date.now() },
+            { id: 'a2', name: '你', mode: 'ai', winner: 0, score: [11, 7], difficulty: 3, ts: Date.now() },
+          ],
+        }),
+      }),
+    });
+    check('启动：localStorage 被清（初始未解锁）', t.ppd.isHellUnlocked() === false && t.ppd.isHellCleared() === false);
+    await sleep(10); // 等待 syncUnlocksFromRecords 异步完成
+    check('记录含困难获胜 → 地狱解锁', t.ppd.isHellUnlocked() === true);
+    check('记录含地狱获胜 → 地狱通关', t.ppd.isHellCleared() === true);
+    const opts = ['aiLevel', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB']
+      .map((id) => t.elements.get(id).querySelector('option[value="3"]'));
+    check('解锁后：5 个难度下拉全部可用', opts.every((o) => o.disabled === false));
+  }
+
   // ---------- 2.8 地狱通关 → 人机暂停变「电脑 AI 数值调控」 ----------
   {
     const t = await boot();
