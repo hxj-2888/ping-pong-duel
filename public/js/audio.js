@@ -34,10 +34,21 @@
   // musicOn 持久化（设置面板）：默认开；关闭后下次打开仍保持关闭
   let musicOn = true;
   try { musicOn = typeof localStorage !== 'undefined' && localStorage.getItem('ppd_music_on') === '0' ? false : true; } catch (e) { /* ignore */ }
+  // 音量（设置面板滑杆，0~1，localStorage 持久化）：音乐默认 0.3、音效默认 0.5
+  let musicVol = 0.3;
+  try { musicVol = Math.min(1, Math.max(0, (parseInt(localStorage.getItem('ppd_music_vol'), 10) || 30) / 100)); } catch (e) { /* ignore */ }
+  let sfxVol = 0.5;
+  try { sfxVol = Math.min(1, Math.max(0, (parseInt(localStorage.getItem('ppd_sfx_vol'), 10) || 50) / 100)); } catch (e) { /* ignore */ }
   let musicGain = null;
   let musicTimer = null;
   let musicStep = 0;        // 当前 1/8 步序号（16 步循环）
   let musicLevel = 0;       // 紧张强度：0=常规 1=胶着 2=赛点/终局
+
+  // 按当前状态（开关 + 音量 + 紧张强度）统一刷新音乐总线增益
+  function applyMusicGain() {
+    if (!musicGain) return;
+    musicGain.gain.value = musicOn ? Math.min(1, musicVol * (1 + musicLevel * 0.13)) : 0;
+  }
 
   // raw 游戏音乐（audio/music.mp4，可能含视频轨的视频容器）：
   // 优先 WebAudio 解码 → AudioBufferSourceNode.loop=true（**零间隙无缝循环**）；
@@ -58,7 +69,7 @@
         if (!el) return;
         el.src = 'audio/music.mp4';
         el.loop = true;
-        el.volume = 0.3; // 与合成音乐 musicGain 音量一致
+        el.volume = musicVol; // 与合成音乐 musicGain 音量一致（音量滑杆）
         el.preload = 'auto';
         bgmEl = el;
       } catch (e) { bgmEl = null; }
@@ -158,11 +169,11 @@
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
-    master = ctx.createGain();          // 游戏音效总线（受「游戏音效」开关控制）
-    master.gain.value = 0.5;
+    master = ctx.createGain();          // 游戏音效总线（受「游戏音效」开关与音量控制）
+    master.gain.value = sfxVol;
     master.connect(ctx.destination);
-    musicGain = ctx.createGain();       // 背景音乐总线（受「背景音乐」开关控制）
-    musicGain.gain.value = musicOn ? 0.3 : 0;
+    musicGain = ctx.createGain();       // 背景音乐总线（受「背景音乐」开关与音量控制）
+    musicGain.gain.value = musicOn ? musicVol : 0;
     // 音乐直连输出，不经过 master——音乐与音效完全独立（关音效不影响音乐）
     musicGain.connect(ctx.destination);
     const len = ctx.sampleRate * 0.5;
@@ -293,16 +304,30 @@
   function setMusicOn(on) {
     musicOn = !!on;
     try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_music_on', musicOn ? '1' : '0'); } catch (e) { /* ignore */ }
-    if (musicGain) musicGain.gain.value = musicOn ? 0.3 : 0;
+    applyMusicGain();
     if (musicOn) startMusic(); else stopMusic();
   }
 
-  // 紧张强度：比分胶着/赛点时加快节奏、抬高音量
+  // 音乐音量（0~1，设置面板滑杆）：即时生效 + 持久化；<audio> 元素同步
+  function setMusicVol(v) {
+    musicVol = Math.min(1, Math.max(0, v));
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_music_vol', String(Math.round(musicVol * 100))); } catch (e) { /* ignore */ }
+    if (bgmEl) bgmEl.volume = musicVol;
+    applyMusicGain();
+  }
+  // 音效音量（0~1，设置面板滑杆）：即时生效 + 持久化
+  function setSfxVol(v) {
+    sfxVol = Math.min(1, Math.max(0, v));
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_sfx_vol', String(Math.round(sfxVol * 100))); } catch (e) { /* ignore */ }
+    if (master) master.gain.value = muted ? 0 : sfxVol;
+  }
+
+  // 紧张强度：比分胶着/赛点时加快节奏、抬高音量（相对用户设定的音乐音量按比例提）
   function setIntensity(level) {
     const lv = Math.max(0, Math.min(2, level | 0));
     if (lv === musicLevel) return;
     musicLevel = lv;
-    if (musicGain) musicGain.gain.value = musicOn ? 0.3 + lv * 0.04 : 0;
+    applyMusicGain();
     if (musicOn) {
       stopMusic();
       startMusic(); // 按新节奏重启
@@ -512,10 +537,12 @@
       try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_sound_on', muted ? '0' : '1'); } catch (e) { /* ignore */ }
       // 只静音游戏音效（master 总线）；背景音乐走独立通路（musicGain 直连 / <audio> 元素），
       // 不受音效开关影响——音乐与音效完全独立
-      if (master) master.gain.value = m ? 0 : 0.5;
+      if (master) master.gain.value = m ? 0 : sfxVol;
     },
     isMuted() { return muted; },
     setMusicOn, isMusicOn() { return musicOn; },
+    setMusicVol, getMusicVol() { return musicVol; },
+    setSfxVol, getSfxVol() { return sfxVol; },
     musicMode, bgmPath, bgmInfo, // 'raw'=真实音乐 / 'synth'=合成音乐兜底；bgmPath: buffer/element/synth
     setIntensity,
     hit() { noise(0.06, 0.35, 1800); tone(260, 0.07, 'square', 0.12, 90); },

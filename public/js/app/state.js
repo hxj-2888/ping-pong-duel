@@ -51,6 +51,8 @@
     setShowHitRanges: document.getElementById('setShowHitRanges'),
     setMusic: document.getElementById('setMusic'),
     setSound: document.getElementById('setSound'),
+    setMusicVol: document.getElementById('setMusicVol'),
+    setSfxVol: document.getElementById('setSfxVol'),
     roomPanel: document.getElementById('roomPanel'),
     roomCode: document.getElementById('roomCode'),
     roomHint: document.getElementById('roomHint'),

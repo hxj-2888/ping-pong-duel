@@ -54,12 +54,21 @@
   refreshNetModeBtn();
 
   // ---------- 设置面板（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效 ----------
+  // 音量滑杆的百分比标签（滑杆 value 0~100 → 显示 N%）
+  function syncVolSlider(el, vol) {
+    if (!el) return;
+    el.value = String(Math.round(vol * 100));
+    const lb = el.parentElement && el.parentElement.querySelector ? el.parentElement.querySelector('b') : null;
+    if (lb) lb.textContent = Math.round(vol * 100) + '%';
+  }
   function openSettings() {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
     if (PPD.ui.setShowHitRanges) PPD.ui.setShowHitRanges.checked = PPD.app.showHitRanges;
     if (PPD.ui.setMusic) PPD.ui.setMusic.checked = PPD.GameAudio.isMusicOn();
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
+    syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());
+    syncVolSlider(PPD.ui.setSfxVol, PPD.GameAudio.getSfxVol());
     PPD.show(PPD.ui.settingsPanel, true);
   }
   function closeSettings() { PPD.show(PPD.ui.settingsPanel, false); }
@@ -76,6 +85,19 @@
   // 背景音乐 / 游戏音效：写回 GameAudio（内部持久化）
   PPD.ui.setMusic.addEventListener('change', () => { PPD.GameAudio.setMusicOn(PPD.ui.setMusic.checked); });
   PPD.ui.setSound.addEventListener('change', () => { PPD.GameAudio.setMuted(!PPD.ui.setSound.checked); });
+  // 音乐 / 音效音量滑杆：拖动即生效 + 更新百分比标签
+  const wireVol = (el, setter) => {
+    if (!el) return;
+    const apply = () => {
+      const v = (parseInt(el.value, 10) || 0) / 100;
+      setter(v);
+      syncVolSlider(el, v);
+    };
+    el.addEventListener('input', apply);
+    el.addEventListener('change', apply);
+  };
+  wireVol(PPD.ui.setMusicVol, (v) => PPD.GameAudio.setMusicVol(v));
+  wireVol(PPD.ui.setSfxVol, (v) => PPD.GameAudio.setSfxVol(v));
 
   PPD.ui.btnAgain.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.restartMatch(); });
   PPD.ui.btnMenu.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.backToMenu(); });

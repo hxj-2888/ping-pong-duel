@@ -80,7 +80,7 @@ function makeElement(id) {
 const ELEMENT_IDS = [
   'game', 'menu', 'gameScreen', 'nameInput', 'btnLocal', 'btnHost', 'btnJoin', 'btnNetMode',
   'joinInput', 'btnSettings', 'btnSettingsGame', 'settingsPanel', 'btnSettingsClose',
-  'setShowHitRanges', 'setMusic', 'setSound', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
+  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot', 'tips',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAIVsAI',
@@ -547,6 +547,16 @@ async function main() {
       check('独立性：关闭音乐不影响音效开关', G.isMusicOn() === false && G.isMuted() === false);
       t3.elements.get('setMusic').checked = true;
       t3.elements.get('setMusic').dispatch('change', {});
+      // 音量滑杆：音乐/音效默认 30%/50%，拖动即生效且互不影响
+      check('音量：默认音乐 30% / 音效 50%', G.getMusicVol() === 0.3 && G.getSfxVol() === 0.5);
+      t3.elements.get('setMusicVol').value = '70';
+      t3.elements.get('setMusicVol').dispatch('input', {});
+      check('音量：音乐调到 70%', G.getMusicVol() === 0.7);
+      t3.elements.get('setSfxVol').value = '20';
+      t3.elements.get('setSfxVol').dispatch('change', {});
+      check('音量：音效调到 20%', G.getSfxVol() === 0.2);
+      check('音量：调音效不影响音乐音量', G.getMusicVol() === 0.7);
+      check('音量：调音乐不影响音效音量', G.getSfxVol() === 0.2);
     }
 
     // 页面打开即播：主菜单加载后自动尝试播放；被自动播放策略拦截（沙盒无 AudioContext
