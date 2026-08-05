@@ -95,6 +95,18 @@ async function waitUp() {
   const g1 = await req('GET', '/api/records?limit=1');
   check('GET limit=1 只返回 1 条', g1.json.records.length === 1);
 
+  // DELETE：按 id 删除（维护用）
+  const g0 = await req('GET', '/api/records?limit=20');
+  const id0 = g0.json.records[0].id;
+  const d = await req('DELETE', '/api/records?id=' + encodeURIComponent(id0));
+  check('DELETE 按 id 删除：removed=1', d.status === 200 && d.json.ok === true && d.json.removed === 1);
+  const g2 = await req('GET', '/api/records?limit=20');
+  check('DELETE 后记录少一条', g2.json.records.length === g0.json.records.length - 1);
+  const d2 = await req('DELETE', '/api/records?id=not_exist');
+  check('DELETE 不存在的 id：removed=0', d2.json.ok === true && d2.json.removed === 0);
+  const d3 = await req('DELETE', '/api/records');
+  check('DELETE 无 id：400', d3.status === 400);
+
   // 静态页面不受影响
   const s = await req('GET', '/index.html');
   check('静态页面仍正常', s.status === 200 && s.json === null);

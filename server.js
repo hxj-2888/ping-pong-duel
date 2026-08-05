@@ -58,11 +58,11 @@ function saveRecords(list) {
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
 
-  // 通关记录 API（GET/POST /api/records，CORS 兼容桌面公网跨域）
+  // 通关记录 API（GET/POST/DELETE /api/records，CORS 兼容桌面公网跨域）
   if (urlPath === '/api/records') {
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json',
     };
@@ -91,6 +91,19 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, cors);
         res.end(JSON.stringify({ ok: true, id: rec.id }));
       });
+      return;
+    }
+    if (req.method === 'DELETE') {
+      // 按 id 删除一条记录（维护用；与 Cloudflare DO 行为一致）
+      const q = new URLSearchParams(req.url.split('?')[1] || '');
+      const id = q.get('id');
+      if (!id) { res.writeHead(400, cors); res.end(JSON.stringify({ ok: false, e: 'no id' })); return; }
+      const list = loadRecords();
+      const next = list.filter((r) => r && r.id !== id);
+      const removed = list.length - next.length;
+      if (removed > 0) saveRecords(next);
+      res.writeHead(200, cors);
+      res.end(JSON.stringify({ ok: true, removed }));
       return;
     }
     res.writeHead(405, cors); res.end(JSON.stringify({ ok: false, e: 'method' })); return;

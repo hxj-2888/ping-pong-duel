@@ -38,12 +38,12 @@ export class GameRoom extends DurableObject {
     this.loadPromise = null;
   }
 
-  // ---------- HTTP API：通关记录（GET/POST /api/records，CORS 兼容桌面公网跨域） ----------
+  // ---------- HTTP API：通关记录（GET/POST/DELETE /api/records，CORS 兼容桌面公网跨域） ----------
   async _handleApi(request) {
     const url = new URL(request.url);
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json',
     };
@@ -70,6 +70,18 @@ export class GameRoom extends DurableObject {
       if (list.length > RECORDS_CAP) list.length = RECORDS_CAP;
       await this.ctx.storage.put(RECORDS_KEY, list); // 无 TTL：永久保存
       return new Response(JSON.stringify({ ok: true, id: rec.id }), { headers: cors });
+    }
+    if (request.method === 'DELETE') {
+      // 按 id 删除一条记录（维护用；无鉴权，轻量榜单可接受）
+      const id = url.searchParams.get('id');
+      if (!id) {
+        return new Response(JSON.stringify({ ok: false, e: 'no id' }), { status: 400, headers: cors });
+      }
+      const list = (await this.ctx.storage.get(RECORDS_KEY)) || [];
+      const next = list.filter((r) => r && r.id !== id);
+      const removed = list.length - next.length;
+      if (removed > 0) await this.ctx.storage.put(RECORDS_KEY, next);
+      return new Response(JSON.stringify({ ok: true, removed }), { headers: cors });
     }
     return new Response(JSON.stringify({ ok: false, e: 'method' }), { status: 405, headers: cors });
   }
