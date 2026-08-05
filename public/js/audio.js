@@ -158,12 +158,13 @@
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
-    master = ctx.createGain();
+    master = ctx.createGain();          // 游戏音效总线（受「游戏音效」开关控制）
     master.gain.value = 0.5;
     master.connect(ctx.destination);
-    musicGain = ctx.createGain();
+    musicGain = ctx.createGain();       // 背景音乐总线（受「背景音乐」开关控制）
     musicGain.gain.value = musicOn ? 0.3 : 0;
-    musicGain.connect(master);
+    // 音乐直连输出，不经过 master——音乐与音效完全独立（关音效不影响音乐）
+    musicGain.connect(ctx.destination);
     const len = ctx.sampleRate * 0.5;
     noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -509,9 +510,9 @@
     setMuted(m) {
       muted = m;
       try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_sound_on', muted ? '0' : '1'); } catch (e) { /* ignore */ }
+      // 只静音游戏音效（master 总线）；背景音乐走独立通路（musicGain 直连 / <audio> 元素），
+      // 不受音效开关影响——音乐与音效完全独立
       if (master) master.gain.value = m ? 0 : 0.5;
-      // raw 游戏音乐（<audio> 元素）同样跟随静音开关（与合成音乐一致）
-      if (bgmEl) bgmEl.volume = m ? 0 : 0.3;
     },
     isMuted() { return muted; },
     setMusicOn, isMusicOn() { return musicOn; },

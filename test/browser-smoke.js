@@ -538,9 +538,15 @@ async function main() {
       t3.elements.get('setSound').checked = false;
       t3.elements.get('setSound').dispatch('change', {});
       check('设置-音效开关：关闭 → muted', G.isMuted() === true);
+      check('独立性：关闭音效后音乐照常播放（音量不变）', bgm.paused === false && bgm.volume === 0.3);
       t3.elements.get('setSound').checked = true;
       t3.elements.get('setSound').dispatch('change', {});
       check('设置-音效开关：恢复 → 音效开启', G.isMuted() === false);
+      t3.elements.get('setMusic').checked = false;
+      t3.elements.get('setMusic').dispatch('change', {});
+      check('独立性：关闭音乐不影响音效开关', G.isMusicOn() === false && G.isMuted() === false);
+      t3.elements.get('setMusic').checked = true;
+      t3.elements.get('setMusic').dispatch('change', {});
     }
 
     // 页面打开即播：主菜单加载后自动尝试播放；被自动播放策略拦截（沙盒无 AudioContext
