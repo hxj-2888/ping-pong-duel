@@ -88,6 +88,7 @@ const ELEMENT_IDS = [
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch',
   'gameTools', 'btnDiff', 'btnPause', 'btnExit', 'showHitRanges',
   'pausePanel', 'btnResume', 'btnPauseExit',
+  'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'recordsPanel', // 通关记录面板（records.js 渲染）
 ];
@@ -236,11 +237,13 @@ async function main() {
     t.runFrames(3);
     check('关闭开关后判定范围虚线隐藏', t.app.showHitRanges === false &&
       t.ppd.viewModelFromEngine(t.app.engine, 0).showHitRanges === false);
+    check('关闭开关：左上角判定面板整体隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
     t.elements.get('showHitRanges').checked = true;
     t.elements.get('showHitRanges').dispatch('change', {});
     t.runFrames(3);
     check('重新开启后判定范围虚线显示', t.app.showHitRanges === true &&
       t.ppd.viewModelFromEngine(t.app.engine, 0).showHitRanges === true);
+    check('重新开启：左上角判定面板恢复显示', t.elements.get('hitRangeInfo').style.display === '');
     t.runFrames(10);
     check('本地渲染 10 帧无异常', true);
     check('左上角实时显示球高', /^\d+\.\d{2}m$/.test(t.elements.get('ballHeight').textContent));
@@ -743,6 +746,32 @@ async function main() {
     t.elements.get('btnMenu').dispatch('click', {});
     await sleep(10);
     check('返回主菜单：记录面板重新拉取', getCalls >= 1);
+  }
+
+  // ---------- 2.8 地狱通关 → 人机暂停变「电脑 AI 数值调控」 ----------
+  {
+    const t = await boot();
+    t.click('btnAI');
+    // 未通关地狱：暂停面板不显示调控块
+    t.elements.get('btnPause').dispatch('click', {});
+    check('未通关地狱：人机暂停无数值调控', t.app.paused === true && t.elements.get('pauseAITune').style.display === 'none');
+    t.elements.get('btnResume').dispatch('click', {});
+    // 模拟通关地狱（人机击败地狱难度）→ 再暂停：调控块出现
+    t.ppd.markHellCleared();
+    check('通关地狱标记生效', t.ppd.isHellCleared());
+    t.elements.get('btnPause').dispatch('click', {});
+    check('通关地狱后：人机暂停显示数值调控', t.elements.get('pauseAITune').style.display !== 'none');
+    // 滑杆写入 aiTuneB（对手=蓝方）并即时生效
+    t.elements.get('tuneOppReact').value = '120';
+    t.elements.get('tuneOppReact').dispatch('input', {});
+    check('调控滑杆：反应 ×1.2 写入 aiTuneB', t.app.aiTuneB.reactMul === 1.2);
+    t.elements.get('tuneOppCatch').value = '50';
+    t.elements.get('tuneOppCatch').dispatch('change', {});
+    check('调控滑杆：接球 ×0.5 写入 aiTuneB', t.app.aiTuneB.catchMul === 0.5);
+    t.runFrames(30); // 暂停中物理冻结，调控值不触发异常
+    check('调控后暂停中渲染无异常', true);
+    t.elements.get('btnResume').dispatch('click', {});
+    check('调控后继续：暂停面板关闭', t.app.paused === false && t.elements.get('pausePanel').style.display === 'none');
   }
 
   // ---------- 3. 联机建房（side 0） ----------

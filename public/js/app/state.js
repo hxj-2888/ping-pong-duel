@@ -35,6 +35,10 @@
     tuneBCatch: document.getElementById('tuneBCatch'),
     tuneBSmash: document.getElementById('tuneBSmash'),
     tuneBAgility: document.getElementById('tuneBAgility'),
+    tuneOppReact: document.getElementById('tuneOppReact'),
+    tuneOppCatch: document.getElementById('tuneOppCatch'),
+    tuneOppSmash: document.getElementById('tuneOppSmash'),
+    tuneOppAgility: document.getElementById('tuneOppAgility'),
     btnHost: document.getElementById('btnHost'),
     btnJoin: document.getElementById('btnJoin'),
     btnNetMode: document.getElementById('btnNetMode'),
@@ -84,6 +88,7 @@
     btnExit: document.getElementById('btnExit'),
     showHitRanges: document.getElementById('showHitRanges'),
     pausePanel: document.getElementById('pausePanel'),
+    pauseAITune: document.getElementById('pauseAITune'), // 人机：地狱通关后的电脑 AI 数值调控
     btnResume: document.getElementById('btnResume'),
     btnPauseExit: document.getElementById('btnPauseExit'),
   };
@@ -206,6 +211,21 @@
     syncHellOptions();
   }
 
+  // ---------- 地狱通关（人机击败地狱难度，localStorage 持久化） ----------
+  // 与「解锁地狱」不同：解锁=击败困难；通关=击败地狱。通关后解锁人机暂停的电脑 AI 数值调控。
+  const HELL_CLEARED_KEY = 'ppd_hell_cleared';
+  let hellClearedMem = false;
+  try {
+    hellClearedMem = typeof localStorage !== 'undefined' && localStorage.getItem(HELL_CLEARED_KEY) === '1';
+  } catch (e) { /* ignore */ }
+
+  function isHellCleared() { return hellClearedMem; }
+  function markHellCleared() {
+    if (hellClearedMem) return;
+    hellClearedMem = true;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(HELL_CLEARED_KEY, '1'); } catch (e) { /* ignore */ }
+  }
+
   // 得分后触发观众反应：得分方（winner 0=红 1=蓝）欢呼，对方观众摇头
   function triggerCheer(winner) {
     app.fan.cheer[winner] = 1;
@@ -231,7 +251,8 @@
     TT, TTG, GameAudio, NetClient, AIC,
     $id, show, resize,
     wsUrl, isLocalHost, isTouch,
-    isHellUnlocked, unlockHell, syncHellOptions, syncHellOptions,
+    isHellUnlocked, unlockHell, syncHellOptions,
+    isHellCleared, markHellCleared, syncHellOptions,
     triggerCheer, updateMusicIntensity,
   };
 })();

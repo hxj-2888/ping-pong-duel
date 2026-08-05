@@ -145,5 +145,8 @@
     isHellUnlocked: PPD.isHellUnlocked,
     unlockHell: PPD.unlockHell,
     syncHellOptions: PPD.syncHellOptions,
+    // 地狱通关（冒烟测试用）：人机击败地狱 → 解锁人机暂停的电脑 AI 数值调控
+    isHellCleared: PPD.isHellCleared,
+    markHellCleared: PPD.markHellCleared,
   };
 })();

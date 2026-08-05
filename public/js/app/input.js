@@ -147,12 +147,15 @@
     PPD.ui.btnPause.textContent = PPD.app.paused ? '继续' : '暂停';
   }
 
-  // AI 观战参数滑杆：4 项 × 双侧（值 50~150 → 倍率 0.5~1.5）
+  // AI 观战参数滑杆：4 项 × 双侧（值 50~150 → 倍率 0.5~1.5）；
+  // 人机「电脑 AI 数值调控」（tuneOpp*，地狱通关后暂停面板显示）同样写 aiTuneB（对手=蓝方）
   const TUNE_SPEC = {
     tuneAReact: ['aiTuneA', 'reactMul'], tuneACatch: ['aiTuneA', 'catchMul'],
     tuneASmash: ['aiTuneA', 'smashMul'], tuneAAgility: ['aiTuneA', 'agilityMul'],
     tuneBReact: ['aiTuneB', 'reactMul'], tuneBCatch: ['aiTuneB', 'catchMul'],
     tuneBSmash: ['aiTuneB', 'smashMul'], tuneBAgility: ['aiTuneB', 'agilityMul'],
+    tuneOppReact: ['aiTuneB', 'reactMul'], tuneOppCatch: ['aiTuneB', 'catchMul'],
+    tuneOppSmash: ['aiTuneB', 'smashMul'], tuneOppAgility: ['aiTuneB', 'agilityMul'],
   };
 
   function tuneVal(el) { return (parseInt(el.value, 10) || 100) / 100; }
@@ -188,11 +191,18 @@
     // AI 观战：暂停面板显示双方难度下拉并同步当前值（改后写回 app.aiLevelA/B）
     if (PPD.app.paused && PPD.app.mode === 'aivai') {
       PPD.show(PPD.ui.pauseAIVsAI, true);
+      PPD.show(PPD.ui.pauseAITune, false);
       if (PPD.ui.pauseAiLevelA) PPD.ui.pauseAiLevelA.value = String(PPD.app.aiLevelA);
       if (PPD.ui.pauseAiLevelB) PPD.ui.pauseAiLevelB.value = String(PPD.app.aiLevelB);
       syncTuneSliders();
+    } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.isHellCleared()) {
+      // 人机 + 地狱已通关：暂停面板变为「电脑 AI 数值调控」（滑杆即时生效）
+      PPD.show(PPD.ui.pauseAIVsAI, false);
+      PPD.show(PPD.ui.pauseAITune, true);
+      syncTuneSliders();
     } else {
       PPD.show(PPD.ui.pauseAIVsAI, false);
+      PPD.show(PPD.ui.pauseAITune, false);
     }
     updateGameTools();
     if (!PPD.app.paused) PPD.GameAudio.ensure();

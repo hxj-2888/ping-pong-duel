@@ -196,14 +196,12 @@
           }
           s.hitDelay += dt;
           if (s.hitDelay >= react) {
-            // 决定扣/推的"命中时球高"：
-            //  - 地狱：挥拍 windup 约 0.08s 后才命中，用抛物线近似命中高度
-            //    （当前高度 + 垂直速度爬升 - 重力回落）——上升段来球（高吊/弹起）会扣杀，
-            //    下降段/贴地来球推球或低平快球；比"球到箱中心高度"更贴近实际命中时刻
-            //  - 其余档位：保持原判定（预判起手用预测到箱高度，否则当前高度）
-            const hitY = hell
-              ? b.pos.y + b.vel.y * 0.08 - 0.5 * R.GRAVITY * 0.08 * 0.08
-              : (crossNear ? cross.y : b.pos.y);
+            // 决定扣/推的高度：
+            //  - 预判起手（球未进箱）：用预测到箱高度（当前高度不代表到箱高度）
+            //  - 慢球已进箱：用当前高度。注意：命中时球会因弹起略升，但此处用保守判定，
+            //    避免对上升段慢球误判扣杀——type 2 扣球求解失败会整拍挥空丢分，
+            //    快球/高球（cross.y ≥ smashY）已能正常扣杀，慢推球推回去更稳
+            const hitY = crossNear ? cross.y : b.pos.y;
             if (s.lowThisBall) lp = 1;
             else if (hitY >= L.smashY && rnd(s) < smashProb) sm = 1;
             else pu = 1;

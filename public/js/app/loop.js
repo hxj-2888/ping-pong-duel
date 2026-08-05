@@ -53,7 +53,8 @@
             crouch: PPD.app.keyP1.crouch || PPD.app.keyP2.crouch,
             run: PPD.app.keyP1.run || PPD.app.keyP2.run,
           });
-          PPD.AIC.control(PPD.app.engine, 1, step, PPD.app.aiLevel);
+          // 电脑对手（蓝方）：难度 + 地狱通关后的数值调控倍率（暂停面板滑杆，即时生效）
+          PPD.AIC.control(PPD.app.engine, 1, step, PPD.app.aiLevel, PPD.app.aiTuneB);
           PPD.TT.step(PPD.app.engine, step);
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;

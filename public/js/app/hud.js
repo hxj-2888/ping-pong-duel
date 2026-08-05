@@ -65,6 +65,10 @@
           // 地狱模式解锁：人机模式在困难难度下玩家获胜
           const hellUnlocked = PPD.app.mode === 'ai' && PPD.app.aiLevel === 2 && e.s === 0;
           if (hellUnlocked) PPD.unlockHell();
+          // 地狱通关：人机模式在地狱难度下玩家获胜 → 解锁人机暂停的电脑 AI 数值调控
+          if (PPD.app.mode === 'ai' && e.s === 0 && PPD.app.aiLevel === 3 && PPD.markHellCleared) {
+            PPD.markHellCleared();
+          }
           // 通关记录：人机模式玩家获胜 → 后端保存（失败静默，不影响游戏）
           if (PPD.app.mode === 'ai' && e.s === 0 && PPD.saveRecord) {
             const eng = PPD.app.engine;
@@ -136,6 +140,11 @@
   function updateHitRangeLive() {
     const mode = PPD.app.mode;
     const elH = PPD.ui.ballHeight, elS = PPD.ui.inBoxStatus;
+    // 左上角判定面板跟随主页开关：关闭时隐藏全部提示内容（接球箱/蹲下最低/球高/进箱）
+    const panel = PPD.ui.hitRangeInfo;
+    if (panel && panel.style.display !== (PPD.app.showHitRanges ? '' : 'none')) {
+      panel.style.display = PPD.app.showHitRanges ? '' : 'none';
+    }
     if (!elH || !elS || (mode !== 'local' && mode !== 'ai' && mode !== 'online')) return;
     // 球位置：本地/人机用引擎，联机用快照（飞行 b / 持球 bh）
     let bv = null;

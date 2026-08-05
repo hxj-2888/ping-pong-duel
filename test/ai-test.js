@@ -101,6 +101,7 @@ const DT = 1 / 120;
 }
 
 // ---------- 2b. 地狱 AI 刻意打低球（lowShotProb=0.5 → type 3 低平快球）----------
+// 注：lowThisBall 每球掷一次（rng 确定性），短窗口可能偏——用 48 回球窗口验证比例 ~50%
 {
   const e = TT.createEngine();
   const hold = [0, 0];
@@ -115,7 +116,7 @@ const DT = 1 / 120;
   let aiHits = 0, aiLow = 0;
   for (let i = 0; i < 60000; i++) {
     if (e.phase === 'serve' && e.server === 0 && e.ball.inHand && e.players[0].hitCd <= 0) hold[0] = 12;
-    const want = e.phase === 'play' && e.mayHit[0] && ballNear(0) && aiHits < 12;
+    const want = e.phase === 'play' && e.mayHit[0] && ballNear(0) && aiHits < 48;
     if (want && !wasWanting[0]) hold[0] = 45;
     wasWanting[0] = want;
     TT.setInput(e, 0, { pu: hold[0] > 0 });
@@ -127,9 +128,9 @@ const DT = 1 / 120;
       aiHits++;
       if (e.players[1].stroke.type === 3) aiLow++;
     }
-    if (aiHits >= 12) break;
+    if (aiHits >= 48) break;
   }
-  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次）`, aiLow >= 3 && aiLow <= aiHits);
+  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次≈${(aiLow / Math.max(1, aiHits) * 100).toFixed(0)}%）`, aiLow >= 12 && aiLow <= aiHits);
 }
 
 // ---------- 2c. 地狱强化：数值拉满 + 快球预判（修"快球必漏"，仅地狱生效） ----------
@@ -159,21 +160,21 @@ const DT = 1 / 120;
   check('地狱快球预判：22m/s 高球接住', fastCatch(3, 1.35));
   check('地狱快球预判：22m/s 低球（蹲下）接住', fastCatch(3, 0.95));
   check('困难无预判：22m/s 高球接不住', !fastCatch(2, 1.35));
-  // 地狱快速发球：发球即抢攻（fast serve）
-  const e2 = TT.createEngine();
-  e2.server = 1; e2.startServer = 1;
-  e2.ball.pos = { x: 0, y: 1.0, z: e2.players[1].z + e2.players[1].facing * 0.22 };
-  let fastServe = false, served2 = false;
-  for (let i = 0; i < 2400; i++) {
-    AIC.control(e2, 1, DT, 3);
-    TT.step(e2, DT);
-    if (e2.phase === 'play') {
-      served2 = true;
-      fastServe = Math.hypot(e2.ball.vel.x, e2.ball.vel.y, e2.ball.vel.z) > 6.0;
-      break;
+  // 地狱快速发球：发球即抢攻（fast serve，速度明显快于困难/中等）
+  const serveSpeedAt = (lv) => {
+    const e2 = TT.createEngine();
+    e2.server = 1; e2.startServer = 1;
+    e2.ball.pos = { x: 0, y: 1.0, z: e2.players[1].z + e2.players[1].facing * 0.22 };
+    for (let i = 0; i < 2400; i++) {
+      AIC.control(e2, 1, DT, lv);
+      TT.step(e2, DT);
+      if (e2.phase === 'play') return Math.hypot(e2.ball.vel.x, e2.ball.vel.y, e2.ball.vel.z);
     }
-  }
-  check(`地狱快速发球（出球速度${served2 ? Math.hypot(e2.ball.vel.x, e2.ball.vel.y, e2.ball.vel.z).toFixed(1) : '未发'}m/s > 6）`, served2 && fastServe);
+    return -1;
+  };
+  const hellServe = serveSpeedAt(3);
+  const diffServe = serveSpeedAt(2);
+  check(`地狱快速发球（${hellServe.toFixed(1)}m/s > 困难${diffServe.toFixed(1)}m/s）`, hellServe > diffServe + 0.3 && hellServe > 0);
 }
 
 // ---------- 5. 难度档位配置 ----------
