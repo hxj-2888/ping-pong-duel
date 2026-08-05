@@ -29,9 +29,73 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
+// ---------- 通关记录（本地后端，records.json 持久化，与 Cloudflare DO /api/records 兼容） ----------
+// RECORDS_FILE 可用环境变量覆盖（测试用临时文件）
+const RECORDS_FILE = process.env.RECORDS_FILE || path.join(__dirname, 'records.json');
+const RECORDS_CAP = 200;
+
+function sanitizeRecord(b) {
+  if (!b || typeof b !== 'object') return null;
+  const name = String(b.name || '玩家').slice(0, 20);
+  const mode = b.mode === 'ai' ? 'ai' : 'other';
+  const winner = b.winner === 0 ? 0 : 1;
+  const sc = Array.isArray(b.score)
+    ? b.score.slice(0, 2).map((v) => Math.max(0, Math.min(99, Math.round(Number(v) || 0))))
+    : [0, 0];
+  const difficulty = [0, 1, 2, 3].includes(Number(b.difficulty)) ? Number(b.difficulty) : 1;
+  const ts = Number(b.ts) || Date.now();
+  return { id: ts + '_' + Math.random().toString(36).slice(2, 8), name, mode, winner, score: sc, difficulty, ts };
+}
+
+function loadRecords() {
+  try { return JSON.parse(fs.readFileSync(RECORDS_FILE, 'utf8')); } catch (e) { return []; }
+}
+function saveRecords(list) {
+  try { fs.writeFileSync(RECORDS_FILE, JSON.stringify(list, null, 1), 'utf8'); } catch (e) { /* ignore */ }
+}
+
 // ---------- 静态文件 ----------
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
+
+  // 通关记录 API（GET/POST /api/records，CORS 兼容桌面公网跨域）
+  if (urlPath === '/api/records') {
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Content-Type': 'application/json',
+    };
+    if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
+    if (req.method === 'GET') {
+      const q = new URLSearchParams(req.url.split('?')[1] || '');
+      const limit = Math.min(parseInt(q.get('limit') || '20', 10) || 20, 100);
+      res.writeHead(200, cors);
+      res.end(JSON.stringify({ ok: true, records: loadRecords().slice(0, limit) }));
+      return;
+    }
+    if (req.method === 'POST') {
+      let raw = '';
+      req.on('data', (c) => { raw += c; if (raw.length > 8192) req.destroy(); });
+      req.on('end', () => {
+        let body = {};
+        try { body = JSON.parse(raw); } catch (e) {
+          res.writeHead(400, cors); res.end(JSON.stringify({ ok: false, e: 'bad json' })); return;
+        }
+        const rec = sanitizeRecord(body);
+        if (!rec) { res.writeHead(400, cors); res.end(JSON.stringify({ ok: false, e: 'invalid' })); return; }
+        const list = loadRecords();
+        list.unshift(rec);
+        if (list.length > RECORDS_CAP) list.length = RECORDS_CAP;
+        saveRecords(list);
+        res.writeHead(200, cors);
+        res.end(JSON.stringify({ ok: true, id: rec.id }));
+      });
+      return;
+    }
+    res.writeHead(405, cors); res.end(JSON.stringify({ ok: false, e: 'method' })); return;
+  }
+
   if (urlPath === '/') urlPath = '/index.html';
   const filePath = path.normalize(path.join(ROOT, urlPath));
   if (!filePath.startsWith(ROOT)) {

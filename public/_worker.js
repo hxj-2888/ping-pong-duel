@@ -14,6 +14,13 @@ export { GameRoom };
 
 export default {
   async fetch(request, env, ctx) {
+    // 通关记录 HTTP API → 转发到全局 GameRoom DO（静态资源回退之前）
+    if (new URL(request.url).pathname.startsWith('/api/')) {
+      const id = env.GAME_ROOM.idFromName('global');
+      const stub = env.GAME_ROOM.get(id);
+      return stub.fetch(request);
+    }
+
     // WebSocket 升级 → 转发到全局 GameRoom DO
     if (request.headers.get('Upgrade') === 'websocket') {
       const id = env.GAME_ROOM.idFromName('global');

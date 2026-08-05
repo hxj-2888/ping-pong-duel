@@ -68,6 +68,15 @@ input:focus { border-color: var(--blue); }
 .status { min-height: 20px; font-size: 13px; color: #ffd166; text-align: center; opacity: 0.9; }
 .tips { width: min(620px, 92vw); text-align: center; color: #7f90ad; font-size: 12px; line-height: 1.8; }
 
+/* 通关记录面板（主菜单） */
+.records-panel {
+  width: min(620px, 92vw); text-align: center; color: #7f90ad; font-size: 12px;
+  line-height: 1.9; margin-top: 10px; padding: 8px 16px;
+  background: rgba(13, 22, 42, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+}
+.records-panel .rec-title { color: #ffd166; font-weight: 700; letter-spacing: 1px; font-size: 12px; margin-bottom: 2px; }
+.records-panel .rec-item { color: #9fb1cf; }
+
 .room-panel { background: radial-gradient(900px 500px at 50% 30%, #16233c 0%, #0d1220 65%); z-index: 20; }
 .room-panel h2 { letter-spacing: 3px; color: #cfe0ff; }
 .room-code {

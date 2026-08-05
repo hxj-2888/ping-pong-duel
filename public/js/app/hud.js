@@ -65,6 +65,18 @@
           // 地狱模式解锁：人机模式在困难难度下玩家获胜
           const hellUnlocked = PPD.app.mode === 'ai' && PPD.app.aiLevel === 2 && e.s === 0;
           if (hellUnlocked) PPD.unlockHell();
+          // 通关记录：人机模式玩家获胜 → 后端保存（失败静默，不影响游戏）
+          if (PPD.app.mode === 'ai' && e.s === 0 && PPD.saveRecord) {
+            const eng = PPD.app.engine;
+            PPD.saveRecord({
+              name: (PPD.app.names && PPD.app.names[0]) || '玩家',
+              mode: 'ai',
+              winner: 0,
+              score: eng && eng.score ? [eng.score[0], eng.score[1]] : [0, 0],
+              difficulty: PPD.app.aiLevel,
+              ts: Date.now(),
+            });
+          }
           const overMsg = hellUnlocked
             ? '🎉 你赢了，已解锁地狱模式！'
             : `${winnerName(e.s)} 获胜！`;

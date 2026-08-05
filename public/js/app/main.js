@@ -95,18 +95,10 @@
   `;
 
   // ---------- 启动 ----------
-  // 各难度下拉的地狱选项：按解锁状态显示（人机 + AI 观战主页/暂停面板）
-  function syncHellOption(sel) {
-    const opt = sel && sel.querySelector ? sel.querySelector('option[value="3"]') : null;
-    if (!opt) return;
-    opt.disabled = !PPD.isHellUnlocked();
-    opt.textContent = PPD.isHellUnlocked() ? '地狱' : '地狱 🔒（击败困难解锁）';
-  }
-  syncHellOption(PPD.ui.aiLevel);
-  syncHellOption(PPD.ui.aiLevelA);
-  syncHellOption(PPD.ui.aiLevelB);
-  syncHellOption(PPD.ui.pauseAiLevelA);
-  syncHellOption(PPD.ui.pauseAiLevelB);
+  // 各难度下拉的地狱选项：按解锁状态全量同步（人机 + AI 观战主页/暂停面板）
+  PPD.syncHellOptions();
+  // 通关记录：进入主菜单时拉取后端并渲染（失败静默）
+  if (PPD.refreshRecords) PPD.refreshRecords();
   // 调试：?auto=ai 自动进入人机对战（便于截图/自动化验证）
   if (/[?&]auto=ai/.test(location.search)) PPD.startAI();
   // 调试：?net=public 强制联机走公网（桌面端自动化验证用，网页版本就同域 /ws）
@@ -136,6 +128,9 @@
     get app() { return PPD.app; },
     get ui() { return PPD.ui; },
     GameAudio: PPD.GameAudio,
+    unlockHell: PPD.unlockHell,
+    isHellUnlocked: PPD.isHellUnlocked,
+    syncHellOptions: PPD.syncHellOptions,
     viewModelFromEngine: PPD.viewModelFromEngine,
     viewModelFromSnap: PPD.viewModelFromSnap,
     servePathFromSnap: PPD.servePathFromSnap,
@@ -144,5 +139,9 @@
     updateServeAim: PPD.updateServeAim,
     setServeAim: PPD.TT.setServeAim,
     solveServeTo: PPD.TT.solveServeTo,
+    // 地狱解锁（冒烟测试用）
+    isHellUnlocked: PPD.isHellUnlocked,
+    unlockHell: PPD.unlockHell,
+    syncHellOptions: PPD.syncHellOptions,
   };
 })();

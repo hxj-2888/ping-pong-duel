@@ -85,6 +85,7 @@
     PPD.show(PPD.ui.menu, true);
     PPD.show(PPD.ui.roomPanel, false);
     PPD.showTouch(false);
+    if (PPD.refreshRecords) PPD.refreshRecords(); // 通关记录：返回主页时刷新
   }
 
   function startOnlineGame(side) {

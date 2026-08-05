@@ -70,6 +70,7 @@
     inBoxStatus: document.getElementById('inBoxStatus'),
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
+    recordsPanel: document.getElementById('recordsPanel'),
     touchControls: document.getElementById('touchControls'),
     btnLeft: document.getElementById('btnLeft'),
     btnRight: document.getElementById('btnRight'),
@@ -181,17 +182,28 @@
   app.showHitRanges = showHitRanges;
   if (ui.showHitRanges) ui.showHitRanges.checked = showHitRanges;
 
-  // 解锁地狱模式并同步主菜单下拉框状态
+  // 单个难度下拉的地狱选项：按解锁状态显示（人机 + AI 观战主页/暂停面板共用）
+  function syncHellOption(sel) {
+    const opt = sel && sel.querySelector ? sel.querySelector('option[value="3"]') : null;
+    if (!opt) return;
+    opt.disabled = !isHellUnlocked();
+    opt.textContent = isHellUnlocked() ? '地狱' : '地狱 🔒（击败困难解锁）';
+  }
+  // 全量同步 5 个难度下拉（主页人机 + AI观战红/蓝 + 暂停面板红/蓝）
+  function syncHellOptions() {
+    syncHellOption(PPD.ui.aiLevel);
+    syncHellOption(PPD.ui.aiLevelA);
+    syncHellOption(PPD.ui.aiLevelB);
+    syncHellOption(PPD.ui.pauseAiLevelA);
+    syncHellOption(PPD.ui.pauseAiLevelB);
+  }
+
+  // 解锁地狱模式并全量同步所有难度下拉框状态
   function unlockHell() {
     if (hellUnlockedMem) return;
     hellUnlockedMem = true;
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(HELL_KEY, '1'); } catch (e) { /* ignore */ }
-    const sel = PPD.ui.aiLevel;
-    const opt = sel && sel.querySelector ? sel.querySelector('option[value="3"]') : null;
-    if (opt) {
-      opt.disabled = false;
-      opt.textContent = '地狱';
-    }
+    syncHellOptions();
   }
 
   // 得分后触发观众反应：得分方（winner 0=红 1=蓝）欢呼，对方观众摇头
@@ -219,7 +231,7 @@
     TT, TTG, GameAudio, NetClient, AIC,
     $id, show, resize,
     wsUrl, isLocalHost, isTouch,
-    isHellUnlocked, unlockHell,
+    isHellUnlocked, unlockHell, syncHellOptions, syncHellOptions,
     triggerCheer, updateMusicIntensity,
   };
 })();

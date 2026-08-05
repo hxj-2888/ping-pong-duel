@@ -13,6 +13,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // 通关记录 HTTP API → 转发全局 GameRoom DO
+    if (url.pathname.startsWith('/api/')) {
+      const id = env.GAME_ROOM.idFromName('global');
+      const stub = env.GAME_ROOM.get(id);
+      return stub.fetch(request);
+    }
+
     // 仅 WebSocket 升级请求转发给 DO（避免无效请求计入 DO 费用）
     if (request.headers.get('Upgrade') === 'websocket') {
       const id = env.GAME_ROOM.idFromName('global');

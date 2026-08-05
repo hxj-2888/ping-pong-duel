@@ -11,6 +11,22 @@ import { DurableObject } from 'cloudflare:workers';
 import { RoomCore } from './room-core.js';
 
 const STORAGE_KEY = 'rooms';
+const RECORDS_KEY = 'records'; // 通关记录（全局单实例，无 TTL 永久保存）
+const RECORDS_CAP = 200;
+
+// 校验并规整一条通关记录
+function sanitizeRecord(b) {
+  if (!b || typeof b !== 'object') return null;
+  const name = String(b.name || '玩家').slice(0, 20);
+  const mode = b.mode === 'ai' ? 'ai' : 'other';
+  const winner = b.winner === 0 ? 0 : 1;
+  const sc = Array.isArray(b.score)
+    ? b.score.slice(0, 2).map((v) => Math.max(0, Math.min(99, Math.round(Number(v) || 0))))
+    : [0, 0];
+  const difficulty = [0, 1, 2, 3].includes(Number(b.difficulty)) ? Number(b.difficulty) : 1;
+  const ts = Number(b.ts) || Date.now();
+  return { id: ts + '_' + Math.random().toString(36).slice(2, 8), name, mode, winner, score: sc, difficulty, ts };
+}
 
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
@@ -20,6 +36,42 @@ export class GameRoom extends DurableObject {
     this.core = new RoomCore();
     this.loaded = false;
     this.loadPromise = null;
+  }
+
+  // ---------- HTTP API：通关记录（GET/POST /api/records，CORS 兼容桌面公网跨域） ----------
+  async _handleApi(request) {
+    const url = new URL(request.url);
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Content-Type': 'application/json',
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (url.pathname !== '/api/records') {
+      return new Response(JSON.stringify({ ok: false, e: 'not found' }), { status: 404, headers: cors });
+    }
+    if (request.method === 'GET') {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 100);
+      const list = (await this.ctx.storage.get(RECORDS_KEY)) || [];
+      return new Response(JSON.stringify({ ok: true, records: list.slice(0, limit) }), { headers: cors });
+    }
+    if (request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch (e) {
+        return new Response(JSON.stringify({ ok: false, e: 'bad json' }), { status: 400, headers: cors });
+      }
+      const rec = sanitizeRecord(body);
+      if (!rec) {
+        return new Response(JSON.stringify({ ok: false, e: 'invalid' }), { status: 400, headers: cors });
+      }
+      const list = (await this.ctx.storage.get(RECORDS_KEY)) || [];
+      list.unshift(rec);
+      if (list.length > RECORDS_CAP) list.length = RECORDS_CAP;
+      await this.ctx.storage.put(RECORDS_KEY, list); // 无 TTL：永久保存
+      return new Response(JSON.stringify({ ok: true, id: rec.id }), { headers: cors });
+    }
+    return new Response(JSON.stringify({ ok: false, e: 'method' }), { status: 405, headers: cors });
   }
 
   // 首次使用前从 storage 恢复房间（幂等）
@@ -46,8 +98,12 @@ export class GameRoom extends DurableObject {
     }
   }
 
-  // ---------- WebSocket 升级入口（Hibernation API） ----------
+  // ---------- WebSocket 升级入口（Hibernation API）+ HTTP API ----------
   async fetch(request) {
+    // 通关记录 HTTP API（不经过房间 _load/_save）
+    if (new URL(request.url).pathname.startsWith('/api/')) {
+      return this._handleApi(request);
+    }
     await this._load();
     const upgrade = request.headers.get('Upgrade');
     if (upgrade !== 'websocket') {

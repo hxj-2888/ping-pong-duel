@@ -14,7 +14,7 @@ const SCRIPTS = [
   'engine/rules.js', 'engine/math.js', 'engine/state.js', 'engine/physics.js',
   'engine/shots.js', 'engine/strokes.js', 'engine.js',
   'render.js', 'characters.js', 'network.js', 'audio.js', 'ai.js',
-  'app/state.js', 'app/input.js', 'app/render.js', 'app/hud.js',
+  'app/state.js', 'app/records.js', 'app/input.js', 'app/render.js', 'app/hud.js',
   'app/net.js', 'app/modes.js', 'app/loop.js', 'app/main.js',
 ];
 
@@ -53,6 +53,14 @@ function makeElement(id) {
     addEventListener(type, fn) { (handlers[type] = handlers[type] || []).push(fn); },
     dispatch(type, ev) { for (const fn of handlers[type] || []) fn(ev); },
     getContext: () => makeCtx2d(),
+    // 难度下拉的地狱 option 桩（syncHellOption 查询 option[value="3"]）
+    querySelector(sel) {
+      if (sel === 'option[value="3"]') {
+        if (!this._hellOpt) this._hellOpt = { disabled: true, textContent: '地狱 🔒（击败困难解锁）' };
+        return this._hellOpt;
+      }
+      return null;
+    },
     getBoundingClientRect() {
       return { left: 100, top: 500, width: 132, height: 132, right: 232, bottom: 632 };
     },
@@ -81,6 +89,7 @@ const ELEMENT_IDS = [
   'gameTools', 'btnDiff', 'btnPause', 'btnExit', 'showHitRanges',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
+  'recordsPanel', // 通关记录面板（records.js 渲染）
 ];
 
 function boot(opts) {
@@ -132,6 +141,8 @@ function boot(opts) {
     addEventListener(type, fn) { (winHandlers[type] = winHandlers[type] || []).push(fn); },
     Math, JSON, Object, Array, Number, String, Boolean, Date, RegExp, Error, Promise,
     isFinite, isNaN, parseInt, parseFloat,
+    // 通关记录 fetch 桩：默认无后端（ok:false），测试可注入 opts.fetch 捕获请求
+    fetch: opts.fetch || (() => Promise.resolve({ ok: false, json: () => Promise.resolve({ ok: false, records: [] }) })),
   };
   sandbox.window = sandbox;
   sandbox.self = sandbox;
@@ -668,6 +679,57 @@ async function main() {
     // 返回主页面
     t.elements.get('btnExit').dispatch('click', {});
     check('AI 观战退出返回主页面', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
+  }
+
+  // ---------- 2.6 地狱解锁：全量同步 5 个难度下拉 ----------
+  {
+    const t = await boot();
+    const selects = ['aiLevel', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB'];
+    const opt = (id) => t.elements.get(id).querySelector('option[value="3"]');
+    check('地狱未解锁：5 个难度下拉初始均锁定', selects.every((id) => opt(id).disabled === true && opt(id).textContent.indexOf('🔒') !== -1));
+    t.ppd.unlockHell();
+    check('解锁后：5 个下拉全部解锁且文字=地狱', selects.every((id) => opt(id).disabled === false && opt(id).textContent === '地狱'));
+  }
+
+  // ---------- 2.7 通关记录：人机获胜 → 后端保存 + 主菜单渲染 ----------
+  {
+    let posted = null;
+    let getCalls = 0;
+    const t = await boot({
+      fetch: (url, init) => {
+        if (init && init.method === 'POST') {
+          posted = JSON.parse(init.body);
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, id: 'r1' }) });
+        }
+        getCalls++;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, records: [] }) });
+      },
+    });
+    check('通关记录：启动时已 GET 拉取', getCalls >= 1);
+    await sleep(10); // refreshRecords 异步：等微任务完成渲染
+    check('通关记录：面板显示「暂无」占位', t.elements.get('recordsPanel').innerHTML.indexOf('暂无') !== -1);
+    t.elements.get('aiLevel').value = '2'; // 困难
+    t.click('btnAI');
+    check('通关记录：困难 AI 模式启动', t.app.mode === 'ai' && t.app.aiLevel === 2);
+    const eng = t.app.engine;
+    eng.server = 0; eng.startServer = 0;
+    eng.score = [10, 9];
+    eng.phase = 'point'; eng.pointWinner = 0; eng.phaseT = 2.0;
+    t.runFrames(1);
+    t.runFrames(3);
+    check('通关记录：人机获胜触发后端保存', !!posted);
+    if (posted) {
+      check('保存内容：ai/获胜/困难/比分/玩家名/时间戳',
+        posted.mode === 'ai' && posted.winner === 0 && posted.difficulty === 2 &&
+        posted.score[0] === 11 && posted.score[1] === 9 &&
+        typeof posted.name === 'string' && typeof posted.ts === 'number');
+    }
+    check('通关记录：困难获胜同时解锁地狱', t.ppd.isHellUnlocked());
+    // 返回主菜单：面板应重新拉取渲染（fetch 桩现在返回 1 条记录）
+    getCalls = 0;
+    t.elements.get('btnMenu').dispatch('click', {});
+    await sleep(10);
+    check('返回主菜单：记录面板重新拉取', getCalls >= 1);
   }
 
   // ---------- 3. 联机建房（side 0） ----------
