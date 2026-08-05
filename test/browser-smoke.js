@@ -79,14 +79,15 @@ function makeElement(id) {
 
 const ELEMENT_IDS = [
   'game', 'menu', 'gameScreen', 'nameInput', 'btnLocal', 'btnHost', 'btnJoin', 'btnNetMode',
-  'joinInput', 'btnMute', 'btnMusic', 'btnMusicGame', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
+  'joinInput', 'btnSettings', 'btnSettingsGame', 'settingsPanel', 'btnSettingsClose',
+  'setShowHitRanges', 'setMusic', 'setSound', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot', 'tips',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch',
-  'gameTools', 'btnDiff', 'btnPause', 'btnExit', 'showHitRanges',
+  'gameTools', 'btnDiff', 'btnPause', 'btnExit',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
@@ -231,19 +232,26 @@ async function main() {
     check('本地模式已启动', t.app.mode === 'local' && !!t.app.engine);
     check('左上角显示接球箱尺寸', t.elements.get('hitBallVal').textContent === `${(TT.RULES.HITBOX_HX * 2).toFixed(1)}×${(TT.RULES.HITBOX_HZ * 2).toFixed(1)}×${(TT.RULES.HITBOX_Y_TOP - TT.RULES.HITBOX_Y_BOTTOM).toFixed(1)}m`);
     check('左上角显示蹲下最低接球', t.elements.get('hitPaddleVal').textContent === `低至 ${TT.RULES.CROUCH_HITBOX_Y_BOTTOM}m`);
-    check('判定范围虚线开关默认开启', t.app.showHitRanges === true && t.elements.get('showHitRanges').checked === true);
-    t.elements.get('showHitRanges').checked = false;
-    t.elements.get('showHitRanges').dispatch('change', {});
+    check('判定范围虚线默认关闭', t.app.showHitRanges === false);
     t.runFrames(3);
-    check('关闭开关后判定范围虚线隐藏', t.app.showHitRanges === false &&
-      t.ppd.viewModelFromEngine(t.app.engine, 0).showHitRanges === false);
-    check('关闭开关：左上角判定面板整体隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
-    t.elements.get('showHitRanges').checked = true;
-    t.elements.get('showHitRanges').dispatch('change', {});
+    check('默认关闭：左上角判定面板隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
+    // 设置面板：打开 → 开启虚线 → 立即生效；再关闭
+    t.elements.get('btnSettings').dispatch('click', {});
+    check('设置面板打开', t.elements.get('settingsPanel').style.display !== 'none');
+    t.elements.get('setShowHitRanges').checked = true;
+    t.elements.get('setShowHitRanges').dispatch('change', {});
     t.runFrames(3);
-    check('重新开启后判定范围虚线显示', t.app.showHitRanges === true &&
+    check('设置开启虚线后立即显示', t.app.showHitRanges === true &&
       t.ppd.viewModelFromEngine(t.app.engine, 0).showHitRanges === true);
-    check('重新开启：左上角判定面板恢复显示', t.elements.get('hitRangeInfo').style.display === '');
+    check('开启后：左上角判定面板显示', t.elements.get('hitRangeInfo').style.display === '');
+    t.elements.get('setShowHitRanges').checked = false;
+    t.elements.get('setShowHitRanges').dispatch('change', {});
+    t.runFrames(3);
+    check('设置关闭虚线后立即隐藏', t.app.showHitRanges === false &&
+      t.ppd.viewModelFromEngine(t.app.engine, 0).showHitRanges === false);
+    check('关闭后：左上角判定面板整体隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
+    t.elements.get('btnSettingsClose').dispatch('click', {});
+    check('设置面板关闭', t.elements.get('settingsPanel').style.display === 'none');
     t.runFrames(10);
     check('本地渲染 10 帧无异常', true);
     check('左上角实时显示球高', /^\d+\.\d{2}m$/.test(t.elements.get('ballHeight').textContent));
@@ -479,6 +487,7 @@ async function main() {
     // 方案四：感知辅助（仅判定范围显示开启时）——球进人类控制方箱体 → 提示音（上升沿一次）
     {
       const t2 = await boot();
+      t2.ppd.app.showHitRanges = true; // 本测试聚焦提示音：显式开启判定显示（默认已关闭）
       t2.click('btnLocal');
       const eng2 = t2.app.engine;
       TT.resetMatch(eng2);
@@ -511,7 +520,7 @@ async function main() {
       t2.ppd.GameAudio.ready = origReady;
     }
 
-    // raw 游戏音乐：挂接 <audio> 元素 + 音乐按钮切换播放/暂停（无 AudioContext 环境走元素路径）
+    // raw 游戏音乐：挂接 <audio> 元素 + 设置面板音乐/音效开关切换（无 AudioContext 环境走元素路径）
     {
       const t3 = await boot();
       const G = t3.ppd.GameAudio;
@@ -520,9 +529,18 @@ async function main() {
       const bgm = t3.elements.get('bgmAudio');
       check('raw 音乐：元素 src 指向 music.mp4', /music\.mp4$/.test(bgm.src));
       const on0 = G.isMusicOn();
-      G.setMusicOn(!on0);
-      check('raw 音乐：音乐按钮切换 → ' + (on0 ? '暂停' : '播放'), bgm.paused === on0);
-      G.setMusicOn(on0);
+      t3.elements.get('setMusic').checked = !on0;
+      t3.elements.get('setMusic').dispatch('change', {});
+      check('设置-音乐开关：关闭 → 音乐暂停', G.isMusicOn() === false && bgm.paused === true);
+      t3.elements.get('setMusic').checked = on0;
+      t3.elements.get('setMusic').dispatch('change', {});
+      check('设置-音乐开关：恢复 → 音乐播放', G.isMusicOn() === on0 && bgm.paused === false);
+      t3.elements.get('setSound').checked = false;
+      t3.elements.get('setSound').dispatch('change', {});
+      check('设置-音效开关：关闭 → muted', G.isMuted() === true);
+      t3.elements.get('setSound').checked = true;
+      t3.elements.get('setSound').dispatch('change', {});
+      check('设置-音效开关：恢复 → 音效开启', G.isMuted() === false);
     }
 
     // 页面打开即播：主菜单加载后自动尝试播放；被自动播放策略拦截（沙盒无 AudioContext

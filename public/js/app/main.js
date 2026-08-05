@@ -52,27 +52,31 @@
     PPD.setStatus(PPD.app.publicServer ? '联机服务器：公网（Cloudflare）' : '联机服务器：本地（局域网）');
   });
   refreshNetModeBtn();
-  PPD.ui.btnMute.addEventListener('click', () => {
+
+  // ---------- 设置面板（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效 ----------
+  function openSettings() {
     PPD.GameAudio.ensure();
-    const m = !PPD.GameAudio.isMuted();
-    PPD.GameAudio.setMuted(m);
-    PPD.ui.btnMute.textContent = m ? '🔇' : '🔊';
+    PPD.GameAudio.ui();
+    if (PPD.ui.setShowHitRanges) PPD.ui.setShowHitRanges.checked = PPD.app.showHitRanges;
+    if (PPD.ui.setMusic) PPD.ui.setMusic.checked = PPD.GameAudio.isMusicOn();
+    if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
+    PPD.show(PPD.ui.settingsPanel, true);
+  }
+  function closeSettings() { PPD.show(PPD.ui.settingsPanel, false); }
+  PPD.openSettings = openSettings;
+  PPD.closeSettings = closeSettings;
+  PPD.ui.btnSettings.addEventListener('click', openSettings);
+  PPD.ui.btnSettingsGame.addEventListener('click', openSettings);
+  PPD.ui.btnSettingsClose.addEventListener('click', () => { PPD.GameAudio.ui(); closeSettings(); });
+  // 判定范围虚线：局内随时可关（设置面板开关，立即生效 + 本地记忆）
+  PPD.ui.setShowHitRanges.addEventListener('change', () => {
+    PPD.app.showHitRanges = PPD.ui.setShowHitRanges.checked;
+    try { localStorage.setItem('ppd_show_hit_ranges', PPD.app.showHitRanges ? '1' : '0'); } catch (e) { /* ignore */ }
   });
-  // 背景音乐开关：主菜单与比赛页右上角两处按钮状态同步
-  function refreshMusicBtns() {
-    const on = PPD.GameAudio.isMusicOn();
-    const label = on ? '🎵' : '🎵❌';
-    if (PPD.ui.btnMusic) PPD.ui.btnMusic.textContent = label;
-    if (PPD.ui.btnMusicGame) PPD.ui.btnMusicGame.textContent = label;
-  }
-  function toggleMusic() {
-    PPD.GameAudio.ensure();
-    PPD.GameAudio.setMusicOn(!PPD.GameAudio.isMusicOn());
-    refreshMusicBtns();
-  }
-  PPD.ui.btnMusic.addEventListener('click', toggleMusic);
-  PPD.ui.btnMusicGame.addEventListener('click', toggleMusic);
-  refreshMusicBtns();
+  // 背景音乐 / 游戏音效：写回 GameAudio（内部持久化）
+  PPD.ui.setMusic.addEventListener('change', () => { PPD.GameAudio.setMusicOn(PPD.ui.setMusic.checked); });
+  PPD.ui.setSound.addEventListener('change', () => { PPD.GameAudio.setMuted(!PPD.ui.setSound.checked); });
+
   PPD.ui.btnAgain.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.restartMatch(); });
   PPD.ui.btnMenu.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.backToMenu(); });
   PPD.ui.btnQuit.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.quitGame(); });
@@ -81,11 +85,6 @@
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
     PPD.backToMenu();
-  });
-  // 首页开关：判定范围虚线显示 / 隐藏（本地记忆）
-  PPD.ui.showHitRanges.addEventListener('change', () => {
-    PPD.app.showHitRanges = PPD.ui.showHitRanges.checked;
-    try { localStorage.setItem('ppd_show_hit_ranges', PPD.app.showHitRanges ? '1' : '0'); } catch (e) { /* ignore */ }
   });
 
   // 提示

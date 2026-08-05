@@ -50,8 +50,13 @@ function sanitizeRecord(b) {
 function loadRecords() {
   try { return JSON.parse(fs.readFileSync(RECORDS_FILE, 'utf8')); } catch (e) { return []; }
 }
+// 原子写：先写临时文件再 rename，防止进程中断把 records.json 写坏（规范后端）
 function saveRecords(list) {
-  try { fs.writeFileSync(RECORDS_FILE, JSON.stringify(list, null, 1), 'utf8'); } catch (e) { /* ignore */ }
+  try {
+    const tmp = RECORDS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(list, null, 1), 'utf8');
+    fs.renameSync(tmp, RECORDS_FILE);
+  } catch (e) { /* ignore */ }
 }
 
 // ---------- 静态文件 ----------

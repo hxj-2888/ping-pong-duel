@@ -11,6 +11,7 @@
 
   <!-- 主菜单 -->
   <div id="menu" class="panel">
+    <button id="btnSettings" class="settings-btn" title="设置">⚙</button>
     <div class="logo">
       <div class="logo-ball">●</div>
       <h1>乒乓对决</h1>
@@ -53,12 +54,6 @@
           </select>
         </label>
       </div>
-      <div class="row toggle-row">
-        <label class="toggle-label">
-          <input type="checkbox" id="showHitRanges" checked>
-          判定范围虚线显示（接球箱 / 蹲下接球范围）
-        </label>
-      </div>
       <div class="row">
         <button id="btnHost" class="btn">创建联机房间</button>
         <button id="btnJoin" class="btn">加入房间</button>
@@ -68,8 +63,6 @@
       </div>
       <div class="row">
         <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
-        <button id="btnMute" class="btn icon">🔊</button>
-        <button id="btnMusic" class="btn icon">🎵</button>
       </div>
       <div id="statusBar" class="status"></div>
     </div>
@@ -114,9 +107,9 @@
       <div class="hr-row"><span class="hr-dot ball"></span><span>球高 <b id="ballHeight">-</b></span></div>
       <div class="hr-row"><span class="hr-dot box"></span><span>进箱 <b id="inBoxStatus" class="off">-</b></span></div>
     </div>
-    <!-- 右上角工具：音乐开关 / 难度切换 / 暂停 / 退出 -->
+    <!-- 右上角工具：设置 / 难度切换 / 暂停 / 退出 -->
     <div id="gameTools" class="game-tools">
-      <button id="btnMusicGame" class="tool-btn">🎵</button>
+      <button id="btnSettingsGame" class="tool-btn" title="设置">⚙</button>
       <button id="btnDiff" class="tool-btn" style="display:none">难度:中等</button>
       <button id="btnPause" class="tool-btn">暂停</button>
       <button id="btnExit" class="tool-btn">退出</button>
@@ -203,6 +196,26 @@
       <button id="btnAgain" class="btn primary">再来一局</button>
       <button id="btnMenu" class="btn">返回主界面</button>
       <button id="btnQuit" class="btn">退出游戏</button>
+    </div>
+  </div>
+
+  <!-- 设置（主页与比赛页右上角 ⚙ 打开）：判定虚线 / 背景音乐 / 游戏音效 -->
+  <div id="settingsPanel" class="settings-panel" style="display:none">
+    <div class="settings-card">
+      <h2>设置</h2>
+      <label class="toggle-label">
+        <input type="checkbox" id="setShowHitRanges">
+        判定范围虚线（接球箱 / 球高 / 进箱提示）
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="setMusic" checked>
+        背景音乐
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="setSound" checked>
+        游戏音效
+      </label>
+      <button id="btnSettingsClose" class="btn primary">完成</button>
     </div>
   </div>
 

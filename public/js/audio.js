@@ -9,7 +9,9 @@
   let ctx = null;
   let master = null;
   let noiseBuf = null;
+  // 音效开关（设置面板，localStorage 持久化）：muted=true 时游戏音效静音
   let muted = false;
+  try { muted = typeof localStorage !== 'undefined' && localStorage.getItem('ppd_sound_on') === '0'; } catch (e) { /* ignore */ }
   let revIR = null; // 观众欢呼：小厅混响脉冲响应（双声道）
   let applauseBuf = null;       // 真实掌声 WAV（audio/applause.wav）解码结果
   let applauseLoading = false;
@@ -29,7 +31,9 @@
   function applauseLoaded() { return !!applauseBuf; }
 
   // ---------- 背景音乐（独立开关，与音效 muted 分离） ----------
+  // musicOn 持久化（设置面板）：默认开；关闭后下次打开仍保持关闭
   let musicOn = true;
+  try { musicOn = typeof localStorage !== 'undefined' && localStorage.getItem('ppd_music_on') === '0' ? false : true; } catch (e) { /* ignore */ }
   let musicGain = null;
   let musicTimer = null;
   let musicStep = 0;        // 当前 1/8 步序号（16 步循环）
@@ -287,6 +291,7 @@
 
   function setMusicOn(on) {
     musicOn = !!on;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_music_on', musicOn ? '1' : '0'); } catch (e) { /* ignore */ }
     if (musicGain) musicGain.gain.value = musicOn ? 0.3 : 0;
     if (musicOn) startMusic(); else stopMusic();
   }
@@ -503,6 +508,7 @@
     autoplayMusic,
     setMuted(m) {
       muted = m;
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_sound_on', muted ? '0' : '1'); } catch (e) { /* ignore */ }
       if (master) master.gain.value = m ? 0 : 0.5;
       // raw 游戏音乐（<audio> 元素）同样跟随静音开关（与合成音乐一致）
       if (bgmEl) bgmEl.volume = m ? 0 : 0.3;

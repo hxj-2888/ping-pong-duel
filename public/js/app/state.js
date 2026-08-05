@@ -43,9 +43,14 @@
     btnJoin: document.getElementById('btnJoin'),
     btnNetMode: document.getElementById('btnNetMode'),
     joinInput: document.getElementById('joinInput'),
-    btnMute: document.getElementById('btnMute'),
-    btnMusic: document.getElementById('btnMusic'),
-    btnMusicGame: document.getElementById('btnMusicGame'),
+    // 设置（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效
+    btnSettings: document.getElementById('btnSettings'),
+    btnSettingsGame: document.getElementById('btnSettingsGame'),
+    settingsPanel: document.getElementById('settingsPanel'),
+    btnSettingsClose: document.getElementById('btnSettingsClose'),
+    setShowHitRanges: document.getElementById('setShowHitRanges'),
+    setMusic: document.getElementById('setMusic'),
+    setSound: document.getElementById('setSound'),
     roomPanel: document.getElementById('roomPanel'),
     roomCode: document.getElementById('roomCode'),
     roomHint: document.getElementById('roomHint'),
@@ -86,7 +91,6 @@
     btnDiff: document.getElementById('btnDiff'),
     btnPause: document.getElementById('btnPause'),
     btnExit: document.getElementById('btnExit'),
-    showHitRanges: document.getElementById('showHitRanges'),
     pausePanel: document.getElementById('pausePanel'),
     pauseAITune: document.getElementById('pauseAITune'), // 人机：地狱通关后的电脑 AI 数值调控
     btnResume: document.getElementById('btnResume'),
@@ -152,7 +156,7 @@
     paused: false,
     // 红/蓝双方观众状态：得分方欢呼量 cheer、对方摇头量 shake（0..1，主循环每帧衰减）
     fan: { cheer: [0, 0], shake: [0, 0] },
-    showHitRanges: true, // 是否在球/球拍周围显示判定范围虚线（首页开关）
+    showHitRanges: false, // 判定范围虚线（设置面板开关，默认关闭）
   };
 
   // ---------- 工具 ----------
@@ -178,14 +182,13 @@
 
   function isHellUnlocked() { return hellUnlockedMem; }
 
-  // 判定范围虚线开关（localStorage 持久化）
-  let showHitRanges = true;
+  // 判定范围虚线开关（设置面板，localStorage 持久化；默认关闭）
+  let showHitRanges = false;
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(HIT_RANGE_KEY) : null;
-    showHitRanges = v === null ? true : v === '1';
+    showHitRanges = v === null ? false : v === '1';
   } catch (e) { /* ignore */ }
   app.showHitRanges = showHitRanges;
-  if (ui.showHitRanges) ui.showHitRanges.checked = showHitRanges;
 
   // 单个难度下拉的地狱选项：按解锁状态显示（人机 + AI 观战主页/暂停面板共用）
   function syncHellOption(sel) {

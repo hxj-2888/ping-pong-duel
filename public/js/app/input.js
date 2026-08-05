@@ -234,7 +234,14 @@
     });
   }
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' && (PPD.app.mode === 'ai' || PPD.app.mode === 'local' || PPD.app.mode === 'aivai')) togglePause();
+    // Esc：设置面板打开时优先关闭设置；否则在比赛中暂停/继续
+    if (e.code === 'Escape') {
+      if (PPD.ui.settingsPanel && PPD.ui.settingsPanel.style.display !== 'none') {
+        PPD.closeSettings();
+        return;
+      }
+      if (PPD.app.mode === 'ai' || PPD.app.mode === 'local' || PPD.app.mode === 'aivai') togglePause();
+    }
   });
 
   // ---------- 屏幕点击：发球瞄准 + 对打单击推球/双击扣球 ----------

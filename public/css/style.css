@@ -261,6 +261,26 @@ canvas#game { touch-action: none; }
   cursor: pointer; transition: 0.15s;
 }
 .tool-btn:hover { background: rgba(255,255,255,0.16); }
+/* 主菜单右上角 ⚙ 设置按钮（固定于视口右上角，与比赛页 gameTools 同位） */
+.settings-btn {
+  position: fixed; top: 14px; right: 14px; z-index: 8;
+  width: 40px; height: 40px; font-size: 18px; line-height: 1;
+  background: rgba(10, 15, 26, 0.72); border: 1px solid var(--line); color: #eef2f8;
+  border-radius: 10px; cursor: pointer; transition: 0.15s;
+}
+.settings-btn:hover { background: rgba(255,255,255,0.16); }
+/* 设置弹层（主页与比赛页共用，右上角 ⚙ 打开） */
+.settings-panel {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 22, 0.75); backdrop-filter: blur(4px);
+}
+.settings-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 28px 34px; display: flex; flex-direction: column; gap: 16px; min-width: 280px;
+}
+.settings-card h2 { color: #ffd166; letter-spacing: 3px; margin: 0; }
+.settings-card .toggle-label { justify-content: flex-start; font-size: 14px; }
 .pause-panel {
   position: fixed; inset: 0; z-index: 40;
   display: flex; align-items: center; justify-content: center;

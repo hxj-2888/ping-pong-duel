@@ -6,12 +6,10 @@
 (function () {
   'use strict';
 
-  // API 基址：与联机 wsUrl 同源/公网判断一致
-  // 本地（127.0.0.1/localhost 且未切公网）→ 同源本地 server.js；否则走公网 pages.dev
-  function apiBase() {
-    if (PPD.isLocalHost && !PPD.app.publicServer) return '';
-    return 'https://ping-pong-duel.pages.dev';
-  }
+  // API 基址：记录一律走当前页面**同源**后端——桌面端=本地 server.js（records.json，
+  // 页面就是它服务的，必然可达）；网页版=pages.dev /api/records（Cloudflare DO）。
+  // 不跟随"联机:公网"切换，避免桌面切公网时记录静默写到远端、重开又读本地导致记录"消失"。
+  function apiBase() { return ''; }
 
   // 保存一条通关记录（人机玩家获胜时由 hud.js 调用）
   async function saveRecord(rec) {
