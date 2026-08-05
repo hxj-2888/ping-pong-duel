@@ -65,6 +65,49 @@ function isOurGame(port) {
   });
 }
 
+// 端口上的服务器是否已是"当前版本"：当前版 server.js 才有 /api/records 路由
+// （旧版本返回 404）——避免复用旧进程导致通关记录保存静默失败
+function isCurrentGame(port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/api/records', timeout: 600 }, (res) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
+// 杀掉监听指定端口的进程（Windows：netstat 找 PID + taskkill）
+function killPort(port) {
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('netstat -ano', { encoding: 'utf8', windowsHide: true });
+    const re = new RegExp(':' + port + '\\s+\\S+\\s+LISTENING\\s+(\\d+)', 'i');
+    for (const line of out.split(/\r?\n/)) {
+      const m = line.match(re);
+      if (m) execSync('taskkill /PID ' + m[1] + ' /F', { windowsHide: true, stdio: 'ignore' });
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// 等待端口释放（连接被拒绝即视为已释放）
+function waitPortFree(port, tries) {
+  return new Promise((resolve, reject) => {
+    let n = 0;
+    const once = () => {
+      const s = net.connect({ host: '127.0.0.1', port });
+      s.once('connect', () => {
+        s.destroy();
+        if (++n >= tries) reject(new Error('端口 ' + port + ' 释放超时'));
+        else setTimeout(once, 150);
+      });
+      s.once('error', () => { s.destroy(); resolve(); });
+    };
+    once();
+  });
+}
+
 function findFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
@@ -89,8 +132,15 @@ async function main() {
   try {
     await serverReady(PORT, 1);
     if (await isOurGame(PORT)) {
-      alreadyRunning = true;
-      log('端口 ' + PORT + ' 已有本游戏服务器，直接复用');
+      if (await isCurrentGame(PORT)) {
+        alreadyRunning = true;
+        log('端口 ' + PORT + ' 已有本游戏服务器（当前版本），直接复用');
+      } else {
+        // 旧版本服务器（无通关记录 API）：杀掉重启，保证记录功能可用
+        log('端口 ' + PORT + ' 是本游戏但版本过旧，重启服务器以启用最新功能');
+        killPort(PORT);
+        try { await waitPortFree(PORT, 20); } catch (e) { log('旧服务器未及时退出: ' + e.message); }
+      }
     } else {
       urlPort = await findFreePort();
       log('端口 ' + PORT + ' 被其他程序占用，自动改用空闲端口 ' + urlPort);
