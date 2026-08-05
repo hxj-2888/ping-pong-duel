@@ -97,7 +97,7 @@
     const b = engine.ball;
     const f = p.facing;
 
-    let l = 0, r = 0, pu = 0, sm = 0, lp = 0;
+    let l = 0, r = 0, fwd = 0, back = 0, pu = 0, sm = 0, lp = 0, crouch = 0, run = 0;
 
     // 站位误差目标定期刷新（模拟人类判断偏差）
     s.errT -= dt;
@@ -119,6 +119,10 @@
       const tx = clamp(opp.x * 0.45, -1.2, 1.2);
       if (tx < p.x - 0.06) l = 1;
       else if (tx > p.x + 0.06) r = 1;
+      // 回位到基础站位（与玩家相同的移动范围）
+      const baseZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
+      if (baseZ > p.z + 0.08) fwd = 1;
+      else if (baseZ < p.z - 0.08) back = 1;
     } else if (engine.phase === 'play' && !b.inHand) {
       const zc = p.z + f * 0.42;
       const incoming = b.vel.z * f < 0;
@@ -135,19 +139,35 @@
         targetX = clamp(b.pos.x + s.errTarget, -2.3, 2.3);
       }
 
-      // 移动输出（敏捷度 = 移动占空比，简单难度明显更慢）
+      // 前后站位（与玩家相同的移动范围）：来球时迎到球前，球在对方半场时回位
+      let targetZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
+      if (incoming) targetZ = clamp(b.pos.z - f * 0.42, -T.RULES.Z_BACK, T.RULES.Z_BACK);
+      const dzF = (targetZ - p.z) * f; // 沿朝向的位移（正=向前）
+      if (dzF > 0.10) fwd = 1;
+      else if (dzF < -0.10) back = 1;
+
+      // 蹲下（与玩家 Ctrl 蹲下相同）：来球很低且接近时压低接球箱，可接贴地球
+      const ballNear = Math.hypot(b.pos.x - p.x, b.pos.y - 1.0, b.pos.z - zc);
+      crouch = incoming && b.pos.y < 0.95 && ballNear < 1.6 ? 1 : 0;
+
+      // 移动输出（敏捷度 = 移动占空比，简单难度明显更慢；追远球时跑步加速）
       const dx = targetX - p.x;
+      const dz = targetZ - p.z;
       s.moveT += dt;
-      if ((s.moveT % 0.12) < 0.12 * agility && Math.abs(dx) > 0.045) {
+      const wantMove = Math.abs(dx) > 0.045 || Math.abs(dz) > 0.10;
+      if ((s.moveT % 0.12) < 0.12 * agility && wantMove) {
         if (dx > 0) r = 1;
         else l = 1;
       }
+      run = (Math.abs(dx) > 0.9 || Math.abs(dz) > 0.9) ? 1 : 0;
 
-      // 击球判断：与玩家同一碰撞箱（站立箱体）——球进箱即可接
+      // 击球判断：与玩家同一碰撞箱（进箱即命中；蹲下时用蹲下箱，可接贴地球）
       const R = T.RULES;
+      const yTop = crouch ? R.CROUCH_HITBOX_Y_TOP : R.HITBOX_Y_TOP;
+      const yBottom = crouch ? R.CROUCH_HITBOX_Y_BOTTOM : R.HITBOX_Y_BOTTOM;
       const inBox = Math.abs(b.pos.x - p.x) < R.HITBOX_HX &&
         Math.abs(b.pos.z - zc) < R.HITBOX_HZ &&
-        b.pos.y > R.HITBOX_Y_BOTTOM && b.pos.y < R.HITBOX_Y_TOP;
+        b.pos.y > yBottom && b.pos.y < yTop;
       const hittable = incoming && engine.mayHit[side] && inBox;
       if (hittable) {
         // 每球只掷一次"接/漏"：catchProb 定义的接球概率（地狱=88%，可微调）
@@ -175,13 +195,16 @@
         s.lowRolled = false;
       }
     } else {
-      // 得分/结束阶段：回中
+      // 得分/结束阶段：回中 + 回位
       if (p.x > 0.15) l = 1;
       else if (p.x < -0.15) r = 1;
+      const baseZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
+      if (baseZ > p.z + 0.08) fwd = 1;
+      else if (baseZ < p.z - 0.08) back = 1;
     }
 
-    T.setInput(engine, side, { l, r, pu, sm, lp });
-    return { l, r, pu, sm, lp };
+    T.setInput(engine, side, { l, r, f: fwd, b: back, pu, sm, lp, crouch, run });
+    return { l, r, f: fwd, b: back, pu, sm, lp, crouch, run };
   }
 
   function reset() {

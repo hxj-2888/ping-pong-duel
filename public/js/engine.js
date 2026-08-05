@@ -75,11 +75,19 @@
       const zLo = p.side === 0 ? -ctx.RULES.Z_BACK : ctx.RULES.Z_FWD;
       const zHi = p.side === 0 ? -ctx.RULES.Z_FWD : ctx.RULES.Z_BACK;
       p.z = ctx.clamp(p.z + p.vz * dt, zLo, zHi);
-      // 不能上球桌：台面正投影范围（|x|≤半宽 且 |z|≤半长）不允许站立——
-      // 台面宽度内最多走到台面端线；台面两侧可以继续走到球网线（己方半场）
+      // 台面禁区（含人物整体尺寸）：候选位置若进入台面正投影，就沿“最近的边”平滑推出——
+      // 人物从一开始就进不了台面（正面走被端线挡住、侧面切被台边挡住），而不是先进去再被赶出来
       const TW = ctx.RULES.TABLE_WIDTH / 2, TL = ctx.RULES.TABLE_LENGTH / 2;
-      if (Math.abs(p.x) <= TW && Math.abs(p.z) < TL) {
-        p.z = p.side === 0 ? -TL : TL;
+      const rw = TW + ctx.RULES.PLAYER_BODY_W, rl = TL + ctx.RULES.PLAYER_BODY_D;
+      if (Math.abs(p.x) <= rw && Math.abs(p.z) <= rl) {
+        const dx = rw - Math.abs(p.x);
+        const dz = rl - Math.abs(p.z);
+        if (dx < dz) {
+          p.x = p.x >= 0 ? rw : -rw;    // 从侧面进入：横向推到台边外（贴边滑动）
+          p.padX = p.x + f * 0.18;      // 同步球拍定位坐标，避免球/拍继续飘进台面
+        } else {
+          p.z = p.side === 0 ? -rl : rl; // 从端线进入：退到端线后
+        }
       }
       p.crouch = inp.crouch ? 1 : 0;
       p.run = inp.run ? 1 : 0;
@@ -120,9 +128,8 @@
       // 待发时球拍保持准备姿势并跟随球员移动（挥拍过程中不干预）
     if (!p.stroke.active) {
       const f = p.facing;
-      // 发球持拍位置与持球点一致：站到网前时自动退到可发球位置
-      const z = f > 0 ? Math.min(p.z + f * 0.42, -0.7) : Math.max(p.z + f * 0.42, 0.7);
-      p.paddle.p = ctx.vec(p.padX, p.crouch ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, z);
+      // 发球持拍位置跟随球员，球始终在拍前 0.10m（serveBallPos）
+      p.paddle.p = ctx.vec(p.padX, p.crouch ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, p.z + f * 0.42);
       p.paddle.n = ctx.vec(0, 0, f);
       p.paddle.v = ctx.vec(0, 0, 0);
       }

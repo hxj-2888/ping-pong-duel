@@ -34,6 +34,9 @@
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); return; }
     if (e.code.startsWith('Arrow')) e.preventDefault();
+    // 游戏中拦截 Ctrl/⌘ 组合键的浏览器默认行为（Ctrl+W 关闭窗口、Ctrl+Q 退出、
+    // Ctrl+R 刷新等），保证 Ctrl 只用于“蹲下”，组合移动键（如 Ctrl+W 蹲着向前）正常生效
+    if ((e.ctrlKey || e.metaKey) && PPD.app.mode) e.preventDefault();
     applyKey(e.code, true);
     syncKeys();
   });
@@ -67,32 +70,66 @@
     PPD.show(PPD.ui.touchControls, v && PPD.isTouch);
   }
 
+  // 全方位摇杆：拖动映射左/右/前/后（可斜向移动），松手回中
+  const JOY_MAX = 48; // 摇杆最大行程（px）
+  const joy = { active: false, id: -1, cx: 0, cy: 0, dx: 0, dy: 0 };
+  function joyApply() {
+    const k = PPD.app.keyP1;
+    k.r = joy.dx > 0.25 ? 1 : 0;
+    k.l = joy.dx < -0.25 ? 1 : 0;
+    k.f = joy.dy < -0.25 ? 1 : 0; // 上=向前（朝网）
+    k.b = joy.dy > 0.25 ? 1 : 0;
+    syncKeys();
+  }
+  function joyMove(clientX, clientY) {
+    let dx = clientX - joy.cx, dy = clientY - joy.cy;
+    const len = Math.hypot(dx, dy);
+    if (len > JOY_MAX) { dx = (dx / len) * JOY_MAX; dy = (dy / len) * JOY_MAX; }
+    joy.dx = dx / JOY_MAX;
+    joy.dy = dy / JOY_MAX;
+    if (PPD.ui.joyKnob) PPD.ui.joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    joyApply();
+  }
+  function joyReset() {
+    joy.active = false; joy.id = -1;
+    joy.dx = 0; joy.dy = 0;
+    PPD.app.keyP1.l = 0; PPD.app.keyP1.r = 0; PPD.app.keyP1.f = 0; PPD.app.keyP1.b = 0;
+    if (PPD.ui.joyKnob) PPD.ui.joyKnob.style.transform = 'translate(0,0)';
+    syncKeys();
+  }
+
   function bindTouch() {
-    const bind = (el, key) => {
+    const hold = (el, key) => {
       if (!el) return;
-      const onDown = (e) => {
-        e.preventDefault();
-        PPD.app.keyP1[key] = 1;
-        syncKeys();
-        if (key === 'pu' && PPD.app.mode === 'online' && PPD.app.snapB && PPD.app.snapB.ph === 0) {
-          PPD.GameAudio.ensure();
-        }
-      };
-      const onUp = (e) => {
-        e.preventDefault();
-        PPD.app.keyP1[key] = 0;
-        syncKeys();
-      };
-      el.addEventListener('pointerdown', onDown);
-      el.addEventListener('pointerup', onUp);
-      el.addEventListener('pointercancel', onUp);
-      el.addEventListener('pointerleave', onUp);
+      const on = (v) => (e) => { e.preventDefault(); PPD.app.keyP1[key] = v; syncKeys(); };
+      el.addEventListener('pointerdown', on(1));
+      el.addEventListener('pointerup', on(0));
+      el.addEventListener('pointercancel', on(0));
+      el.addEventListener('pointerleave', on(0));
       el.addEventListener('contextmenu', (e) => e.preventDefault());
     };
-    bind(PPD.ui.btnLeft, 'l');
-    bind(PPD.ui.btnRight, 'r');
-    bind(PPD.ui.btnFwd, 'f');
-    bind(PPD.ui.btnBack, 'b');
+    // 蹲下按钮（手机端）：按住蹲下（与电脑 Ctrl 相同效果）
+    hold(PPD.ui.btnCrouch, 'crouch');
+    // 全方位摇杆
+    const base = PPD.ui.joyBase;
+    if (base) {
+      base.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        joy.active = true; joy.id = e.pointerId;
+        const r = base.getBoundingClientRect();
+        joy.cx = r.left + r.width / 2; joy.cy = r.top + r.height / 2;
+        joyMove(e.clientX, e.clientY);
+        if (base.setPointerCapture) { try { base.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } }
+      });
+      base.addEventListener('pointermove', (e) => {
+        if (joy.active && e.pointerId === joy.id) joyMove(e.clientX, e.clientY);
+      });
+      const end = (e) => { if (joy.active && e.pointerId === joy.id) joyReset(); };
+      base.addEventListener('pointerup', end);
+      base.addEventListener('pointercancel', end);
+      base.addEventListener('pointerleave', end);
+      base.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
   }
   bindTouch();
 
@@ -278,10 +315,12 @@
   });
 
   PPD.canvas.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // 鼠标：左键推球 / 右键扣球（右键不发球菜单）；触屏：单击推球 / 双击扣球
+    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
     if (!PPD.app.mode) return;
     PPD.app.lastPointerX = e.clientX;
     PPD.app.lastPointerY = e.clientY;
+    const isTouchEv = e.pointerType === 'touch';
     const serveSide = myServeSide();
     if (serveSide !== null) {
       // 发球阶段：电脑单击直接发球；手机第一下点按进入瞄准、第二下点按发球
@@ -294,7 +333,7 @@
         PPD.showPoint('该位置无法发球，请移动鼠标/手指调整瞄准');
         return;
       }
-      if (e.pointerType === 'touch') {
+      if (isTouchEv) {
         if (!PPD.app.serveAiming) {
           PPD.app.serveAiming = true;
           PPD.showPoint('已瞄准：移动手指调整轨迹，再点一下发球');
@@ -303,23 +342,28 @@
           fireShot(serveSide, 'pu');
         }
       } else {
-        fireShot(serveSide, 'pu');
+        fireShot(serveSide, e.button === 2 ? 'sm' : 'pu');
       }
       return;
     }
     PPD.app.serveAiming = false;
-    // 对打：单击立即推球（消除 280ms 双击判定延迟——快球也能接到）；
-    // 280ms 内同侧第二击发扣球边沿，引擎把蓄力期推球挥拍升级为扣球
     const side = tapSideFor(e.clientX);
-    const now = performance.now();
-    if (now - tapAt <= DOUBLE_TAP_MS && side === tapSidePending) {
-      tapAt = 0;
-      tapSidePending = -1;
-      fireShot(side, 'sm');
+    if (isTouchEv) {
+      // 对打（触屏）：单击立即推球（消除 280ms 双击判定延迟——快球也能接到）；
+      // 280ms 内同侧第二击发扣球边沿，引擎把蓄力期推球挥拍升级为扣球
+      const now = performance.now();
+      if (now - tapAt <= DOUBLE_TAP_MS && side === tapSidePending) {
+        tapAt = 0;
+        tapSidePending = -1;
+        fireShot(side, 'sm');
+      } else {
+        tapAt = now;
+        tapSidePending = side;
+        fireShot(side, 'pu');
+      }
     } else {
-      tapAt = now;
-      tapSidePending = side;
-      fireShot(side, 'pu');
+      // 对打（鼠标）：左键推球 / 右键扣球
+      fireShot(side, e.button === 2 ? 'sm' : 'pu');
     }
   });
   PPD.canvas.addEventListener('contextmenu', (e) => e.preventDefault());

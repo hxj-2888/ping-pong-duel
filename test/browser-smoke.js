@@ -53,6 +53,9 @@ function makeElement(id) {
     addEventListener(type, fn) { (handlers[type] = handlers[type] || []).push(fn); },
     dispatch(type, ev) { for (const fn of handlers[type] || []) fn(ev); },
     getContext: () => makeCtx2d(),
+    getBoundingClientRect() {
+      return { left: 100, top: 500, width: 132, height: 132, right: 232, bottom: 632 };
+    },
   };
   // 与浏览器一致：textContent/innerHTML 赋值自动转字符串
   for (const prop of ['textContent', 'innerHTML']) {
@@ -74,7 +77,7 @@ const ELEMENT_IDS = [
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
-  'touchControls', 'btnLeft', 'btnRight', 'btnFwd', 'btnBack',
+  'touchControls', 'joyBase', 'joyKnob', 'btnCrouch',
   'gameTools', 'btnDiff', 'btnPause', 'btnExit', 'showHitRanges',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
@@ -166,6 +169,22 @@ function boot() {
       const ev = { pointerType: 'touch', button: 0, clientX: x, clientY: y, preventDefault() {} };
       elements.get('game').dispatch('pointerdown', ev);
     },
+    tapRight(x, y) {
+      const ev = { pointerType: 'mouse', button: 2, clientX: x, clientY: y, preventDefault() {} };
+      elements.get('game').dispatch('pointerdown', ev);
+    },
+    joyDown(x, y) {
+      const ev = { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, preventDefault() {} };
+      elements.get('joyBase').dispatch('pointerdown', ev);
+    },
+    joyMove(x, y) {
+      const ev = { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, preventDefault() {} };
+      elements.get('joyBase').dispatch('pointermove', ev);
+    },
+    joyUp() {
+      const ev = { pointerId: 7, pointerType: 'touch', clientX: 0, clientY: 0, preventDefault() {} };
+      elements.get('joyBase').dispatch('pointerup', ev);
+    },
     move(x, y) {
       const ev = { clientX: x, clientY: y, preventDefault() {} };
       elements.get('game').dispatch('pointermove', ev);
@@ -226,28 +245,40 @@ async function main() {
     check('P2 按 ← 向左移动', t.app.engine.players[1].x < -0.2);
     t.key('ArrowLeft', false);
 
-    // 触控按钮：桌面环境应隐藏，按下/抬起应正确驱动 P1
-    check('桌面环境：触控按钮隐藏', t.elements.get('touchControls').style.display === 'none');
+    // 触控摇杆 + 蹲下按钮：桌面环境应隐藏；摇杆拖动应正确驱动 P1（全方位）
+    check('桌面环境：触控控件隐藏', t.elements.get('touchControls').style.display === 'none');
     t.app.engine.players[0].x = 0;
     t.app.engine.players[0].vx = 0;
     t.app.engine.players[0].padX = 0;
-    t.elements.get('btnRight').dispatch('pointerdown', { preventDefault() {} });
+    t.joyDown(210, 566); // 摇杆右推
     t.runFrames(30);
-    check('触控按钮 ◀▶：按右移动', t.app.engine.players[0].x > 0.2);
-    t.elements.get('btnRight').dispatch('pointerup', { preventDefault() {} });
-
-    // 前后触控按钮：▲ 向前移动 / ▼ 向后移动（与左右键围成方向键）
+    check('摇杆右推：P1 向右移动', t.app.engine.players[0].x > 0.2);
+    t.joyUp();
     const zBeforeFwd = t.app.engine.players[0].z;
-    t.elements.get('btnFwd').dispatch('pointerdown', { preventDefault() {} });
+    t.joyDown(166, 510); // 摇杆上推（向前）
     t.runFrames(30);
-    check('触控按钮 ▲▼：按▲向前移动', t.app.engine.players[0].z > zBeforeFwd + 0.05);
-    t.elements.get('btnFwd').dispatch('pointerup', { preventDefault() {} });
+    check('摇杆上推：P1 向前移动', t.app.engine.players[0].z > zBeforeFwd + 0.05);
+    t.joyUp();
     t.runFrames(20);
     const zAfterFwd = t.app.engine.players[0].z;
-    t.elements.get('btnBack').dispatch('pointerdown', { preventDefault() {} });
+    t.joyDown(166, 620); // 摇杆下推（向后）
     t.runFrames(30);
-    check('触控按钮 ▲▼：按▼向后移动', t.app.engine.players[0].z < zAfterFwd - 0.05);
-    t.elements.get('btnBack').dispatch('pointerup', { preventDefault() {} });
+    check('摇杆下推：P1 向后移动', t.app.engine.players[0].z < zAfterFwd - 0.05);
+    t.joyUp();
+    // 斜向：右+上 同时生效（全方位移动）
+    t.app.engine.players[0].x = 0; t.app.engine.players[0].padX = 0;
+    const zDiag = t.app.engine.players[0].z;
+    t.joyDown(210, 510);
+    t.runFrames(30);
+    check('摇杆斜推：右+前同时生效', t.app.engine.players[0].x > 0.1 && t.app.engine.players[0].z > zDiag + 0.02);
+    t.joyUp();
+    // 蹲下按钮（手机端）：按住蹲下 / 松开恢复
+    t.elements.get('btnCrouch').dispatch('pointerdown', { preventDefault() {} });
+    t.runFrames(2);
+    check('蹲下按钮：P1 蹲下生效', t.app.engine.players[0].crouch === 1);
+    t.elements.get('btnCrouch').dispatch('pointerup', { preventDefault() {} });
+    t.runFrames(2);
+    check('松开蹲下按钮：恢复站立', t.app.engine.players[0].crouch === 0);
 
     // Shift 跑步加速 / Ctrl 蹲下减速（电脑端按键）
     const p0 = t.app.engine.players[0];
@@ -269,6 +300,16 @@ async function main() {
     const dC = moveDist(false, true);
     check('Shift 跑步：移动速度明显变快', dR > dN * 1.25);
     check('Ctrl 蹲下：移动速度明显变慢且蹲姿生效', dC < dN * 0.8 && t.app.engine.players[0].crouch === 1);
+    // Ctrl+W：浏览器“关闭窗口”快捷键应被拦截，游戏内表现为蹲下+向前移动
+    let pdW = false;
+    t.app.keyP1.crouch = 0; t.app.keyP1.f = 0;
+    for (const fn of t.winHandlers.keydown || []) fn({ code: 'ControlLeft', ctrlKey: false, preventDefault() {} });
+    const evW = { code: 'KeyW', ctrlKey: true, preventDefault() { pdW = true; } };
+    for (const fn of t.winHandlers.keydown || []) fn(evW);
+    check('Ctrl+W 被拦截（不会关闭游戏窗口）', pdW);
+    check('Ctrl+W 触发蹲下+向前', t.app.keyP1.crouch === 1 && t.app.keyP1.f === 1);
+    for (const fn of t.winHandlers.keyup || []) fn({ code: 'KeyW', ctrlKey: true, preventDefault() {} });
+    for (const fn of t.winHandlers.keyup || []) fn({ code: 'ControlLeft', ctrlKey: false, preventDefault() {} });
 
     // 蹲下能接远台低球（不蹲下接不到）
     const lowBallSetup = (crouch) => {
@@ -394,10 +435,24 @@ async function main() {
     t.runFrames(45);
     await sleep(90);
     t.runFrames(2);
-    t.tap(400, 360); t.runFrames(1); // 单击推球，立即出拍（蓄力期）
-    t.tap(400, 360);                 // 280ms 内同侧第二击 → 扣球边沿
-    t.runFrames(3);                  // 引擎把推球挥拍升级为扣球
-    check('对打双击：推球挥拍升级为扣球', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 2);
+    t.tap(400, 360); t.runFrames(1); // 左键推球，立即出拍（蓄力期）
+    t.tapRight(400, 360);            // 右键扣球边沿 → 引擎把推球挥拍升级为扣球
+    t.runFrames(3);
+    check('右键扣球：推球挥拍升级为扣球', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 2);
+    t.runFrames(40);
+    await sleep(90);
+    // 右键单独扣球：直接进入扣球挥拍
+    TT.resetMatch(t.app.engine);
+    setStance(0, 0, -1.65);
+    t.runFrames(5);
+    t.tap(300, 360); // 发球
+    t.runFrames(3);
+    t.runFrames(45);
+    await sleep(90);
+    t.runFrames(2);
+    t.tapRight(400, 360);
+    t.runFrames(3);
+    check('右键单独扣球：进入扣球挥拍', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 2);
     t.runFrames(40);
     await sleep(90);
 

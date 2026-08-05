@@ -149,5 +149,62 @@ const DT = 1 / 120;
     lowProbs[0] === 0 && lowProbs[1] === 0 && lowProbs[2] === 0.2 && lowProbs[3] === 0.5);
 }
 
+// ---------- 6. AI 与玩家条件同步（蹲下/跑步/前后移动/同一碰撞箱） ----------
+{
+  // 贴地球（台端线后方，避免先弹台）：AI 应像玩家按 Ctrl 一样自动蹲下，
+  // 球进入蹲下箱（可接范围）；成功回球由物理边界 9e 覆盖（引擎级）
+  const e = TT.createEngine();
+  e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [true, true];
+  e.ball.inHand = false;
+  e.ball.pos = { x: 0.2, y: 0.50, z: e.players[1].z - 0.15 };
+  e.ball.vel = { x: 0, y: 0.2, z: 0.6 };
+  e.ball.spin = { x: 0, y: 0, z: 0 };
+  e.ball.hitBy = 0; e.ball.lastBounce = 0;
+  let crouched = false, inCrouchBox = false;
+  for (let i = 0; i < 90; i++) {
+    const inp = AIC.control(e, 1, DT, 2);
+    if (inp.crouch) crouched = true;
+    const R = TT.RULES;
+    if (crouched &&
+        Math.abs(e.ball.pos.x - e.players[1].x) < R.HITBOX_HX &&
+        Math.abs(e.ball.pos.z - (e.players[1].z + e.players[1].facing * 0.42)) < R.HITBOX_HZ &&
+        e.ball.pos.y > R.CROUCH_HITBOX_Y_BOTTOM && e.ball.pos.y < R.CROUCH_HITBOX_Y_TOP) {
+      inCrouchBox = true;
+    }
+    TT.step(e, DT);
+    if (e.phase === 'point' || e.phase === 'over') break;
+  }
+  check('AI 贴地球自动蹲下且球进入蹲下箱（与玩家蹲下同步）', crouched && inCrouchBox);
+
+  // 多拍回合中 AI 会使用前/后移动与跑步（与玩家移动范围/跑步同步）
+  const e2 = TT.createEngine();
+  const stats = { f: 0, b: 0, run: 0, hits: 0 };
+  let want = false;
+  for (let i = 0; i < 8000 && stats.hits < 20; i++) {
+    if (e2.phase === 'serve' && e2.server === 0 && e2.ball.inHand && e2.players[0].hitCd <= 0) {
+      TT.setInput(e2, 0, { pu: 1 }); TT.step(e2, DT); TT.setInput(e2, 0, {});
+      continue;
+    }
+    const p0 = e2.players[0];
+    const zc0 = p0.z + p0.facing * 0.42;
+    const near = e2.phase === 'play' && e2.mayHit[0] && !e2.ball.inHand &&
+      Math.abs(e2.ball.pos.x - p0.x) < TT.RULES.HITBOX_HX &&
+      Math.abs(e2.ball.pos.z - zc0) < TT.RULES.HITBOX_HZ &&
+      e2.ball.pos.y > TT.RULES.HITBOX_Y_BOTTOM && e2.ball.pos.y < TT.RULES.HITBOX_Y_TOP;
+    if (near && !want) TT.setInput(e2, 0, { pu: 1 });
+    else if (!near) TT.setInput(e2, 0, {});
+    want = near;
+    const inp = AIC.control(e2, 1, DT, 2);
+    if (inp.f) stats.f++;
+    if (inp.b) stats.b++;
+    if (inp.run) stats.run++;
+    const before = e2.rallyCount;
+    TT.step(e2, DT);
+    if (e2.rallyCount > before && e2.ball.hitBy === 1) stats.hits++;
+    if (e2.phase === 'point' || e2.phase === 'over') break;
+  }
+  check('AI 使用前/后移动与跑步（与玩家移动范围同步）', stats.f > 0 && stats.b > 0 && stats.run > 0);
+}
+
 console.log(failures === 0 ? '\n人机对手测试全部通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);

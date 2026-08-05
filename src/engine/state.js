@@ -88,13 +88,9 @@
   // 发球持球点：球位于球拍正前方（与拍面中心同高，拍面法线前方 0.10m）
   function serveBallPos(p) {
     const f = p.facing;
-    const z = p.z + f * (0.42 + 0.10);
-    // 发球必须“先落本方半台”：持球点至少离球网 0.7m，球员站到网前也能正常发球
-    return ctx.vec(
-      ctx.clamp(p.padX, -1.35, 1.35),
-      0.98,
-      f > 0 ? Math.min(z, -0.7) : Math.max(z, 0.7)
-    );
+    // 球始终位于球拍正前方 0.10m（不随站位被钳到奇怪位置）；
+    // 若站位导致发球解不出合法轨迹，则按“无法发球”处理，需调整站位后再发
+    return ctx.vec(p.padX, 0.98, p.z + f * (0.42 + 0.10));
   }
 
   function resetBallToServer(state) {

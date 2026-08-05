@@ -202,6 +202,28 @@ input:focus { border-color: var(--blue); }
   pointer-events: auto;
 }
 .touch-controls .pad-row { display: flex; gap: 10px; justify-content: center; }
+.joy-area {
+  pointer-events: auto; width: 150px; height: 150px;
+  display: flex; align-items: center; justify-content: center;
+}
+.joy-base {
+  width: 132px; height: 132px; border-radius: 50%;
+  background: rgba(18, 26, 42, 0.55); border: 1.5px solid rgba(255,255,255,0.30);
+  position: relative; touch-action: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
+.joy-knob {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(58,134,255,0.78); border: 1.5px solid rgba(255,255,255,0.55);
+  position: absolute; left: 50%; top: 50%; margin: -27px 0 0 -27px;
+  transform: translate(0, 0); box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  will-change: transform;
+}
+.tc-right {
+  display: flex; flex-direction: column; gap: 10px; align-items: flex-end;
+  pointer-events: auto;
+}
+.crouch-btn { width: 64px; height: 64px; font-size: 18px; }
 .tbtn {
   width: 68px; height: 68px; border-radius: 50%;
   background: rgba(18, 26, 42, 0.66); border: 1.5px solid rgba(255,255,255,0.30);

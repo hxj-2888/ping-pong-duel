@@ -410,19 +410,29 @@ const DT = 1 / 120;
   }
 }
 
-// ---------- 10. 移动范围：己方半场（球网线为界），不能上球桌 ----------
+// ---------- 10. 移动范围：己方半场（球网线为界），整身不上桌 ----------
 {
   const e = TT.createEngine();
   const p = e.players[0];
   const TW = R.TABLE_WIDTH / 2, TL = R.TABLE_LENGTH / 2;
-  // 台面中间：向前最多走到台面端线
+  // 台面中间：向前最多走到台面端线（含身体余量）
   p.x = 0; p.padX = 0; p.z = -1.5;
   for (let i = 0; i < 300; i++) { TT.setInput(e, 0, { f: 1 }); TT.step(e, DT); }
-  check('台面中间向前止步于台面端线', Math.abs(p.z + TL) < 0.02);
+  check('台面中间向前止步于台面端线（含身体余量）', Math.abs(p.z + TL + R.PLAYER_BODY_D) < 0.02);
   // 台面外侧：可以一直走到球网线
   p.x = 1.2; p.padX = 1.38; p.z = -1.37;
   for (let i = 0; i < 300; i++) { TT.setInput(e, 0, { f: 1 }); TT.step(e, DT); }
   check('台面外侧可走到球网线（己方半场）', p.z > -0.2 && p.z <= -0.05);
+  // 侧面切回台面宽度内：应贴边平滑滑动，而不是被“赶回”端线
+  let maxJump = 0;
+  for (let i = 0; i < 120; i++) {
+    const z0 = p.z;
+    TT.setInput(e, 0, { l: 1 });
+    TT.step(e, DT);
+    maxJump = Math.max(maxJump, Math.abs(p.z - z0));
+  }
+  check('侧面切入不被赶回（贴边滑动，单帧 z 跳变 < 0.1m）',
+    maxJump < 0.1 && Math.abs(Math.abs(p.x) - (TW + R.PLAYER_BODY_W)) < 0.02);
   // 乱走时绝不站上球桌（|x|≤半宽 且 |z|≤半长）
   let onTable = false;
   p.x = 0; p.padX = 0; p.z = -2.0;
@@ -433,11 +443,49 @@ const DT = 1 / 120;
     if (Math.abs(q.x) <= TW && Math.abs(q.z) < TL - 1e-6) onTable = true;
   }
   check('任意移动都不会站上球桌', !onTable);
-  // 网前站位也能正常发球（持球点自动回到可发球位置）
+  // 任意站位持球点都在球拍正前方 0.10m（不被钳到奇怪位置）
   const e2 = TT.createEngine();
-  e2.players[0].z = -0.2; e2.players[0].x = 0.4; e2.players[0].padX = 0.4;
+  const p2 = e2.players[0];
+  p2.z = -0.2; p2.x = 0.4; p2.padX = 0.4;
+  const H2 = { x: p2.padX, y: 0.98, z: p2.z + p2.facing * 0.52 };
+  check('网前站位持球点在球拍正前方', Math.abs(H2.z - (p2.z + p2.facing * 0.42) - p2.facing * 0.10) < 1e-6 && H2.x === p2.padX);
+  // 网前极端站位：球仍在前方，但发球解不出合法轨迹（需调整站位）
   const plan = TT.solveServeTo(e2, 0, 0, 0.6, false);
-  check('网前站位发球仍可解（持球点自动回退）', !!plan);
+  check('网前站位发球被阻止（球越过网，需调整站位）', !plan);
+  // 台面两侧网前朝台面按方向键：球/拍不飘离身体（回归：原先球会飘进台面）
+  for (const side of [0, 1]) {
+    const eS = TT.createEngine();
+    eS.server = side; eS.startServer = side;
+    const pS = eS.players[side];
+    const sd = side === 0 ? -1 : 1;
+    pS.padX = sd * 1.38; pS.x = sd * 1.2; pS.z = side === 0 ? -0.18 : 0.18;
+    for (let i = 0; i < 60; i++) { TT.setInput(eS, side, side === 0 ? { r: 1 } : { l: 1 }); TT.step(eS, DT); }
+    const ball0 = eS.ball.pos.x;
+    let maxDrift = 0;
+    for (let i = 0; i < 120; i++) {
+      TT.setInput(eS, side, side === 0 ? { r: 1 } : { l: 1 });
+      TT.step(eS, DT);
+      maxDrift = Math.max(maxDrift, Math.abs(eS.ball.pos.x - ball0));
+    }
+    check(`P${side + 1} 台面侧前朝台面按方向键：球不飘（漂移 < 0.05m）`, maxDrift < 0.05);
+  }
+  // 整身不压台：把火柴人看作整体（脚距 0.16 + 步幅 0.14/0.06 + 脚趾 0.09），
+  // 极限站位（侧前/端线，静止与最大步幅）两只脚都不进入台面正投影
+  const rw2 = TW + R.PLAYER_BODY_W, rl2 = TL + R.PLAYER_BODY_D;
+  const maxAmpX = 0.14, maxAmpZ = 0.06;
+  let footBad = false;
+  const poses = [[-rw2, -0.18, 1], [rw2, 0.18, -1], [0, -rl2, 1], [-rw2, -rl2, 1], [rw2, rl2, -1]];
+  for (const [px, pz, f] of poses) {
+    for (const sx of [-1, 0, 1]) {
+      for (const sz of [-1, 0, 1]) {
+        const fl = { x: px - 0.16 + sx * maxAmpX, z: pz + f * (0.04 + sz * maxAmpZ) };
+        const fr = { x: px + 0.16 - sx * maxAmpX, z: pz + f * (0.04 - sz * maxAmpZ) };
+        const hit = (q) => Math.abs(q.x) <= TW && Math.abs(q.z) <= TL;
+        if (hit(fl) || hit(fr)) footBad = true;
+      }
+    }
+  }
+  check('整身不压台：极限站位（含最大步幅）脚不上桌', !footBad);
 }
 
 console.log(failures === 0 ? '\n物理边界测试全部通过 ✓' : `\n${failures} 项失败 ✗`);

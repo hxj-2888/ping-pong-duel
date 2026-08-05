@@ -163,19 +163,13 @@
         <button id="btnPauseExit" class="btn">退出比赛（返回主页面）</button>
       </div>
     </div>
-    <!-- 手机端触控按钮（触屏设备才显示） -->
+    <!-- 手机端触控（触屏设备才显示）：左下方全方位摇杆 + 右下蹲下按钮 -->
     <div id="touchControls" class="touch-controls" style="display:none">
-      <div class="pad">
-        <div class="pad-row">
-          <button id="btnFwd" class="tbtn" aria-label="向前移动">▲</button>
-        </div>
-        <div class="pad-row">
-          <button id="btnLeft" class="tbtn" aria-label="向左移动">◀</button>
-          <button id="btnRight" class="tbtn" aria-label="向右移动">▶</button>
-        </div>
-        <div class="pad-row">
-          <button id="btnBack" class="tbtn" aria-label="向后移动">▼</button>
-        </div>
+      <div id="joyArea" class="joy-area">
+        <div id="joyBase" class="joy-base"><div id="joyKnob" class="joy-knob"></div></div>
+      </div>
+      <div class="tc-right">
+        <button id="btnCrouch" class="tbtn crouch-btn" aria-label="蹲下">蹲</button>
       </div>
     </div>
   </div>
