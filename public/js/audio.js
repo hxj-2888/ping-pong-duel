@@ -67,6 +67,8 @@
         .then((ab) => ctx.decodeAudioData(ab))
         .then((buf) => {
           bgmBuf = buf;
+          trimBgmBuffer();   // 首尾相连：裁掉开头/结尾近静音
+          computeBgmInfo();
           // 解码完成：停掉元素兜底再启零间隙循环，避免双音
           if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
           startMusic();
@@ -77,6 +79,60 @@
   }
 
   function musicMode() { return (bgmBuf || bgmEl) ? 'raw' : 'synth'; }
+  // 当前 raw 音乐实际播放路径（调试/验证用）：buffer=WebAudio 无缝循环 / element=<audio> 兜底
+  function bgmPath() { return bgmBuf ? 'buffer' : bgmEl ? 'element' : 'synth'; }
+  // 诊断缓存：解码完成时计算首/尾响度（RMS）与时长（读取 getChannelData 在解码时做，避免调用期被拦）
+  let bgmInfoCache = null;
+  function bgmInfo() { return bgmInfoCache; }
+  function computeBgmInfo() {
+    if (!bgmBuf) return;
+    const ch = bgmBuf.getChannelData(0);
+    const rate = bgmBuf.sampleRate;
+    const rms = (start, len) => {
+      let s = 0, n = 0;
+      for (let i = start; i < Math.min(start + len, ch.length); i += 64) { s += ch[i] * ch[i]; n++; }
+      return n ? Math.sqrt(s / n) : 0;
+    };
+    const sec = (v) => Math.floor(v * rate);
+    bgmInfoCache = Object.assign({}, bgmInfoCache, {
+      dur: Math.round(bgmBuf.duration * 100) / 100,
+      head0_2: +rms(0, sec(0.2)).toFixed(4),
+      tail0_5: +rms(ch.length - sec(0.5), sec(0.5)).toFixed(4),
+      tail0_2: +rms(ch.length - sec(0.2), sec(0.2)).toFixed(4),
+      tail0_05: +rms(ch.length - sec(0.05), sec(0.05)).toFixed(4),
+    });
+  }
+  // 首尾相连：裁掉缓冲开头/结尾的近静音（20ms 窗口 RMS < 0.005），
+  // 让循环从响亮结尾直接接上音乐开头（消除开头死寂造成的"断裂"感）
+  function trimBgmBuffer() {
+    if (!bgmBuf) return;
+    const ch0 = bgmBuf.getChannelData(0);
+    const rate = bgmBuf.sampleRate;
+    const win = Math.max(1, Math.floor(rate * 0.02));
+    const rmsAt = (start) => {
+      let s = 0, n = 0;
+      for (let i = start; i < Math.min(start + win, ch0.length); i += 8) { s += ch0[i] * ch0[i]; n++; }
+      return n ? Math.sqrt(s / n) : 0;
+    };
+    const TH = 0.005;
+    let head = 0;
+    while (head + win < ch0.length && rmsAt(head) < TH) head += win;
+    let tail = ch0.length;
+    while (tail - win > head && rmsAt(tail - win) < TH) tail -= win;
+    // 安全兜底：整段几乎无声或几乎无静音（开头 <30ms 且结尾无静音）时不裁
+    if (head >= ch0.length / 2) return;
+    if (head < Math.floor(rate * 0.03) && tail >= ch0.length) return;
+    bgmInfoCache = bgmInfoCache || {};
+    bgmInfoCache.headTrimMs = Math.round(head / rate * 1000);
+    bgmInfoCache.tailTrimMs = Math.round((ch0.length - tail) / rate * 1000);
+    if (head === 0 && tail === ch0.length) return;
+    const newLen = tail - head;
+    const trimmed = ctx.createBuffer(bgmBuf.numberOfChannels, newLen, rate);
+    for (let c = 0; c < bgmBuf.numberOfChannels; c++) {
+      trimmed.copyToChannel(bgmBuf.getChannelData(c).subarray(head, tail), c);
+    }
+    bgmBuf = trimmed;
+  }
 
   // 体育赛事风格 16 步循环（2 小节，约 115 BPM）：
   // 鼓组：底鼓 1/3 拍，军鼓 2/4 拍，踩镲 八分音符（强度越高越密）
@@ -422,7 +478,7 @@
     },
     isMuted() { return muted; },
     setMusicOn, isMusicOn() { return musicOn; },
-    musicMode, // 'raw'=真实音乐已加载 / 'synth'=合成音乐兜底
+    musicMode, bgmPath, bgmInfo, // 'raw'=真实音乐 / 'synth'=合成音乐兜底；bgmPath: buffer/element/synth
     setIntensity,
     hit() { noise(0.06, 0.35, 1800); tone(260, 0.07, 'square', 0.12, 90); },
     bounce() { tone(420, 0.045, 'sine', 0.18, 240); },
