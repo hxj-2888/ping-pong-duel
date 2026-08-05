@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>乒乓对决 · 双人联机乒乓球</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- 主菜单 -->
+  <div id="menu" class="panel">
+    <div class="logo">
+      <div class="logo-ball">●</div>
+      <h1>乒乓对决</h1>
+      <p>TABLE TENNIS DUEL · ITTF 标准场地</p>
+    </div>
+    <div class="menu-card">
+      <label>你的昵称
+        <input id="nameInput" maxlength="12" placeholder="球员名字" value="乒乓球手">
+      </label>
+      <button id="btnLocal" class="btn primary">本地双人对战（分屏）</button>
+      <button id="btnAI" class="btn primary">人机对战（单机）</button>
+      <div class="row ai-row">
+        <label class="ai-label">难度
+          <select id="aiLevel">
+            <option value="0">简单</option>
+            <option value="1" selected>中等</option>
+            <option value="2">困难</option>
+            <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
+          </select>
+        </label>
+      </div>
+      <div class="row ai-row">
+        <button id="btnAIVsAI" class="btn primary">AI 观战（AI vs AI）</button>
+      </div>
+      <div class="row aivai-row">
+        <label class="ai-label">红方
+          <select id="aiLevelA">
+            <option value="0">简单</option>
+            <option value="1" selected>中等</option>
+            <option value="2">困难</option>
+            <option value="3" disabled>地狱 🔒</option>
+          </select>
+        </label>
+        <label class="ai-label">蓝方
+          <select id="aiLevelB">
+            <option value="0">简单</option>
+            <option value="1" selected>中等</option>
+            <option value="2">困难</option>
+            <option value="3" disabled>地狱 🔒</option>
+          </select>
+        </label>
+      </div>
+      <div class="row toggle-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="showHitRanges" checked>
+          判定范围虚线显示（接球箱 / 蹲下接球范围）
+        </label>
+      </div>
+      <div class="row">
+        <button id="btnHost" class="btn">创建联机房间</button>
+        <button id="btnJoin" class="btn">加入房间</button>
+      </div>
+      <div class="row">
+        <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
+      </div>
+      <div class="row">
+        <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
+        <button id="btnMute" class="btn icon">🔊</button>
+        <button id="btnMusic" class="btn icon">🎵</button>
+      </div>
+      <div id="statusBar" class="status"></div>
+    </div>
+    <div id="tips" class="tips"></div>
+  </div>
+
+  <!-- 联机等待 -->
+  <div id="roomPanel" class="panel room-panel" style="display:none">
+    <h2>房间已创建</h2>
+    <div id="roomCode" class="room-code">----</div>
+    <p id="roomHint">等待对手加入…</p>
+    <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
+    <button id="btnRoomBack" class="btn">返回主页</button>
+  </div>
+
+  <!-- 游戏画面 -->
+  <div id="gameScreen" style="display:none">
+    <div id="hud">
+      <div class="player-box">
+        <span id="hudP1">玩家1</span>
+        <span class="score" id="score1">0</span>
+      </div>
+      <div class="center">
+        <div id="serveDot" class="serve-dot"></div>
+        <div class="vs">VS</div>
+      </div>
+      <div class="player-box right">
+        <span class="score" id="score2">0</span>
+        <span id="hudP2">玩家2</span>
+      </div>
+    </div>
+    <div id="phaseBanner"></div>
+    <div id="pointToast"></div>
+    <div id="hintBar"></div>
+    <div id="netInfo"></div>
+    <!-- 左上角：接球碰撞箱与蹲下最低接球高显示 -->
+    <div id="hitRangeInfo">
+      <div class="hr-title">接球判定（进箱即命中）</div>
+      <div class="hr-row"><span class="hr-dot ball"></span><span>接球箱 <b id="hitBallVal">1.6×1.2×1.0m</b></span></div>
+      <div class="hr-row"><span class="hr-dot paddle"></span><span>蹲下最低接球 <b id="hitPaddleVal">0.02m</b></span></div>
+      <div class="hr-row"><span class="hr-dot ball"></span><span>球高 <b id="ballHeight">-</b></span></div>
+      <div class="hr-row"><span class="hr-dot box"></span><span>进箱 <b id="inBoxStatus" class="off">-</b></span></div>
+    </div>
+    <!-- 右上角工具：音乐开关 / 难度切换 / 暂停 / 退出 -->
+    <div id="gameTools" class="game-tools">
+      <button id="btnMusicGame" class="tool-btn">🎵</button>
+      <button id="btnDiff" class="tool-btn" style="display:none">难度:中等</button>
+      <button id="btnPause" class="tool-btn">暂停</button>
+      <button id="btnExit" class="tool-btn">退出</button>
+    </div>
+    <!-- 暂停面板 -->
+    <div id="pausePanel" class="pause-panel" style="display:none">
+      <div class="pause-card">
+        <h2>已暂停</h2>
+        <!-- AI 观战：暂停中调整双方 AI 难度与参数（即时生效） -->
+        <div id="pauseAIVsAI" class="pause-aivai" style="display:none">
+          <div class="tune-side">
+            <label class="ai-label">红方 AI
+              <select id="pauseAiLevelA">
+                <option value="0">简单</option>
+                <option value="1" selected>中等</option>
+                <option value="2">困难</option>
+                <option value="3" disabled>地狱 🔒</option>
+              </select>
+            </label>
+            <div class="tune-grid">
+              <label class="tune-row">反应 <input id="tuneAReact" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+              <label class="tune-row">接球 <input id="tuneACatch" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+              <label class="tune-row">攻击 <input id="tuneASmash" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+              <label class="tune-row">敏捷 <input id="tuneAAgility" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+            </div>
+          </div>
+          <div class="tune-side">
+            <label class="ai-label">蓝方 AI
+              <select id="pauseAiLevelB">
+                <option value="0">简单</option>
+                <option value="1" selected>中等</option>
+                <option value="2">困难</option>
+                <option value="3" disabled>地狱 🔒</option>
+              </select>
+            </label>
+            <div class="tune-grid">
+              <label class="tune-row">反应 <input id="tuneBReact" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+              <label class="tune-row">接球 <input id="tuneBCatch" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+              <label class="tune-row">攻击 <input id="tuneBSmash" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+              <label class="tune-row">敏捷 <input id="tuneBAgility" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b></label>
+            </div>
+          </div>
+        </div>
+        <button id="btnResume" class="btn primary">继续游戏</button>
+        <button id="btnPauseExit" class="btn">退出比赛（返回主页面）</button>
+      </div>
+    </div>
+    <!-- 手机端触控按钮（触屏设备才显示） -->
+    <div id="touchControls" class="touch-controls" style="display:none">
+      <div class="pad">
+        <div class="pad-row">
+          <button id="btnFwd" class="tbtn" aria-label="向前移动">▲</button>
+        </div>
+        <div class="pad-row">
+          <button id="btnLeft" class="tbtn" aria-label="向左移动">◀</button>
+          <button id="btnRight" class="tbtn" aria-label="向右移动">▶</button>
+        </div>
+        <div class="pad-row">
+          <button id="btnBack" class="tbtn" aria-label="向后移动">▼</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 覆盖层 -->
+  <div id="overlay" class="overlay" style="display:none">
+    <div class="overlay-card">
+      <h2 id="overlayTitle"></h2>
+      <p id="overlayText"></p>
+      <button id="overlayBtn" class="btn primary"></button>
+    </div>
+  </div>
+
+  <!-- 一局结束：渐变成黑屏，显示输赢与三个操作按钮 -->
+  <div id="gameOver" class="game-over-screen" style="display:none">
+    <h1 id="gameOverTitle">您赢了</h1>
+    <div class="game-over-btns">
+      <button id="btnAgain" class="btn primary">再来一局</button>
+      <button id="btnMenu" class="btn">返回主界面</button>
+      <button id="btnQuit" class="btn">退出游戏</button>
+    </div>
+  </div>
+
+  <!-- 引擎：按依赖顺序加载的独立小模块（engine.js 负责组装） -->
+  <script src="js/engine/rules.js"></script>
+  <script src="js/engine/math.js"></script>
+  <script src="js/engine/state.js"></script>
+  <script src="js/engine/physics.js"></script>
+  <script src="js/engine/shots.js"></script>
+  <script src="js/engine/strokes.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/characters.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/ai.js"></script>
+  <!-- 游戏界面：按功能拆分的独立小模块（app/state.js 提供共享状态） -->
+  <script src="js/app/state.js"></script>
+  <script src="js/app/input.js"></script>
+  <script src="js/app/render.js"></script>
+  <script src="js/app/hud.js"></script>
+  <script src="js/app/net.js"></script>
+  <script src="js/app/modes.js"></script>
+  <script src="js/app/loop.js"></script>
+  <script src="js/app/main.js"></script>
+  <!-- raw 游戏音乐：<audio> 元素播放 mp4（含视频轨的视频容器取其音频），随音乐按钮开始/暂停 -->
+  <audio id="bgmAudio" loop preload="auto" style="display:none"></audio>
+</body>
+</html>

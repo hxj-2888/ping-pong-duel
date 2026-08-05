@@ -1,0 +1,153 @@
+/* 人机对手测试：自动发球 / 回球回合 / 追球移动 / 比赛推进 / 难度档位 */
+'use strict';
+
+const TT = require('../public/js/engine.js');
+const AIC = require('../public/js/ai.js');
+
+let failures = 0;
+function check(name, cond) {
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${name}`);
+  if (!cond) failures++;
+}
+
+const DT = 1 / 120;
+
+// ---------- 1. AI 自动发球 ----------
+{
+  const e = TT.createEngine();
+  e.server = 1;
+  e.startServer = 1;
+  e.ball.pos = { x: 0, y: 1.0, z: e.players[1].z + e.players[1].facing * 0.22 };
+  let served = false;
+  for (let i = 0; i < 2400; i++) {
+    AIC.control(e, 1, DT, 1);
+    TT.step(e, DT);
+    if (e.phase === 'play') { served = true; break; }
+  }
+  check('AI 自动发球进入对打', served && !e.ball.inHand && Number.isFinite(e.ball.pos.x));
+}
+
+// ---------- 2. 脚本化人类 vs AI（困难）多拍回合 ----------
+{
+  const e = TT.createEngine();
+  const hold = [0, 0];
+  const wasWanting = [false, false];
+  const ballNear = (side) => {
+    const p = e.players[side], b = e.ball;
+    if (b.inHand) return false;
+    const zc = p.z + p.facing * 0.42;
+    return Math.hypot(b.pos.x - p.x, b.pos.z - zc) < 1.0 &&
+           b.pos.y > 0.80 && b.pos.y < 1.45;
+  };
+  let aiHits = 0;
+  let winner = -1;
+  // 困难 AI 有 10% 刻意漏接（catchProb=0.90），单回合可能漏——跨多回合累计回球数
+  for (let i = 0; i < 60000; i++) {
+    // 人类（P0）：发球 + 推球回击（边沿触发）
+    if (e.phase === 'serve' && e.server === 0 && e.ball.inHand && e.players[0].hitCd <= 0) {
+      hold[0] = 12;
+    }
+    const want = e.phase === 'play' && e.mayHit[0] && ballNear(0) && aiHits < 5;
+    if (want && !wasWanting[0]) hold[0] = 45;
+    wasWanting[0] = want;
+    TT.setInput(e, 0, { pu: hold[0] > 0 });
+    hold[0] = Math.max(0, hold[0] - 1);
+
+    AIC.control(e, 1, DT, 2);
+    const before = e.rallyCount;
+    TT.step(e, DT);
+    if (e.rallyCount > before && e.ball.hitBy === 1) aiHits++;
+    // 完成若干拍后人类停手，让回合自然结束（推球抬高过网后，完美回球回合不会自行终止）
+    if (aiHits >= 5) { hold[0] = 0; wasWanting[0] = false; }
+    if (e.phase === 'over') { winner = e.pointWinner; break; }
+  }
+  check(`困难AI 多拍回合（AI回球${aiHits}次）`, e.phase === 'over' && aiHits >= 3);
+}
+
+// ---------- 3. AI 追球移动 ----------
+{
+  const e = TT.createEngine();
+  e.phase = 'play';
+  e.serveStage = 'rally';
+  e.mayHit = [false, false];
+  e.ball.inHand = false;
+  e.ball.pos = { x: 1.1, y: 1.0, z: 0.5 };
+  e.ball.vel = { x: 0.8, y: -0.2, z: 1.6 };
+  e.ball.spin = { x: 0, y: 0, z: 0 };
+  e.ball.hitBy = 0;
+  e.ball.lastBounce = 0;
+  for (let i = 0; i < 240; i++) {
+    AIC.control(e, 1, DT, 1);
+    TT.step(e, DT);
+    if (e.phase !== 'play') break;
+  }
+  check(`AI 向球落点移动（x=${e.players[1].x.toFixed(2)}）`, e.players[1].x > 0.15);
+}
+
+// ---------- 4. 比赛推进：AI 发球连得分 ----------
+{
+  const e = TT.createEngine();
+  e.server = 1;
+  e.startServer = 1;
+  e.ball.pos = { x: 0, y: 1.0, z: e.players[1].z + e.players[1].facing * 0.22 };
+  let bad = false;
+  for (let i = 0; i < 7200; i++) {
+    AIC.control(e, 1, DT, 1);
+    TT.step(e, DT);
+    const snap = TT.snapshot(e);
+    if (!snap.sc.every((v) => Number.isFinite(v))) { bad = true; break; }
+  }
+  check(`比赛推进：AI 得分 ${e.score[1]} 分`, !bad && e.score[1] >= 2);
+}
+
+// ---------- 2b. 地狱 AI 刻意打低球（lowShotProb=0.5 → type 3 低平快球）----------
+{
+  const e = TT.createEngine();
+  const hold = [0, 0];
+  const wasWanting = [false, false];
+  const ballNear = (side) => {
+    const p = e.players[side], b = e.ball;
+    if (b.inHand) return false;
+    const zc = p.z + p.facing * 0.42;
+    return Math.hypot(b.pos.x - p.x, b.pos.z - zc) < 1.0 &&
+           b.pos.y > 0.80 && b.pos.y < 1.45;
+  };
+  let aiHits = 0, aiLow = 0;
+  for (let i = 0; i < 60000; i++) {
+    if (e.phase === 'serve' && e.server === 0 && e.ball.inHand && e.players[0].hitCd <= 0) hold[0] = 12;
+    const want = e.phase === 'play' && e.mayHit[0] && ballNear(0) && aiHits < 12;
+    if (want && !wasWanting[0]) hold[0] = 45;
+    wasWanting[0] = want;
+    TT.setInput(e, 0, { pu: hold[0] > 0 });
+    hold[0] = Math.max(0, hold[0] - 1);
+    AIC.control(e, 1, DT, 3); // 地狱：50% 刻意低球
+    const before = e.rallyCount;
+    TT.step(e, DT);
+    if (e.rallyCount > before && e.ball.hitBy === 1) {
+      aiHits++;
+      if (e.players[1].stroke.type === 3) aiLow++;
+    }
+    if (aiHits >= 12) break;
+  }
+  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次）`, aiLow >= 3 && aiLow <= aiHits);
+}
+
+// ---------- 5. 难度档位配置 ----------
+{
+  const names = AIC.LEVELS.map((l) => l.name).join('/');
+  const ordered = AIC.LEVELS[0].react > AIC.LEVELS[1].react &&
+    AIC.LEVELS[1].react > AIC.LEVELS[2].react &&
+    AIC.LEVELS[2].react > AIC.LEVELS[3].react &&
+    AIC.LEVELS[0].agility < AIC.LEVELS[1].agility &&
+    AIC.LEVELS[1].agility < AIC.LEVELS[2].agility &&
+    AIC.LEVELS[0].smashProb < AIC.LEVELS[1].smashProb &&
+    AIC.LEVELS[1].smashProb < AIC.LEVELS[2].smashProb;
+  check(`四档难度（${names}）参数递增有序`, AIC.LEVELS.length === 4 && ordered);
+  // 刻意低球概率：简单/中等不低球，困难 1/5、地狱 1/2
+  const lowProbs = AIC.LEVELS.map((l) => l.lowShotProb || 0);
+  check('刻意低球概率：简单0/中等0/困难0.2/地狱0.5',
+    lowProbs[0] === 0 && lowProbs[1] === 0 && lowProbs[2] === 0.2 && lowProbs[3] === 0.5);
+}
+
+console.log(failures === 0 ? '\n人机对手测试全部通过 ✓' : `\n${failures} 项失败 ✗`);
+process.exit(failures === 0 ? 0 : 1);

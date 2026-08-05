@@ -1,0 +1,14 @@
+# 运行时日志
+app.log
+
+# Node
+node_modules/
+npm-debug.log*
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+*.swp
+
+# 本地配置
+.env

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>乒乓对决 · 静态预览</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #0d1220; overflow: hidden; }
+    canvas { display: block; width: 1280px; height: 720px; }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="1280" height="720"></canvas>
+  <script src="../public/js/engine/rules.js"></script>
+  <script src="../public/js/engine/math.js"></script>
+  <script src="../public/js/engine/state.js"></script>
+  <script src="../public/js/engine/physics.js"></script>
+  <script src="../public/js/engine/shots.js"></script>
+  <script src="../public/js/engine/strokes.js"></script>
+  <script src="../public/js/engine.js"></script>
+  <script src="../public/js/render.js"></script>
+  <script src="../public/js/characters.js"></script>
+  <script>
+    /* 静态动作瞬间：P0（红）推球回球中，P1（蓝）准备接球 */
+    (function () {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const cam = new TTG.Camera();
+      cam.set(TTG.v3(0, 4.6, 4.2), TTG.v3(0, 0.75, 0), 640, 360, 1472);
+
+      const p0 = {
+        side: 0, x: 0.35, z: -1.30, vx: 0, lean: -0.04, facing: 1, sb: 0.45,
+        stroke: { active: true, type: 1, t: 0.14, dur: 0.40, hit: true },
+        paddle: {
+          p: TTG.v3(0.62, 1.02, -0.92),
+          n: TTG.vnorm(TTG.v3(0.05, 0.12, 0.99)),
+          v: TTG.v3(1.8, 0.5, 4.2),
+        },
+      };
+      const p1 = {
+        side: 1, x: -0.30, z: 1.30, vx: 0, lean: 0.05, facing: -1, sb: 0,
+        stroke: { active: false, type: 0, t: 0, dur: 0.4, hit: false },
+        paddle: {
+          p: TTG.v3(-0.48, 0.98, 0.88),
+          n: TTG.v3(0, 0, -1),
+          v: TTG.v3(0, 0, 0),
+        },
+      };
+      const view = {
+        cam,
+        side: 0,
+        players: [p0, p1],
+        ball: {
+          pos: TTG.v3(0.28, 0.92, 0.38),
+          vel: TTG.v3(0.2, -1.6, -3.8),
+          spin: TTG.v3(72, 0, 0),
+          vis: true,
+        },
+        ballInHand: null,
+        time: 12.0,
+        phase: 'play',
+        score: [3, 2],
+        server: 0,
+        pointReason: '',
+      };
+      TTG.drawScene(ctx, view, 1280, 720);
+    })();
+  </script>
+</body>
+</html>

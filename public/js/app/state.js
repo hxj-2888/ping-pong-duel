@@ -1,0 +1,216 @@
+/* ============================================================
+ * app/state.js — 共享状态与 DOM 引用（拆分自 main.js）
+ * 所有 app/ 模块通过 window.PPD 访问公共状态、界面元素与接口，
+ * 模块之间不直接调用彼此的私有实现。
+ * ============================================================ */
+(function () {
+  'use strict';
+
+  const TT = window.TT;
+  const TTG = window.TTG;
+  const GameAudio = window.GameAudio;
+  const NetClient = window.NetClient;
+  const AIC = window.AIController;
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const ui = {
+    menu: document.getElementById('menu'),
+    gameScreen: document.getElementById('gameScreen'),
+    nameInput: document.getElementById('nameInput'),
+    btnLocal: document.getElementById('btnLocal'),
+    btnAI: document.getElementById('btnAI'),
+    aiLevel: document.getElementById('aiLevel'),
+    btnAIVsAI: document.getElementById('btnAIVsAI'),
+    aiLevelA: document.getElementById('aiLevelA'),
+    aiLevelB: document.getElementById('aiLevelB'),
+    pauseAiLevelA: document.getElementById('pauseAiLevelA'),
+    pauseAiLevelB: document.getElementById('pauseAiLevelB'),
+    pauseAIVsAI: document.getElementById('pauseAIVsAI'),
+    tuneAReact: document.getElementById('tuneAReact'),
+    tuneACatch: document.getElementById('tuneACatch'),
+    tuneASmash: document.getElementById('tuneASmash'),
+    tuneAAgility: document.getElementById('tuneAAgility'),
+    tuneBReact: document.getElementById('tuneBReact'),
+    tuneBCatch: document.getElementById('tuneBCatch'),
+    tuneBSmash: document.getElementById('tuneBSmash'),
+    tuneBAgility: document.getElementById('tuneBAgility'),
+    btnHost: document.getElementById('btnHost'),
+    btnJoin: document.getElementById('btnJoin'),
+    btnNetMode: document.getElementById('btnNetMode'),
+    joinInput: document.getElementById('joinInput'),
+    btnMute: document.getElementById('btnMute'),
+    btnMusic: document.getElementById('btnMusic'),
+    btnMusicGame: document.getElementById('btnMusicGame'),
+    roomPanel: document.getElementById('roomPanel'),
+    roomCode: document.getElementById('roomCode'),
+    roomHint: document.getElementById('roomHint'),
+    btnRoomBack: document.getElementById('btnRoomBack'),
+    statusBar: document.getElementById('statusBar'),
+    overlay: document.getElementById('overlay'),
+    overlayTitle: document.getElementById('overlayTitle'),
+    overlayText: document.getElementById('overlayText'),
+    overlayBtn: document.getElementById('overlayBtn'),
+    gameOver: document.getElementById('gameOver'),
+    gameOverTitle: document.getElementById('gameOverTitle'),
+    btnAgain: document.getElementById('btnAgain'),
+    btnMenu: document.getElementById('btnMenu'),
+    btnQuit: document.getElementById('btnQuit'),
+    hud: document.getElementById('hud'),
+    hudP1: document.getElementById('hudP1'),
+    hudP2: document.getElementById('hudP2'),
+    phaseBanner: document.getElementById('phaseBanner'),
+    pointToast: document.getElementById('pointToast'),
+    hintBar: document.getElementById('hintBar'),
+    netInfo: document.getElementById('netInfo'),
+    hitRangeInfo: document.getElementById('hitRangeInfo'),
+    hitBallVal: document.getElementById('hitBallVal'),
+    hitPaddleVal: document.getElementById('hitPaddleVal'),
+    ballHeight: document.getElementById('ballHeight'),
+    inBoxStatus: document.getElementById('inBoxStatus'),
+    serveDot: document.getElementById('serveDot'),
+    tips: document.getElementById('tips'),
+    touchControls: document.getElementById('touchControls'),
+    btnLeft: document.getElementById('btnLeft'),
+    btnRight: document.getElementById('btnRight'),
+    btnFwd: document.getElementById('btnFwd'),
+    btnBack: document.getElementById('btnBack'),
+    btnDiff: document.getElementById('btnDiff'),
+    btnPause: document.getElementById('btnPause'),
+    btnExit: document.getElementById('btnExit'),
+    showHitRanges: document.getElementById('showHitRanges'),
+    pausePanel: document.getElementById('pausePanel'),
+    btnResume: document.getElementById('btnResume'),
+    btnPauseExit: document.getElementById('btnPauseExit'),
+  };
+
+  // 联机服务器选择：
+  // - 本地 localhost + 选"本地" → node server.js（ws://localhost:端口，局域网可用）
+  // - 本地 localhost + 选"公网" → Cloudflare 联机端点（wss://ping-pong-duel.pages.dev/ws）
+  // - 网页版（pages.dev）→ 同域 /ws（即公网联机端点；workers.dev 在国内被 DNS 污染，不走）
+  const isLocalHost = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+  function wsUrl() {
+    if (isLocalHost && !app.publicServer) {
+      return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+    }
+    if (isLocalHost) {
+      return 'wss://ping-pong-duel.pages.dev/ws'; // 桌面端切公网：直连 Cloudflare
+    }
+    return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  }
+  // 触屏设备检测（触控按钮只在这些设备上显示）
+  const isTouch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+    'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0 ||
+    /[?&]touch=1/.test(location.search); // 桌面调试：?touch=1 强制显示
+
+  const app = {
+    mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
+    aiLevel: 1,
+    aiLevelA: 1,         // AI 观战：红方 AI 难度
+    aiLevelB: 1,         // AI 观战：蓝方 AI 难度
+    // AI 观战：在难度基准上的参数微调倍率（暂停面板滑杆，默认 ×1 = 基准）
+    aiTuneA: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
+    aiTuneB: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
+    side: 0,             // 联机时我的方位
+    sideSet: false,      // 联机 side 是否已确立（房主=创建响应，加入方=首条非等待 room）
+    heartbeatTimer: null,
+    publicServer: false, // 联机服务器：false=本地（node server.js）/ true=公网（Cloudflare）
+    engine: null,
+    net: null,
+    roomCode: '',
+    names: ['玩家1', '玩家2'],
+    keys: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 },
+    keyP1: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 },
+    keyP2: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 },
+    snapA: null, snapB: null, tA: 0, tB: 0,
+    lastInputSent: 0,
+    lastPhase: -1,
+    lastEventKeys: new Set(),
+    lastPoint: '',
+    serveAim: null,        // 当前瞄准的目标落点（世界坐标 {x, z}）
+    serveAiming: false,    // 手机端：第一下点按后进入瞄准状态，第二下点按发球
+    lastPointerX: null,    // 最近一次指针位置（新发球开始时用于恢复瞄准）
+    lastPointerY: null,
+    countdown: -1,
+    resizeW: 0, resizeH: 0,
+    fx: [],
+    paused: false,
+    // 红/蓝双方观众状态：得分方欢呼量 cheer、对方摇头量 shake（0..1，主循环每帧衰减）
+    fan: { cheer: [0, 0], shake: [0, 0] },
+    showHitRanges: true, // 是否在球/球拍周围显示判定范围虚线（首页开关）
+  };
+
+  // ---------- 工具 ----------
+  function $id(id) { return document.getElementById(id); }
+  function show(el, v) { if (el) el.style.display = v ? '' : 'none'; }
+
+  function resize() {
+    app.resizeW = window.innerWidth;
+    app.resizeH = window.innerHeight;
+    canvas.width = app.resizeW;
+    canvas.height = app.resizeH;
+  }
+
+  // ---------- 地狱模式解锁（localStorage 持久化） ----------
+  const HELL_KEY = 'ppd_hell_unlocked';
+  const HIT_RANGE_KEY = 'ppd_show_hit_ranges';
+
+  // 内存兜底：localStorage 不可用（如测试沙盒/隐私模式）时仍可本次会话解锁
+  let hellUnlockedMem = false;
+  try {
+    hellUnlockedMem = typeof localStorage !== 'undefined' && localStorage.getItem(HELL_KEY) === '1';
+  } catch (e) { /* ignore */ }
+
+  function isHellUnlocked() { return hellUnlockedMem; }
+
+  // 判定范围虚线开关（localStorage 持久化）
+  let showHitRanges = true;
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(HIT_RANGE_KEY) : null;
+    showHitRanges = v === null ? true : v === '1';
+  } catch (e) { /* ignore */ }
+  app.showHitRanges = showHitRanges;
+  if (ui.showHitRanges) ui.showHitRanges.checked = showHitRanges;
+
+  // 解锁地狱模式并同步主菜单下拉框状态
+  function unlockHell() {
+    if (hellUnlockedMem) return;
+    hellUnlockedMem = true;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(HELL_KEY, '1'); } catch (e) { /* ignore */ }
+    const sel = PPD.ui.aiLevel;
+    const opt = sel && sel.querySelector ? sel.querySelector('option[value="3"]') : null;
+    if (opt) {
+      opt.disabled = false;
+      opt.textContent = '地狱';
+    }
+  }
+
+  // 得分后触发观众反应：得分方（winner 0=红 1=蓝）欢呼，对方观众摇头
+  function triggerCheer(winner) {
+    app.fan.cheer[winner] = 1;
+    app.fan.shake[1 - winner] = 1;
+  }
+
+  // 按比分更新背景音乐紧张强度：
+  // 0=常规，1=胶着（总分 ≥6），2=赛点/局点/10 平（紧张感拉满）
+  function updateMusicIntensity(score) {
+    let lvl = 0;
+    if (score) {
+      const a = score[0] | 0, b = score[1] | 0;
+      const win = PPD.TT.RULES.WIN_SCORE;
+      const max = Math.max(a, b), diff = Math.abs(a - b);
+      if ((a >= win - 1 && b >= win - 1) || (max >= win - 1 && diff <= 1)) lvl = 2;
+      else if (a + b >= 6) lvl = 1;
+    }
+    PPD.GameAudio.setIntensity(lvl);
+  }
+
+  window.PPD = {
+    app, ui, canvas, ctx,
+    TT, TTG, GameAudio, NetClient, AIC,
+    $id, show, resize,
+    wsUrl, isLocalHost, isTouch,
+    isHellUnlocked, unlockHell,
+    triggerCheer, updateMusicIntensity,
+  };
+})();

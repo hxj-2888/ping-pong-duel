@@ -1,0 +1,24 @@
+{
+  "name": "ping-pong-duel",
+  "version": "1.3.0",
+  "description": "双人联机乒乓球游戏 · ITTF 标准尺寸 · 火柴人物理骨架 · 观众席欢呼 · 发球瞄准/跑步/蹲下 · 零依赖",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/net-test.js",
+    "test:all": "node test/net-test.js && node test/engine-stress.js && node test/physics-boundary-test.js && node test/ai-test.js && node test/browser-smoke.js",
+    "test:do": "node test/do-smoke.js",
+    "test:persist": "node test/do-persist.js",
+    "test:ws": "node test/ws-live.js",
+    "test:evict": "node test/ws-evict.js 35000",
+    "test:sp": "node test/serve-path-online.js",
+    "test:seated": "node test/seated-crowd-test.js",
+    "deploy:room": "wrangler deploy --config wrangler.room.toml",
+    "deploy:pages": "wrangler pages deploy public",
+    "deploy:all": "npm run deploy:room && npm run deploy:pages",
+    "dev:room": "wrangler dev --config wrangler.room.toml",
+    "dev:pages": "wrangler pages dev public",
+    "preview": "node tools/shot.js"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>乒乓对决 · 观众席预览（常规 / 欢呼）</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #0d1220; overflow: hidden; }
+    canvas { display: block; width: 1280px; height: 720px; }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="1280" height="720"></canvas>
+  <script src="../public/js/engine/rules.js"></script>
+  <script src="../public/js/engine/math.js"></script>
+  <script src="../public/js/engine/state.js"></script>
+  <script src="../public/js/engine/physics.js"></script>
+  <script src="../public/js/engine/shots.js"></script>
+  <script src="../public/js/engine/strokes.js"></script>
+  <script src="../public/js/engine.js"></script>
+  <script src="../public/js/render.js"></script>
+  <script src="../public/js/characters.js"></script>
+  <script>
+    /* 观众席预览：左半屏=常规状态，右半屏=得分欢呼状态 */
+    (function () {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const view = {
+        side: 0,
+        players: [],
+        ball: null,
+        ballInHand: null,
+        time: 1.4,
+        phase: 'point',
+        score: [5, 4],
+        server: 0,
+        pointReason: '',
+        fx: [],
+        fan: { cheer: [0, 0], shake: [0, 0] },
+      };
+      for (const [cheer, cx] of [[0, 320], [1, 960]]) {
+        const cam = new TTG.Camera();
+        const focal = 640 * 1.0; // 与 makeCam(vw*1.0) 一致
+        cam.set(TTG.v3(0, 4.6, -4.2), TTG.v3(0, 0.75, 0), cx, 360, focal);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cx - 320, 0, 640, 720); // 半屏视口：左半 0..640，右半 640..1280
+        ctx.clip();
+        ctx.translate(cx + 320, 0);      // 镜像：screen_x = (视口左缘+640) - scene_x
+        ctx.scale(-1, 1);                // 与游戏一致：红方视角镜像
+        const v = Object.assign({}, view, { cam });
+        if (cheer) v.fan.cheer[0] = 1;   // 左半屏 = 己方红球迷欢呼
+        TTG.drawScene(ctx, v, 640, 720);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, 720); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.font = 'bold 20px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(cheer ? '得分欢呼' : '常规', cx, 30);
+      }
+      // 自检统计：统计观众席区域像素，供无头验证（写入 DOM）
+      (function stats() {
+        const d = ctx.getImageData(0, 0, 1280, 720).data;
+        // 观众席大致位于 y 160..560；两侧看台在左右边缘 x<200 与 x>1080
+        function count(rect) {
+          let n = 0, arms = 0;
+          for (let y = rect.y0; y < rect.y1; y += 2) {
+            for (let x = rect.x0; x < rect.x1; x += 2) {
+              const i = (y * 1280 + x) * 4;
+              const r = d[i], g = d[i + 1], b = d[i + 2];
+              // 观众色：偏蓝灰的有色像素（区别于深蓝黑背景）
+              if (b > 90 && r < b && g < b) {
+                n++;
+                // 观众中偏亮(头/手臂)的像素
+                if (b > 170) arms++;
+              }
+            }
+          }
+          return { n, arms };
+        }
+        // 左半屏(常规) 与 右半屏(欢呼)：各自两侧看台条带
+        const normal = count({ x0: 10, y0: 160, x1: 320, y1: 560 }) && null; // 占位防误用
+        const stat = {
+          normalLeft: count({ x0: 10, y0: 160, x1: 315, y1: 560 }),
+          normalRight: count({ x0: 640 - 315, y0: 160, x1: 630, y1: 560 }),
+          cheerLeft: count({ x0: 640 + 10, y0: 160, x1: 640 + 315, y1: 560 }),
+          cheerRight: count({ x0: 1280 - 315, y0: 160, x1: 1270, y1: 560 }),
+        };
+        const el = document.createElement('pre');
+        el.id = 'stats';
+        el.textContent = JSON.stringify(stat);
+        document.body.appendChild(el);
+        void normal;
+      })();
+    })();
+  </script>
+</body>
+</html>
