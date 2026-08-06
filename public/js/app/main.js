@@ -133,6 +133,26 @@
     规则：11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发
   `;
 
+  // ---------- 主页上/下滑动钮（菜单内容超高时显示，点击按一屏比例滚动） ----------
+  function updateMenuScroll() {
+    const menu = PPD.ui.menu;
+    const btns = PPD.ui.menuScrollBtns;
+    if (!menu || !btns) return;
+    // 内容超高才显示滚动钮（避免矮屏菜单被截断却无法滚动）
+    const over = menu.scrollHeight > menu.clientHeight + 4;
+    PPD.show(btns, over);
+  }
+  function scrollMenu(dir) {
+    const menu = PPD.ui.menu;
+    if (!menu) return;
+    menu.scrollBy({ top: dir * Math.max(80, menu.clientHeight * 0.55), behavior: 'smooth' });
+  }
+  if (PPD.ui.menuScrollUp) {
+    PPD.ui.menuScrollUp.addEventListener('pointerdown', (e) => { if (e && e.preventDefault) e.preventDefault(); PPD.GameAudio.ensure(); scrollMenu(-1); });
+    PPD.ui.menuScrollDown.addEventListener('pointerdown', (e) => { if (e && e.preventDefault) e.preventDefault(); PPD.GameAudio.ensure(); scrollMenu(1); });
+  }
+  PPD.updateMenuScroll = updateMenuScroll;
+
   // ---------- 启动 ----------
   // 各难度下拉的地狱选项：按解锁状态全量同步（人机 + AI 观战主页/暂停面板）
   PPD.syncHellOptions();
@@ -159,8 +179,9 @@
       PPD.setupNet(false);
     }
   }
-  window.addEventListener('resize', PPD.resize);
+  window.addEventListener('resize', () => { PPD.resize(); if (PPD.updateMenuScroll) PPD.updateMenuScroll(); });
   PPD.resize();
+  if (PPD.updateMenuScroll) PPD.updateMenuScroll();
   PPD.startLoop();
   PPD.ui.hudP1.textContent = '玩家1';
   PPD.ui.hudP2.textContent = '玩家2';
@@ -182,6 +203,7 @@
     updateServeAim: PPD.updateServeAim,
     setServeAim: PPD.TT.setServeAim,
     solveServeTo: PPD.TT.solveServeTo,
+    updateMenuScroll: PPD.updateMenuScroll, // 主页滚动钮显隐（冒烟测试用）
     // 地狱解锁（冒烟测试用）
     isHellUnlocked: PPD.isHellUnlocked,
     unlockHell: PPD.unlockHell,

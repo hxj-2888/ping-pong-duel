@@ -93,6 +93,7 @@ const ELEMENT_IDS = [
   'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'recordsPanel', // 通关记录面板（records.js 渲染）
+  'menuScrollBtns', 'menuScrollUp', 'menuScrollDown', // 主页上/下滑动钮
 ];
 
 function boot(opts) {
@@ -670,6 +671,27 @@ async function main() {
     check('右上角退出：返回主菜单', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
   }
 
+  // ---------- 1.5 主页上/下滑动钮（菜单内容超高时显示，点击按比例滚动） ----------
+  {
+    const t = await boot();
+    const menuEl = t.elements.get('menu');
+    // 模拟矮屏菜单内容超高（clientHeight 600 / scrollHeight 900）
+    Object.assign(menuEl, {
+      clientHeight: 600, scrollHeight: 900, scrollTop: 0,
+      scrollBy(o) { this.scrollTop += (o && o.top) || 0; },
+    });
+    t.ppd.updateMenuScroll();
+    check('主页滚动钮：内容超高时显示', t.elements.get('menuScrollBtns').style.display !== 'none');
+    t.elements.get('menuScrollDown').dispatch('pointerdown', { preventDefault() {} });
+    check('主页滚动钮：下滑滚动生效', menuEl.scrollTop > 0);
+    t.elements.get('menuScrollUp').dispatch('pointerdown', { preventDefault() {} });
+    check('主页滚动钮：上滑滚动生效', menuEl.scrollTop === 0);
+    // 内容不超高时隐藏
+    Object.assign(menuEl, { clientHeight: 900, scrollHeight: 600 });
+    t.ppd.updateMenuScroll();
+    check('主页滚动钮：内容不超高时隐藏', t.elements.get('menuScrollBtns').style.display === 'none');
+  }
+
   // ---------- 2. 人机对战 ----------
   {
     const t = await boot();
@@ -689,11 +711,11 @@ async function main() {
     t.runFrames(300);
     check('AI 模式渲染 300 帧无异常', true);
     check('AI 模式难度显示', t.elements.get('netInfo').textContent.indexOf('人机对战') === 0);
-    // 桌面操作说明：WASD/A-D 键位、左键推球/右键扣球，且不含手机端"摇杆/按钮"
-    check('桌面操作说明：键位齐全且无摇杆/蹲按钮',
-      t.elements.get('hintBar').innerHTML.indexOf('左键推球') !== -1 &&
-      t.elements.get('hintBar').innerHTML.indexOf('右键扣球') !== -1 &&
-      t.elements.get('hintBar').innerHTML.indexOf('Ctrl 蹲下') !== -1 &&
+    // 桌面操作说明：极简键位说明（移动/推球/扣球/蹲下/发球），且不含手机端"摇杆/按钮"
+    check('桌面操作说明：极简键位且无摇杆/蹲按钮',
+      t.elements.get('hintBar').innerHTML.indexOf('左键=推球') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('右键=扣球') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('蹲下') !== -1 &&
       t.elements.get('hintBar').innerHTML.indexOf('摇杆') === -1 &&
       t.elements.get('hintBar').innerHTML.indexOf('按钮') === -1);
     t.key('KeyD'); t.runFrames(30);
@@ -705,11 +727,11 @@ async function main() {
       const enterAI = (tt) => { tt.click('btnAI'); return tt.elements.get('hintBar').innerHTML; };
       const hA = enterAI(await boot({ touch: true })); // 触屏但 1280px 宽窗口 → 桌面
       check('触屏+大窗口：按桌面判定（键位齐全、无摇杆/蹲按钮）',
-        hA.indexOf('摇杆') === -1 && hA.indexOf('按钮') === -1 && hA.indexOf('左键推球') !== -1);
+        hA.indexOf('摇杆') === -1 && hA.indexOf('按钮') === -1 && hA.indexOf('左键=推球') !== -1);
       const hB = enterAI(await boot({ touch: true, search: '?touch=1' })); // 强制手机端
       check('?touch=1 强制手机端：显示摇杆/蹲按钮', hB.indexOf('摇杆') !== -1 && hB.indexOf('蹲') !== -1);
       const hC = enterAI(await boot({ touch: true, search: '?desktop=1' })); // 触屏+强制桌面
-      check('?desktop=1 强制桌面端：无摇杆', hC.indexOf('摇杆') === -1 && hC.indexOf('左键推球') !== -1);
+      check('?desktop=1 强制桌面端：无摇杆', hC.indexOf('摇杆') === -1 && hC.indexOf('左键=推球') !== -1);
       const hD = enterAI(await boot({ width: 390, height: 844, touch: true })); // 手机尺寸+触屏 → 手机端
       check('手机尺寸+触屏：显示手机端说明', hD.indexOf('摇杆') !== -1);
     }

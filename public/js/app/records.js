@@ -60,6 +60,7 @@
     const list = await fetchRecords(5);
     if (!list.length) {
       el.innerHTML = '🏆 通关记录：暂无（人机模式击败困难/地狱后自动保存）';
+      if (PPD.updateMenuScroll) PPD.updateMenuScroll(); // 记录面板高度变化 → 刷新滚动钮显隐
       return;
     }
     const items = list.map((r) => {
@@ -71,6 +72,7 @@
       return `<div class="rec-item">🏆 ${d} · ${sc} · ${time} · ${r.name || '玩家'}</div>`;
     }).join('');
     el.innerHTML = `<div class="rec-title">🏆 通关记录（最近 ${list.length} 条）</div>${items}`;
+    if (PPD.updateMenuScroll) PPD.updateMenuScroll();
   }
 
   PPD.saveRecord = saveRecord;

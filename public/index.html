@@ -12,62 +12,69 @@
   <!-- 主菜单 -->
   <div id="menu" class="panel">
     <button id="btnSettings" class="settings-btn" title="设置">⚙</button>
-    <div class="logo">
-      <div class="logo-ball">●</div>
-      <h1>乒乓对决</h1>
-      <p>TABLE TENNIS DUEL · ITTF 标准场地</p>
+    <div class="menu-scroll">
+      <div class="logo">
+        <div class="logo-ball">●</div>
+        <h1>乒乓对决</h1>
+        <p>TABLE TENNIS DUEL · ITTF 标准场地</p>
+      </div>
+      <div class="menu-card">
+        <label>你的昵称
+          <input id="nameInput" maxlength="12" placeholder="球员名字" value="乒乓球手">
+        </label>
+        <button id="btnLocal" class="btn primary">本地双人对战（分屏）</button>
+        <button id="btnAI" class="btn primary">人机对战（单机）</button>
+        <div class="row ai-row">
+          <label class="ai-label">难度
+            <select id="aiLevel">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row ai-row">
+          <button id="btnAIVsAI" class="btn primary">AI 观战（AI vs AI）</button>
+        </div>
+        <div class="row aivai-row">
+          <label class="ai-label">红方
+            <select id="aiLevelA">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒</option>
+            </select>
+          </label>
+          <label class="ai-label">蓝方
+            <select id="aiLevelB">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <button id="btnHost" class="btn">创建联机房间</button>
+          <button id="btnJoin" class="btn">加入房间</button>
+        </div>
+        <div class="row">
+          <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
+        </div>
+        <div class="row">
+          <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
+        </div>
+        <div id="statusBar" class="status"></div>
+      </div>
+      <div id="tips" class="tips"></div>
+      <div id="recordsPanel" class="records-panel">🏆 通关记录：加载中…</div>
     </div>
-    <div class="menu-card">
-      <label>你的昵称
-        <input id="nameInput" maxlength="12" placeholder="球员名字" value="乒乓球手">
-      </label>
-      <button id="btnLocal" class="btn primary">本地双人对战（分屏）</button>
-      <button id="btnAI" class="btn primary">人机对战（单机）</button>
-      <div class="row ai-row">
-        <label class="ai-label">难度
-          <select id="aiLevel">
-            <option value="0">简单</option>
-            <option value="1" selected>中等</option>
-            <option value="2">困难</option>
-            <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
-          </select>
-        </label>
-      </div>
-      <div class="row ai-row">
-        <button id="btnAIVsAI" class="btn primary">AI 观战（AI vs AI）</button>
-      </div>
-      <div class="row aivai-row">
-        <label class="ai-label">红方
-          <select id="aiLevelA">
-            <option value="0">简单</option>
-            <option value="1" selected>中等</option>
-            <option value="2">困难</option>
-            <option value="3" disabled>地狱 🔒</option>
-          </select>
-        </label>
-        <label class="ai-label">蓝方
-          <select id="aiLevelB">
-            <option value="0">简单</option>
-            <option value="1" selected>中等</option>
-            <option value="2">困难</option>
-            <option value="3" disabled>地狱 🔒</option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <button id="btnHost" class="btn">创建联机房间</button>
-        <button id="btnJoin" class="btn">加入房间</button>
-      </div>
-      <div class="row">
-        <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
-      </div>
-      <div class="row">
-        <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
-      </div>
-      <div id="statusBar" class="status"></div>
+    <!-- 主页上/下滑动钮（内容超高时显示） -->
+    <div id="menuScrollBtns" class="menu-scroll-btns" style="display:none">
+      <button id="menuScrollUp" class="menu-scroll-btn" aria-label="上滑">▲</button>
+      <button id="menuScrollDown" class="menu-scroll-btn" aria-label="下滑">▼</button>
     </div>
-    <div id="tips" class="tips"></div>
-    <div id="recordsPanel" class="records-panel">🏆 通关记录：加载中…</div>
   </div>
 
   <!-- 联机等待 -->

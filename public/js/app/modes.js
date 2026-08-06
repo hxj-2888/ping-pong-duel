@@ -85,6 +85,7 @@
     PPD.show(PPD.ui.menu, true);
     PPD.show(PPD.ui.roomPanel, false);
     PPD.showTouch(false);
+    if (PPD.updateMenuScroll) PPD.updateMenuScroll(); // 回到主页：刷新滚动钮显隐
     if (PPD.refreshRecords) PPD.refreshRecords(); // 通关记录：返回主页时刷新
   }
 
@@ -101,10 +102,9 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'WASD 移动（W/S 前后）· <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下接贴地球，蹲得越久越慢；蹲站初始瞬发，3秒内反复蹲站转换延迟增至最多0.5秒）· ↑/↓ 推球/扣球 · 发球：<b>移动鼠标瞄准落点后单击</b>（右键扣球式发球）· 对打：<b>左键推球 / 右键扣球</b>（<b>蹲下+推球=高吊</b>，左上角提示可高吊/可扣杀）· Esc 暂停';
+      'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
     if (PPD.isTouch) {
-      PPD.ui.hintBar.innerHTML =
-        '左下摇杆全方位移动 · 右下<b>蹲</b>按钮（蹲下可接贴地球，蹲得越久越慢；3秒内反复蹲站转换延迟增至最多0.5秒）· 发球：<b>点一下屏幕开始瞄准，移动手指调整轨迹，再点一下发球</b> · 对打：单击推球 / 扣球键扣球';
+      PPD.ui.hintBar.innerHTML = '摇杆=移动 · 点按=推球 · 扣=扣球 · 蹲=蹲下 · 发球=点两下';
     }
     PPD.showTouch(true);
   }
@@ -123,9 +123,9 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'P1（红）：A/D 左右 · W 向前 · S 向后 · <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下接贴地球，蹲得越久越慢；3秒内反复蹲站转换延迟增至最多0.5秒）　|　P2（蓝）：←/→ 左右 · ↑ 推球 · ↓ 扣球　|　发球：移动鼠标瞄准落点后单击（左键推球 / 右键扣球）· 对打：<b>左键推球 / 右键扣球</b>（蹲下+推球=高吊）· Esc 暂停';
+      'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ↑=推球 · ↓=扣球';
     if (PPD.isTouch) {
-      PPD.ui.hintBar.innerHTML = '左下摇杆全方位移动 · 右下<b>蹲</b>按钮（蹲得越久越慢；3秒内反复蹲站转换延迟增至最多0.5秒）· 发球：点一下开始瞄准，移动手指调整轨迹，再点一下发球（左半屏 P1，右半屏 P2）· 对打：单击推球 / 扣球键扣球';
+      PPD.ui.hintBar.innerHTML = '摇杆=移动 · 点按=推球 · 扣=扣球 · 蹲=蹲下 · 发球=点两下（左半屏 P1，右半屏 P2）';
     }
     PPD.GameAudio.ensure();
     PPD.showTouch(true);
@@ -157,10 +157,10 @@
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
     PPD.ui.hintBar.innerHTML =
-      `A/D 或 ←/→ 左右移动 · W/S 前后移动 · <b>Shift 跑步 / Ctrl 蹲下</b>（蹲下接贴地球，蹲得越久越慢；蹲站初始瞬发，3秒内反复蹲站转换延迟增至最多0.5秒）· 发球：<b>移动鼠标瞄准落点后单击左键</b>（右键扣球式发球）· 对打：<b>左键推球 / 右键扣球</b>（<b>蹲下+推球=高吊</b>，左上角提示可高吊/可扣杀）· Esc 暂停 · 电脑难度：${L.name}`;
+      'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML =
-        `左下摇杆全方位移动 · 右下<b>蹲</b>按钮（蹲得越久越慢；3秒内反复蹲站转换延迟增至最多0.5秒）· 发球：<b>点一下开始瞄准，移动手指调整轨迹，再点一下发球</b> · 对打：单击推球 / 扣球键扣球 · 电脑难度：${L.name}`;
+        '摇杆=移动 · 点按=推球 · 扣=扣球 · 蹲=蹲下 · 发球=点两下';
     }
     PPD.GameAudio.ensure();
     PPD.showTouch(true);
@@ -185,7 +185,7 @@
     PPD.updateGameTools();
     const LA = PPD.AIC.LEVELS[PPD.app.aiLevelA], LB = PPD.AIC.LEVELS[PPD.app.aiLevelB];
     PPD.ui.hintBar.innerHTML =
-      `AI 观战：红方 ${LA.name} vs 蓝方 ${LB.name} · 右上角可暂停（暂停中调整双方难度 / 返回主页面）`;
+      `红方 ${LA.name} vs 蓝方 ${LB.name} · 暂停中可调难度`;
     PPD.GameAudio.ensure();
     PPD.showTouch(false);
   }
