@@ -504,11 +504,13 @@
 
   // 页面打开即播：浏览器「自动播放策略」会拦截带声音的自动播放。
   // 先直接尝试启动；若被拦截（AudioContext 处于 suspended / <audio> 未能播放），
-  // 挂在第一次用户交互（任意点击/按键/触摸）上立即恢复出声，无需再点 🎵。
+  // 持续挂接用户交互（任意点击/按键/触摸），每次交互都重试恢复出声，
+  // 直到音乐真正在播才卸载——避免一次性恢复监听因交互时机过早/被策略拦截而丢失机会。
   function autoplayMusic() {
     ensure(); // 建 AudioContext + 挂接 raw 音乐（musicOn 时内部已尝试启动）
-    const blocked = (ctx && ctx.state === 'suspended') || (bgmEl && bgmEl.paused && musicOn);
-    if (!blocked) return; // 已出声（localhost/放行环境）：无需挂接
+    const playing = () =>
+      (ctx && ctx.state === 'running' && (bgmSource || bgmEl || musicTimer)) ||
+      (bgmEl && !bgmEl.paused && musicOn);
     const resume = () => {
       if (ctx && ctx.state === 'suspended' && ctx.resume) {
         try { ctx.resume(); } catch (e) { /* ignore */ }
@@ -518,14 +520,18 @@
       else if (bgmEl && bgmEl.paused) { try { bgmEl.play(); } catch (e) { /* ignore */ } }
       else if (!bgmBuf && !bgmEl && !musicTimer) startMusic();       // 合成兜底：恢复后启节拍器
     };
-    const firstGesture = () => {
+    const tryResume = () => {
       resume();
-      for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
-        try { window.removeEventListener(t, firstGesture); } catch (e) { /* ignore */ }
+      if (playing()) { // 已出声 → 卸载监听，避免常驻开销
+        for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
+          try { window.removeEventListener(t, tryResume); } catch (e) { /* ignore */ }
+        }
       }
     };
-    for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
-      try { window.addEventListener(t, firstGesture, { once: true, passive: true }); } catch (e) { /* ignore */ }
+    if (!playing()) {
+      for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
+        try { window.addEventListener(t, tryResume, { passive: true }); } catch (e) { /* ignore */ }
+      }
     }
   }
 
