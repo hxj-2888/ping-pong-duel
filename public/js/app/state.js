@@ -95,7 +95,6 @@
     joyBase: document.getElementById('joyBase'),
     joyKnob: document.getElementById('joyKnob'),
     btnCrouch: document.getElementById('btnCrouch'),
-    btnDiff: document.getElementById('btnDiff'),
     btnPause: document.getElementById('btnPause'),
     btnExit: document.getElementById('btnExit'),
     pausePanel: document.getElementById('pausePanel'),

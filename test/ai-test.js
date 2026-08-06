@@ -147,10 +147,10 @@ const DT = 1 / 120;
   const lowProbs = AIC.LEVELS.map((l) => l.lowShotProb || 0);
   check('刻意低球概率：简单0/中等0/困难0.2/地狱0.5',
     lowProbs[0] === 0 && lowProbs[1] === 0 && lowProbs[2] === 0.2 && lowProbs[3] === 0.5);
-  // 接扣杀：仅困难/地狱可应对（0/0/0.3/0.5），封顶 50%
+  // 接扣杀概率：仅困难/地狱可应对（0/0/0.55/0.95，等级递增；配合位置门定标有效反击率 困难~50%/地狱~80%）
   const sd = AIC.LEVELS.map((l) => l.smashDef || 0);
-  check('接扣杀 smashDef：简单0/中等0/困难0.3/地狱0.5（≤0.5）',
-    sd[0] === 0 && sd[1] === 0 && sd[2] === 0.3 && sd[3] === 0.5 && sd.every((v) => v <= 0.5));
+  check('接扣杀 smashDef：简单0/中等0/困难0.55/地狱0.95（递增）',
+    sd[0] === 0 && sd[1] === 0 && sd[2] === 0.55 && sd[3] === 0.95 && sd[2] < sd[3]);
   // 变招基础概率：中等(数值=1)=20%，随难度递增
   const tb = AIC.LEVELS.map((l) => l.trickBase || 0);
   check('变招基础概率：中等=0.2 且随难度递增', tb[1] === 0.2 && tb[0] <= tb[1] && tb[1] < tb[2] && tb[2] < tb[3]);
@@ -165,21 +165,60 @@ const DT = 1 / 120;
     TT.RULES.CROUCH_TOGGLE_MAX === 0.5 && TT.RULES.CROUCH_TOGGLE_WINDOW === 3.0);
 }
 
-// ---------- 7. 扣杀求解兜底：type2 永不落空（不会因求解失败而挥空丢分） ----------
+// ---------- 7. 扣杀求解：右键只出快扣杀，解不出=撞网（netHit），不再降级成慢速球 ----------
 {
   const e = TT.createEngine();
   e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [true, false];
   e.ball.inHand = false;
-  let allOk = true, detail = '';
-  for (const y of [0.80, 0.92, 1.00, 1.20]) {
+  let lowNet = 0, highOk = 0, detail = '';
+  for (const y of [0.80, 0.92]) {          // 低接触：快扣不可过网 → 撞网
     e.ball.pos = { x: 0, y, z: -1.2 };
     e.ball.vel = { x: 0, y: 0.5, z: -3.0 };
     e.ball.spin = { x: 0, y: 0, z: 0 };
     e.ball.hitBy = 1; e.ball.lastBounce = 1;
     const shot = TT.computeShot(e, 0, 2);
-    if (!shot) { allOk = false; detail += ` y=${y}→null`; }
+    if (shot && shot.netHit) lowNet++;
+    else detail += ` y=${y}→${shot ? '快扣' : 'null'}`;
   }
-  check('扣杀求解兜底：低接触高度也不落空（降级减力扣/推球）', allOk && detail === '');
+  for (const y of [1.10, 1.25]) {          // 高接触：真快扣可解
+    e.ball.pos = { x: 0, y, z: -1.2 };
+    e.ball.vel = { x: 0, y: 0.5, z: -3.0 };
+    e.ball.spin = { x: 0, y: 0, z: 0 };
+    e.ball.hitBy = 1; e.ball.lastBounce = 1;
+    const shot = TT.computeShot(e, 0, 2);
+    if (shot && !shot.netHit && shot.vel) highOk++;
+    else detail += ` y=${y}→${shot ? 'netHit' : 'null'}`;
+  }
+  check(`扣杀求解：低接触=撞网(netHit) ${lowNet}/2、高接触=快扣 ${highOk}/2`, lowNet === 2 && highOk === 2 && detail === '');
+  // 低球右键整局：挥拍命中但打进网 → 对方得分
+  {
+    const e2 = TT.createEngine();
+    e2.phase = 'play'; e2.serveStage = 'rally'; e2.mayHit = [true, false];
+    e2.ball.inHand = false;
+    e2.ball.pos = { x: 0, y: 0.92, z: -1.25 };
+    e2.ball.vel = { x: 0, y: 0.5, z: 3.0 };
+    e2.ball.spin = { x: 0, y: 0, z: 0 };
+    e2.ball.hitBy = 1; e2.ball.lastBounce = 1;
+    let smHeld = 0, netSeen = false, pWinner = -1;
+    for (let i = 0; i < 120 * 4; i++) {
+      const p0 = e2.players[0], b = e2.ball;
+      const zc0 = p0.z + p0.facing * 0.42;
+      const inBox0 = Math.abs(b.pos.x - p0.x) < TT.RULES.HITBOX_HX && Math.abs(b.pos.z - zc0) < TT.RULES.HITBOX_HZ &&
+        b.pos.y > TT.RULES.HITBOX_Y_BOTTOM && b.pos.y < TT.RULES.HITBOX_Y_TOP;
+      let sm = 0;
+      if (e2.mayHit[0] && inBox0 && !smHeld) { sm = 1; smHeld = 10; }
+      if (smHeld > 0) { sm = 1; smHeld--; }
+      TT.setInput(e2, 0, { sm });
+      TT.step(e2, 1 / 120);
+      for (const ev of e2.events) {
+        if (ev.c === 'net') netSeen = true;
+        if (ev.c === 'point') pWinner = e2.pointWinner;
+      }
+      e2.events.length = 0;
+      if (e2.phase !== 'play') break;
+    }
+    check('低球右键=撞网判负（net 事件 → 对方得分）', netSeen && pWinner === 1);
+  }
 }
 
 // ---------- 8. 玩家可反击扣杀（蹲下+推球+预判起拍，一定角度内可接） ----------

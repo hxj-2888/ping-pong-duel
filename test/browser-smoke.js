@@ -87,7 +87,7 @@ const ELEMENT_IDS = [
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch',
-  'gameTools', 'btnDiff', 'btnPause', 'btnExit', 'fpsMeter',
+  'gameTools', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
@@ -170,10 +170,10 @@ function boot(opts) {
     get fakeWS() { return fakeWS; },
     get app() { return sandbox.__PPD.app; },
     get ppd() { return sandbox.__PPD; },
-    runFrames(n) {
+    runFrames(n, stepMs = 16.67) {
       for (let i = 0; i < n; i++) {
         const fns = rafQueue.splice(0);
-        perf.t += 16.67;
+        perf.t += stepMs;
         for (const fn of fns) fn(perf.t);
       }
     },
@@ -279,10 +279,16 @@ async function main() {
     check('切无上限帧率生效', t.app.quality.frameRate === 'unlimited');
     t.runFrames(8);
     check('无上限渲染 8 帧无异常', true);
+    // 无上限：右上角显示真实帧率（8ms/帧步长 → ~125fps，不再封顶 60；130 帧冲掉 60 帧滚动窗）
+    t.runFrames(130, 8);
+    check('无上限显示真实帧率（>60，8ms 步长≈125）',
+      Number(t.elements.get('fpsMeter').textContent) > 60 && t.app.quality.frameMs < 12);
     t.elements.get('frameRate').value = '60';
     t.elements.get('frameRate').dispatch('change', {});
     t.runFrames(2);
     check('切回帧率上限 60', t.app.quality.frameRate === 60);
+    t.runFrames(80);
+    check('60 档帧率显示恢复封顶 60', t.elements.get('fpsMeter').textContent === '60');
     t.runFrames(10);
     check('本地渲染 10 帧无异常', true);
     check('左上角实时显示球高', /^\d+\.\d{2}m$/.test(t.elements.get('ballHeight').textContent));
@@ -692,11 +698,8 @@ async function main() {
       check('手机尺寸+触屏：显示手机端说明', hD.indexOf('摇杆') !== -1);
     }
 
-    // 右上角工具：难度切换 / 暂停 / 继续
-    check('AI 模式：难度按钮显示', t.elements.get('btnDiff').style.display !== 'none');
-    const beforeLevel = t.app.aiLevel;
-    t.elements.get('btnDiff').dispatch('click', {});
-    check('AI 模式：难度切换生效', t.app.aiLevel === (beforeLevel + 1) % 3);
+    // 右上角工具：暂停 / 继续（人机难度开局锁定，无局内切换按钮）
+    check('AI 模式：局内难度按钮已移除（难度锁定）', !t.elements.get('btnDiff'));
     t.elements.get('btnPause').dispatch('click', {});
     check('暂停：状态与面板', t.app.paused === true && t.elements.get('pausePanel').style.display !== 'none');
     const xWhilePaused = t.app.engine.players[0].x;

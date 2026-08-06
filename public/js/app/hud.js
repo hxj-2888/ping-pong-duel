@@ -147,7 +147,7 @@
     if (b.vel.z * f >= 0) return false;                       // 未朝本方来
     if (Math.abs(b.pos.z - zc) > 2.6) return false;            // 太远（求解无意义且省开销）
     const shot = PPD.TT.computeShot(engine, i, 2);
-    return !!(shot && !shot.degraded);
+    return !!(shot && !shot.netHit);
   }
   // "可高吊"指示：蹲下+推球（推球进阶技巧）能否放出高吊——与人机 lb 同一求解判定
   function canLobNow(engine, i) {

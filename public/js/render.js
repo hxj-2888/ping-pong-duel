@@ -322,8 +322,9 @@
 
   // 画单个观众（供逐帧全量 / 动画层共用）
   function drawPerson(ctx, cam, s, time, cheer, shake, col) {
-    const c = (cheer && cheer[0] != null) ? cheer : 0;
-    const sh = (shake && shake[0] != null) ? shake : 0;
+    // 调用方传的是标量（fan.cheer[team]）；seatedPose 内部已钳制 0..1
+    const c = cheer || 0;
+    const sh = shake || 0;
     const p = seatedPose(s, time, c, sh);
     const hp = cam.project(p.head);
     const fp = cam.project(p.hips);
@@ -778,5 +779,5 @@
     }
   }
 
-  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, drawCrowdAnimated, crowdLayout, seatedPose, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache };
+  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, drawCrowdAnimated, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache };
 });

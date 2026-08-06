@@ -67,5 +67,23 @@ check('摇头时手不举起（仍搭膝）', vlen(vsub(pShake.handL, pShake.kne
 // --- 朝向在欢呼时保持不变 ---
 check('欢呼时朝向不变', Math.abs(pSideCheer.f.x - pSide.f.x) < 0.01 && Math.abs(pSideCheer.f.z - pSide.f.z) < 0.01);
 
+// --- 回归：drawPerson 守卫（标量 cheer/shake 必须生效） ---
+// adbbd20 曾把守卫写成 (cheer && cheer[0] != null) ? cheer : 0，把调用方传入的标量
+// fan.cheer[team] 一律归零 → 观众永远静止。此断言走 drawPerson 全路径（假 ctx/cam 记录投影点）。
+{
+  const rec = [];
+  const fakeCam = {
+    project: (pt) => { rec.push(pt); return { x: pt.x * 100, y: (2 - pt.y) * 80, s: 1 }; },
+  };
+  const fakeCtx = { beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {} };
+  const draw = (cheer, shake) => { rec.length = 0; TTG.drawPerson(fakeCtx, fakeCam, side, 1.0, cheer, shake, 'red'); return rec.slice(); };
+  // 投影顺序：[head, hips, hips, shoulder, hips, kneeL, hips, kneeR, kneeL, footL, kneeR, footR, shL, handL, shR, handR]
+  // rec 存 3D 投影点；3D y 越大=越高（屏幕上越小）。手在上方 ⇒ hand.y > shoulder.y
+  const rest = draw(0, 0);
+  const cheerP = draw(1, 0);
+  check('常态手低于肩（drawPerson 全路径）', rest[13].y < rest[3].y && rest[15].y < rest[3].y);
+  check('欢呼时手高于肩（标量 cheer 生效，回归 adbbd20 守卫 bug）', cheerP[13].y > cheerP[3].y && cheerP[15].y > cheerP[3].y);
+}
+
 console.log(failures === 0 ? '\n坐姿火柴人骨架验证全部通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);

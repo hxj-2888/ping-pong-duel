@@ -4,7 +4,7 @@
  *      击球窗口内按球高选择推球（下旋卸力）或扣球（强上旋）
  *      发球权轮到自己时自动发球
  * 四档难度：简单（反应慢、站位偏、只推球）/ 中等 / 困难（反应快、准、爱扣杀）/ 地狱
- * 扣杀应对：困难/地狱可按 smashDef 接住扣杀球（等级 × 接球率微调，封顶 50%）
+ * 扣杀应对：困难/地狱**确定性**接扣杀（站位可达 + 高度/时序成立 → 必接，不再掷骰）
  * 纯逻辑无 DOM 依赖，可在 Node 中直接测试
  * ============================================================ */
 (function (root, factory) {
@@ -18,14 +18,16 @@
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
   const LEVELS = [
-    // catchProb：该难度能接到的来球比例（其余为"漏接"——不挥拍让球飞过），
-    // 是档位间最直观的差距来源（中等明显漏接、困难几乎不漏、地狱故意漏 5% 保持可战胜）。
+    // catchProb：该难度能接到的来球比例——以"固定间隔必漏 1 球"的计数方式实现
+    // （平均概率 ≈ catchProb：0.975 → 每 40 球漏 1、0.97 → 每 33 球漏 1、1.0 → 永不漏），
+    // 比每球掷骰更稳定，闯关输赢不被运气左右；是档位间最直观的差距来源。
     // lowShotProb：刻意打低球（低平快球）的概率——困难 1/5、地狱 1/2，逼玩家蹲下或失误。
     // lobProb：刻意放高吊球的概率——高吊球喂给对手制造扣杀机会（也让自己有球可扣）。
     // smashY：扣杀判定阈值（预测命中时刻的球高 ≥ smashY 才扣杀——低于真扣杀求解下限
     //   会退化成软球，所以阈值按"真扣杀可解高度 ~1.00m"设）。
-    // smashDef：应对扣杀球的成功率（仅困难/地狱可应对，等级越高越强）——
-    //   实际值 = 基准 × 接球率微调(catchMul)，封顶 50%。
+    // smashDef：接扣杀"可接半径"基准（仅困难/地狱可应对，等级越高越强）——
+    //   实际值 = 基准 × 接球率微调(catchMul)；扣杀来球时 |预测交叉点-站位| ≤ 半径
+    //   且高度可接且时序成立 → 必接（确定性判定，不再掷骰；打边角/骗位才漏）。
     // trickBase：变招基础概率（对打两回合不进球后）——随难度递增，中等(数值=1)为 20%；
     //   实际值 = 基准 × 数值因子 + 未变招回合累积(每回合+0.10)，封顶 100%，变招后清空。
     // failSkip：判定"无法扣杀"（扣杀求解会退化/落空）时放弃扣杀的概率——
@@ -34,11 +36,11 @@
     //   等级越高越爱打刁钻角度，是档位间"能力差异"的一部分。
     { name: '简单', react: 0.30, err: 0.26, agility: 0.45, smashY: 1.45, smashProb: 0, catchProb: 0.55, lowShotProb: 0, lobProb: 0, smashDef: 0, trickBase: 0, failSkip: 0, trickyProb: 0 },
     { name: '中等', react: 0.12, err: 0.12, agility: 0.75, smashY: 1.00, smashProb: 0.90, catchProb: 0.95, lowShotProb: 0, lobProb: 0.15, smashDef: 0, trickBase: 0.20, failSkip: 0.5, trickyProb: 0.40 },
-    { name: '困难', react: 0.05, err: 0.04, agility: 1.00, smashY: 1.00, smashProb: 1, catchProb: 0.975, lowShotProb: 0.20, lobProb: 0.15, smashDef: 0.30, trickBase: 0.24, failSkip: 0.8, trickyProb: 0.25 },
-    // 地狱：反应/站位/扣杀全面拉满，**0% 刻意漏球**（catchProb=1.0，接球率上限同步提到 1.0）；
+    { name: '困难', react: 0.05, err: 0.04, agility: 1.00, smashY: 1.00, smashProb: 1, catchProb: 0.975, lowShotProb: 0.20, lobProb: 0.15, smashDef: 0.55, trickBase: 0.24, failSkip: 0.8, trickyProb: 0.25 },
+    // 地狱：反应/站位/扣杀全面拉满，**0% 刻意漏球**（catchProb=1.0）；
     // 与困难的差距全在能力：更快时机把控、高吊球、刁钻方向射球、低平快球、强扣杀与接扣杀。
     // 扣杀激进：smashY 0.95（更低球也能扣）+ failSkip 0.9（10% 时即使无法完美扣杀也出手，降级扣杀）
-    { name: '地狱', react: 0.01, err: 0.01, agility: 1.00, smashY: 0.95, smashProb: 1, catchProb: 1.0, lowShotProb: 0.50, lobProb: 0.12, smashDef: 0.50, trickBase: 0.28, failSkip: 0.9, trickyProb: 0.40 },
+    { name: '地狱', react: 0.01, err: 0.01, agility: 1.00, smashY: 0.95, smashProb: 1, catchProb: 1.0, lowShotProb: 0.50, lobProb: 0.12, smashDef: 0.95, trickBase: 0.28, failSkip: 0.9, trickyProb: 0.40 },
   ];
 
   // 每个引擎实例、每个方位各一份 AI 状态（确定性种子随机，便于测试）。
@@ -57,14 +59,14 @@
         errTarget: 0,
         errT: 0,
         moveT: 0,
-        catchRolled: false, // 本次来球是否已决定接/漏（每球只掷一次）
+        catchRolled: false, // 本次来球是否已决定接/漏（每球一次；普通球按固定间隔计数漏接）
         catchOk: true,
+        missEvery: 0,       // 普通球"刻意漏球"间隔（每 missEvery 个可接球漏 1，按 catchProb 换算）
+        catchCount: 0,      // 距下次刻意漏球的计数（跨球保留，不随回合重置）
         lowRolled: false,   // 本次来球是否已决定"刻意打低球"（每球只掷一次）
         lowThisBall: false,
         lobRolled: false,   // 本次来球是否已决定"放高吊球"（每球只掷一次）
         lobThisBall: false,
-        defRolled: false,   // 本次来球是否已决定"接扣杀"（每球只掷一次）
-        defOk: true,
         preSwing: false,    // 扣杀来球已提前起拍（命中窗罩住球进箱时段）
         exch: 0,            // 当前回合本方已回球次数（对打计数）
         trickRolled: false, // 本次回球是否已掷"变招"（每球一次）
@@ -115,13 +117,13 @@
     return yHit >= L.smashY;
   }
 
-  // "能否真扣杀"预判（每球一次）：扣杀求解会退化（degraded）即判定无法扣杀，
-  // 按档位 failSkip 概率放弃扣杀（困难 80%、地狱 100%），降低无谓失误
+  // "能否真扣杀"预判（每球一次）：快扣求解无解（netHit=撞网）即判定无法扣杀，
+  // 按档位 failSkip 概率放弃扣杀（困难 80%、地狱 90%），降低无谓撞网失误
   function smashAttemptAllowed(s, engine, side, L) {
     if (!s.failRolled) {
       s.failRolled = true;
       const shot = T.computeShot(engine, side, 2);
-      s.cannotSmash = !(shot && !shot.degraded);
+      s.cannotSmash = !(shot && !shot.netHit);
     }
     if (!s.cannotSmash) return true;
     return rnd(s) >= (L.failSkip || 0);
@@ -144,8 +146,11 @@
     const catchProb = clamp(catchBase * (t.catchMul == null ? 1 : t.catchMul), 0.20, 1.0); // 上限 1.0：地狱 100% 不刻意漏球
     const smashProb = clamp(L.smashProb * (t.smashMul == null ? 1 : t.smashMul), 0, 1);
     const agility = clamp(L.agility * (t.agilityMul == null ? 1 : t.agilityMul), 0, 1);
-    // 接扣杀成功率：等级基准 × 接球率微调（数值越高应对越强），封顶 50%
-    const smashDef = clamp((L.smashDef || 0) * (t.catchMul == null ? 1 : t.catchMul), 0, 0.5);
+    // 接扣杀：**位置门 × 概率掷骰**——扣杀来球时 |落点-站位| ≤ 可接半径(0.35) 且高度/时序成立
+    // 才算"够得着"，再按 smashDef 概率掷骰（困难0.70/地狱0.85）决定接不接：
+    // 定标目标有效反击率 困难~50% / 地狱~80%（打偏/骗位即漏，骰子只作用于够得着的球）
+    const smashDef = clamp((L.smashDef || 0) * (t.catchMul == null ? 1 : t.catchMul), 0, 1);
+    const smashReach = 0.35;
     // 非对打阶段（发球/得分/结束）：清空变招计数与位移
     if (engine.phase !== 'play') {
       s.exch = 0;
@@ -197,6 +202,7 @@
     } else if (engine.phase === 'play' && !b.inHand) {
       const zc = p.z + f * 0.42;
       const incoming = b.vel.z * f < 0;
+      const smashIn = b.hitType === 2; // 来球是扣杀（玩家右键或 AI 扣球）
       const cross = predictCrossing(b, zc, 1.4);
 
       // 移动目标
@@ -215,9 +221,14 @@
         targetX = clamp(targetX + s.trickMove, -2.3, 2.3);
       }
 
-      // 前后站位（与玩家相同的移动范围）：来球时迎到球前，球在对方半场时回位
+      // 前后站位（与玩家相同的移动范围）：来球时迎到球前，球在对方半场时回位；
+      // 扣杀来球时**回守本位（站深）**：扣杀深落点弹台后继续前冲，只有站深
+      // 才能让反弹球穿过接球箱（前场站位会被深落点绕过箱体而挥空）
       let targetZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
-      if (incoming) targetZ = clamp(b.pos.z - f * 0.42, -T.RULES.Z_BACK, T.RULES.Z_BACK);
+      if (incoming) {
+        if (smashIn) targetZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
+        else targetZ = clamp(b.pos.z - f * 0.42, -T.RULES.Z_BACK, T.RULES.Z_BACK);
+      }
       const dzF = (targetZ - p.z) * f; // 沿朝向的位移（正=向前）
       if (dzF > 0.10) fwd = 1;
       else if (dzF < -0.10) back = 1;
@@ -261,34 +272,35 @@
       const inBox = Math.abs(b.pos.x - p.x) < R.HITBOX_HX &&
         Math.abs(b.pos.z - zc) < R.HITBOX_HZ &&
         b.pos.y > yBottom && b.pos.y < yTop;
-      const smashIn = b.hitType === 2;
       // 扣杀来球需"提前起拍"：球未进箱但预测到达箱体平面 ≤0.18s 时先按推球键，
       // 命中窗口（风起 0.08~0.28s）正好罩住球进箱时段——若等球弹台后 mayHit 开启
       // 再起拍，风起结束时球早已飞出箱体（15~21m/s 扣杀 0.03~0.04s 就穿过箱体）。
-      // 接扣杀判定（smashDef）在此一并掷出：失败=不挥拍漏接（扣杀方得分）。
-      if (incoming && smashIn && !inBox && cross && cross.t < 0.18) {
+      // 接扣杀 = 位置门(落点在站位±可接半径内) × 概率掷骰(smashDef)；每球只掷一次
+      if (incoming && smashIn && !inBox && cross && cross.t < 0.18 &&
+        Math.abs(cross.x - p.x) <= smashReach && cross.y >= 0.55 && cross.y <= 1.42) {
         if (!s.catchRolled) {
           s.catchRolled = true;
-          s.catchOk = (catchProb == null) || (rnd(s) < catchProb);
+          s.catchOk = rnd(s) < smashDef;
         }
-        if (!s.defRolled) {
-          s.defRolled = true;
-          s.defOk = rnd(s) < smashDef;
-        }
-        if (s.catchOk && s.defOk) { s.preSwing = true; pu = 1; }
+        if (s.catchOk) { s.preSwing = true; pu = 1; }
       } else if (incoming && engine.mayHit[side] && inBox) {
-        // 每球只掷一次"接/漏"：catchProb 定义的接球概率（地狱=95%，可微调）
+        // 每球一次"接/漏"：扣杀进箱同样受位置门×概率约束（不叠加刻意漏球）；
+        // 普通球 = 固定间隔必漏 1 球（平均概率 ≈ catchProb，比每球掷骰稳定）
         if (!s.catchRolled) {
           s.catchRolled = true;
-          s.catchOk = (catchProb == null) || (rnd(s) < catchProb);
+          if (smashIn) {
+            s.catchOk = Math.abs(b.pos.x - p.x) <= smashReach &&
+              b.pos.y >= 0.55 && b.pos.y <= 1.42 && rnd(s) < smashDef;
+          } else {
+            s.catchOk = true;
+            if (catchProb < 1) {
+              if (!s.missEvery) s.missEvery = Math.max(2, Math.round(1 / (1 - catchProb)));
+              s.catchCount = (s.catchCount || 0) + 1;
+              if (s.catchCount >= s.missEvery) { s.catchOk = false; s.catchCount = 0; }
+            }
+          }
         }
-        // 来球是扣杀（type2）时，额外掷一次"接扣杀"（仅困难/地狱 smashDef>0）：
-        // 成功 = 接住 且 接扣杀通过（基准 × 接球率微调，封顶 50%）
-        if (smashIn && !s.defRolled) {
-          s.defRolled = true;
-          s.defOk = rnd(s) < smashDef;
-        }
-        if (s.catchOk && (!smashIn || s.defOk)) {
+        if (s.catchOk) {
           // 每球只掷一次"是否刻意打低球"（困难 1/5、地狱 1/2）：
           // 低平快球贴网低飞、过网后下坠，逼迫对手蹲下或失误
           if (!s.lowRolled) {
@@ -346,7 +358,6 @@
       } else {
         s.hitDelay = 0;
         s.catchRolled = false;
-        s.defRolled = false;
         s.lowRolled = false;
         s.lobRolled = false;
         s.preSwing = false;

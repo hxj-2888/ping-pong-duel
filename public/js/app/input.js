@@ -133,17 +133,12 @@
   }
   bindTouch();
 
-  // ---------- 右上角工具：难度切换 / 暂停 / 退出 ----------
+  // ---------- 右上角工具：暂停 / 退出 ----------
+  // 人机难度在开局菜单选定，对局中锁定（不提供局内切换）
   function updateGameTools() {
-    const showDiff = PPD.app.mode === 'ai';
     const showPause = PPD.app.mode === 'ai' || PPD.app.mode === 'local' || PPD.app.mode === 'aivai';
-    PPD.show(PPD.ui.btnDiff, showDiff);
     PPD.show(PPD.ui.btnPause, showPause);
     PPD.show(PPD.ui.btnExit, true);
-    if (showDiff) {
-      const L = PPD.AIC.LEVELS[PPD.app.aiLevel] || PPD.AIC.LEVELS[1];
-      PPD.ui.btnDiff.textContent = `难度:${L.name}`;
-    }
     PPD.ui.btnPause.textContent = PPD.app.paused ? '继续' : '暂停';
   }
 
@@ -208,14 +203,6 @@
     if (!PPD.app.paused) PPD.GameAudio.ensure();
   }
 
-  PPD.ui.btnDiff.addEventListener('click', () => {
-    if (PPD.app.mode !== 'ai') return;
-    // 循环难度：0→1→2→(3 地狱，已解锁才进入)→0
-    let next = (PPD.app.aiLevel + 1) % 4;
-    if (next === 3 && !PPD.isHellUnlocked()) next = 0;
-    PPD.app.aiLevel = next;
-    updateGameTools();
-  });
   PPD.ui.btnPause.addEventListener('click', () => { PPD.GameAudio.ensure(); togglePause(); });
   PPD.ui.btnExit.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.backToMenu(); });
   PPD.ui.btnResume.addEventListener('click', () => { PPD.GameAudio.ensure(); togglePause(); });

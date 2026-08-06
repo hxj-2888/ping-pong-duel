@@ -220,11 +220,13 @@
     const p = state.players[pi], b = state.ball, f = p.facing;
     const opp = state.players[1 - pi];
     const soft = !!(opts && opts.soft) && type === 2;
-    const tz = type === 2 ? f * 1.18 : type === 3 ? f * 1.20 : f * 0.55;
+    // 防守式轻挡（defensiveChip，仅推球无解时的扣杀来球兜底）：减力 + 高弧线 + 落点略深
+    const chip = !!(opts && opts.defensiveChip) && type === 1;
+    const tz = type === 2 ? f * 1.18 : type === 3 ? f * 1.20 : f * (chip ? 0.75 : 0.55);
     // 落点 x：默认对准对手站位；人机"刁钻方向射球"通过 p.aimBias 打向对方反方向/边角
     const tx = ctx.clamp(opp.x * 0.85 + (b.pos.x - p.x) * 0.25 + (p.aimBias || 0), -0.72, 0.72);
     const target = ctx.vec(tx, ctx.RULES.TABLE_HEIGHT + ctx.RULES.BALL_RADIUS, tz);
-    const padSpeed = type === 2 ? (soft ? 8.0 : 10.4) : type === 3 ? 7.5 : 2.8; // 扣球更快（减力扣球稍慢）、低平快球快而平的抽击
+    const padSpeed = type === 2 ? (soft ? 8.0 : 10.4) : type === 3 ? 7.5 : (chip ? 2.0 : 2.8); // 扣球更快（减力扣球稍慢）、低平快球快而平的抽击、轻挡更慢更稳
     const e = type === 1 ? 0.20 : type === 3 ? 0.50 : 0.85;
     const outSpeed = (1 + e) * padSpeed + e * ctx.vlen(b.vel);
     const spin = ctx.vec(type === 1 ? -f * 34 : type === 3 ? f * 50 : (soft ? f * 80 : f * 120), 0, 0); // 扣球强上旋下坠（减力扣球略弱）、低平快球中等上旋
@@ -245,24 +247,27 @@
     const low = defensive ? ctx.clamp(1 - b.pos.y / ctx.RULES.HITBOX_Y_BOTTOM, 0, 1) : 0;
     const defSpeed = 1.35 + 0.55 * low;
     let vel = solveRally(b.pos, target,
-      outSpeed * (defensive ? defSpeed : (type === 2 ? 1.10 : type === 3 ? 1.0 : 1.05)),
-      spin, isLob ? 0.55 : minClear, isLob ? 1.3 : maxClear, defensive, type === 3);
+      outSpeed * (defensive ? defSpeed : (type === 2 ? 1.10 : type === 3 ? 1.0 : (chip ? 0.90 : 1.05))),
+      spin, isLob ? 0.55 : minClear, isLob ? 1.3 : maxClear, defensive || chip, type === 3);
     // 高吊解不出合法轨迹（低球救球等球况）时退回普通蹲防弧线，保证命中不落空
     if (!vel && isLob) {
       vel = solveRally(b.pos, target, outSpeed * defSpeed, spin, minClear, maxClear, defensive, false);
     }
-    // 解不出合法轨迹时逐级降级，保证命中不落空：
-    //   低平快球 → 高吊推球；扣球 → 减力扣球 → 高吊推球（扣球不会因求解失败而挥空丢分）
-    //   degraded 标志标记"非完整击球"（人机据此判定无法扣杀而放弃扣杀）
+    // 解不出合法轨迹时的处理：
+    //   低平快球 → 高吊推球（degraded 标记"非完整击球"）；
+    //   推球无解 + 来球是扣杀 → 防守式轻挡（接扣杀不挥空）；
+    //   扣杀(type2)解不出合法快扣 → **判定撞网**（不再降级成慢速球）——
+    //   由 strokes.js 把球打进网，对方得分（右键=快扣杀或撞网）
     if (!vel) {
       if (type === 3) { const f3 = computeShot(state, pi, 1); if (f3) { f3.degraded = true; return f3; } return null; }
-      if (type === 2 && !soft) {
-        const reduced = computeShot(state, pi, 2, { soft: true });
-        if (reduced) { reduced.degraded = true; return reduced; }
-        const push = computeShot(state, pi, 1);
-        if (push) { push.degraded = true; return push; }
+      // 推球无解 + 来球是扣杀（b.hitType===2）：防守式轻挡兜底（!chip 防重入）——
+      // 接扣杀不应因求解无解而白白挥空丢分（对 AI 与玩家反击扣杀同路径生效）
+      if (type === 1 && b.hitType === 2 && !chip) {
+        const chipShot = computeShot(state, pi, 1, { defensiveChip: true });
+        if (chipShot) { chipShot.degraded = true; return chipShot; }
         return null;
       }
+      if (type === 2) return { netHit: true };
       return null;
     }
     return vel ? { vel, outSpeed, spin, degraded: false } : null;

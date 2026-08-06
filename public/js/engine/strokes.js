@@ -108,7 +108,8 @@
   function startRallyStroke(state, pi, type) {
     const p = state.players[pi], b = state.ball, f = p.facing;
     const shot = ctx.computeShot(state, pi, type);
-    const dir = ctx.vnorm(shot ? shot.vel : ctx.vec(0, 0.18, f));
+    const ok = shot && !shot.netHit; // netHit（撞网）无出球方向，用默认挥拍方向
+    const dir = ctx.vnorm(ok ? shot.vel : ctx.vec(0, 0.18, f));
     // 视觉挥拍：从球后方挥向球前方（跟随出球方向）
     const start = ctx.vsub(b.pos, ctx.vscale(dir, 0.36));
     const end = ctx.vadd(b.pos, ctx.vscale(dir, 0.36));
@@ -117,8 +118,8 @@
       active: true, type, t: 0, dur,
       speed: ctx.vlen(ctx.vsub(end, start)) / dur,
       start, end, dir,
-      n: ctx.vnorm(shot ? shot.vel : ctx.vec(0, 0.18, f)),
-      hit: false, ct: -1, outSpeed: shot ? shot.outSpeed : 0,
+      n: ctx.vnorm(ok ? shot.vel : ctx.vec(0, 0.18, f)),
+      hit: false, ct: -1, outSpeed: ok ? shot.outSpeed : 0,
       windup: 0.08, live: 0.20,
       // 球员接球碰撞箱（进箱即命中）：球在箱内 + 窗口内按键即判定击中；
       // 蹲下时箱体下探（可接贴地球）、箱顶略降
@@ -200,10 +201,22 @@
           // 击球瞬间球拍真实触球：拍面落到球上（略越过球），而不是隔空挥空
           p.paddle.p = reach;
           st.end = reach;
-          st.n = ctx.vnorm(shot.vel);
-          st.outSpeed = shot.outSpeed;
-          st.validVel = shot.vel;
-          st.validSpin = shot.spin;
+          if (shot.netHit) {
+            // 扣杀解不出合法过网轨迹 → **球直接撞网**：挥拍命中但把球打进网，
+            // 物理 net 事件 → 球弹回本方 → 对方得分（右键=快扣杀或撞网）
+            const f = p.facing;
+            const tN = Math.max(0.08, Math.abs(b.pos.z) / 6);   // 到网时间（出球 6m/s）
+            const vyN = (0.82 - b.pos.y + 0.5 * ctx.RULES.GRAVITY * tN * tN) / tN;
+            st.n = ctx.vec(0, 0.2, f);
+            st.outSpeed = 6;
+            st.validVel = ctx.vec(0, ctx.clamp(vyN, -2, 4), f * 6);
+            st.validSpin = ctx.vec(0, 0, 0);
+          } else {
+            st.n = ctx.vnorm(shot.vel);
+            st.outSpeed = shot.outSpeed;
+            st.validVel = shot.vel;
+            st.validSpin = shot.spin;
+          }
           applyPaddleHit(state, pi);
         }
       }

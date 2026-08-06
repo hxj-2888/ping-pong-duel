@@ -31,10 +31,10 @@
       for (let i = 0; i < FRAME_HIST; i++) sum += frameHist[i];
       const avg = sum / FRAME_HIST;
       PPD.app.quality.frameMs = avg;
-      // 右上角估测帧数（上限 60；约 5 次/秒刷新，避免 DOM 抖动）
+      // 右上角估测帧数（60/45/30 档封顶 60；无上限档显示真实帧率；约 5 次/秒刷新，避免 DOM 抖动）
       if (now - lastFpsUpdate > 200) {
         lastFpsUpdate = now;
-        const fps = Math.min(60, Math.round(1000 / avg));
+        const fps = frameRate === 'unlimited' ? Math.round(1000 / avg) : Math.min(60, Math.round(1000 / avg));
         if (PPD.ui.fpsMeter) {
           PPD.ui.fpsMeter.textContent = String(fps);
           if (fps < 45) PPD.ui.fpsMeter.classList.add('low');
@@ -51,8 +51,11 @@
     if (PPD.app.mode !== null) PPD.updateHud();
 
     // 暂停 / 比赛结束（phase 'over'）：物理已冻结或只剩重开计时，跳过渲染省 CPU；
-    // 窗口尺寸/DPR 变化时（resizeDirty）补一帧，避免画布空白
-    const skipRender = PPD.app.paused || (PPD.app.engine && PPD.app.engine.phase === 'over');
+    // 窗口尺寸/DPR 变化时（resizeDirty）补一帧，避免画布空白。
+    // 比赛结束瞬间的决胜欢呼（fan 动画约 1.7s）仍需渲染可见，动画平息后再停
+    const fanActive = PPD.app.fan && (PPD.app.fan.cheer[0] > 0 || PPD.app.fan.cheer[1] > 0 ||
+      PPD.app.fan.shake[0] > 0 || PPD.app.fan.shake[1] > 0);
+    const skipRender = PPD.app.paused || (PPD.app.engine && PPD.app.engine.phase === 'over' && !fanActive);
     const renderNow = shouldRender && !skipRender;
 
     if (PPD.app.mode === 'local' && PPD.app.engine) {
