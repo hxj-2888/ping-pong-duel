@@ -122,16 +122,27 @@ export class RoomCore {
     return 'ABCD';
   }
 
-  // ---------- 模拟推进 + 快照广播（消息驱动，按真实时间差） ----------
+  // ---------- 模拟推进 + 快照广播（消息驱动，按真实时间差追赶固定步长） ----------
+  // 与本地 server.js（60Hz setInterval 恒定步进）保持一致：无论消息多稀疏/密集，
+  // 都按真实时间差拆成 1/60 固定步长推进，物理稳定 60Hz、游戏时间不落后于墙钟。
+  // 原先"clamp 单帧"的问题：消息间隔 >50ms 时 dt 被压到 0.05 → 游戏时间比真实慢
+  // （球速变慢、操作延迟——公网联机"能进但很卡"的直接原因）。
   stepRoom(room) {
     if (!room) return;
     const now = Date.now();
-    // 真实时间差，clamp 到 [1/60, 0.05]：
-    // - 首次/长时间无消息：只步进一帧上限 0.05，避免追赶过快
-    // - 快速连续消息（时间差≈0）：至少步进一帧，保证引擎持续推进
-    const dt = Math.min(Math.max((now - room.lastStep) / 1000, 1 / TICK_HZ), 0.05);
+    const step = 1 / TICK_HZ; // 固定 60Hz 步长（与本地 server.js 一致）
+    let remaining = (now - room.lastStep) / 1000;
     room.lastStep = now;
-    TT.step(room.engine, dt);
+    // 上限：长时间无消息（DO 休眠/网络中断）只追 0.5s，避免恢复时瞬间追赶爆炸
+    if (remaining > 0.5) remaining = 0.5;
+    let n = 0;
+    while (remaining >= step && n < 60) {
+      TT.step(room.engine, step);
+      remaining -= step;
+      n++;
+    }
+    // 即使消息密集（同毫秒多次），至少推进一帧，保证引擎持续推进（首帧即步进）
+    if (n === 0 && remaining >= 0) TT.step(room.engine, step);
     const snap = TT.snapshot(room.engine);
     const data = JSON.stringify({ t: 'state', s: snap, n: room.names, my: -1 });
     if (data !== room.lastSnap) {

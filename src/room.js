@@ -121,8 +121,14 @@ export class GameRoom extends DurableObject {
 
   // 每次状态变更后落盘（供驱逐恢复）；2h TTL 自动清理僵尸房间
   // （如房主断线未触发 webSocketClose、席位卡死的情况）
-  async _save() {
+  // 节流：每消息都写 storage 会拖慢消息处理（SQLite 写 + engine 全量序列化），
+  // 60Hz 输入下即每秒几十次写——联机卡顿主因之一。改为 2s 窗口内只落盘一次；
+  // 断线（webSocketClose）时强制保存，驱逐恢复容忍丢最近 2s 状态（连接重挂后快照补齐）。
+  async _save(force) {
     if (!this.loaded) return;
+    const now = Date.now();
+    if (!force && this.lastSaveAt && now - this.lastSaveAt < 2000) return;
+    this.lastSaveAt = now;
     try {
       await this.ctx.storage.put(STORAGE_KEY, this.core.serialize(), { expirationTtl: 7200 });
     } catch (e) {
@@ -154,11 +160,10 @@ export class GameRoom extends DurableObject {
   async webSocketMessage(ws, raw) {
     await this._load();
     const att = ws.deserializeAttachment() || {};
-    let t = '';
-    try { t = JSON.parse(raw).t || ''; } catch (e) {}
-    await diag(this.ctx, 'msg=' + t + ' att.room=' + (att.room || '-') + ' rooms=' + this.core.rooms.size + ' slots=' + (this.core.rooms.size ? JSON.stringify([...this.core.rooms.values()][0].slots) : '-'));
     this.core.handleMessage(ws, raw, att);
-    await this._save();
+    // 节流落盘：2s 窗口内只写一次（60Hz 输入下避免每消息写 storage——卡顿主因）。
+    // 原每消息 diag 日志同样每消息读写 storage，已移除（驱逐问题已修复并验证）
+    await this._save(false);
   }
 
   // ---------- 断线处理（委托 RoomCore） ----------
@@ -166,6 +171,6 @@ export class GameRoom extends DurableObject {
     await this._load();
     const att = ws.deserializeAttachment() || {};
     this.core.handleClose(ws, att);
-    await this._save();
+    await this._save(true); // 断线强制落盘（席位清空立即持久化，避免恢复后房间还占着）
   }
 }

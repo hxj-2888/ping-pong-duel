@@ -142,9 +142,10 @@
         PPD.renderSingle();
       }
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
-      // 输入发送（30Hz + 变化时）
+      // 输入发送（60Hz + 变化时）：服务器按消息驱动推进，30Hz 输入会把物理压到 30Hz
+      // （联机卡顿主因）——提到 60Hz 后 DO 端固定步长追赶与本地 60Hz 一致
       const myKeys = (PPD.app.keys.l ? 1 : 0) | (PPD.app.keys.r ? 2 : 0) | (PPD.app.keys.pu ? 4 : 0) | (PPD.app.keys.sm ? 8 : 0) | (PPD.app.keys.f ? 16 : 0) | (PPD.app.keys.b ? 32 : 0);
-      if (now - PPD.app.lastInputSent > 33) {
+      if (now - PPD.app.lastInputSent > 16) {
         PPD.app.lastInputSent = now;
         // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）
         const a = PPD.app.serveAim ? [PPD.app.serveAim.x, PPD.app.serveAim.z] : undefined;
