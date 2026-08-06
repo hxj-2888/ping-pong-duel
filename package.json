@@ -14,7 +14,7 @@
     "test:sp": "node test/serve-path-online.js",
     "test:seated": "node test/seated-crowd-test.js",
     "deploy:room": "wrangler deploy --config wrangler.room.toml",
-    "deploy:pages": "wrangler pages deploy public",
+    "deploy:pages": "wrangler pages deploy public --branch main",
     "deploy:all": "npm run deploy:room && npm run deploy:pages",
     "dev:room": "wrangler dev --config wrangler.room.toml",
     "dev:pages": "wrangler pages dev public",
