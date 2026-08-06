@@ -123,11 +123,12 @@
     return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   }
   // 触屏设备检测（触控按钮只在这些设备上显示）：
-  // 必须同时满足"粗指针/触屏事件" 且 窗口宽度为手机尺寸（≤1024px，仅按宽度——
-  // 现代手机竖屏/横屏都窄，触摸屏笔记本/桌面浏览器（如 IAB 预览）窗口宽则判定为桌面）；
-  // ?touch=1 强制手机端（桌面调试）、?desktop=1 强制桌面端
+  // 以「主指针为粗指针」(手机/平板)为准；或 支持触摸但主输入非细指针（无鼠标的触屏设备/旧安卓）。
+  // 触屏笔记本/台式机主指针仍是鼠标（pointer:fine）→ 判定为桌面，避免把手机端
+  // 摇杆/蹲/扣按钮与触屏提示带到电脑上；?touch=1 强制手机端（桌面调试）、?desktop=1 强制桌面端
   const q = (s) => !!(window.matchMedia && window.matchMedia(s).matches);
-  const coarse = q('(pointer: coarse)') || 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+  const coarse = q('(pointer: coarse)') ||
+    (!q('(pointer: fine)') && ('ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0));
   const phoneSize = window.innerWidth <= 1024;
   const isTouch = /[?&]touch=1/.test(location.search)
     ? !/[?&]desktop=1/.test(location.search)

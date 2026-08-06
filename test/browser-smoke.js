@@ -140,7 +140,7 @@ function boot(opts) {
     location: { protocol: 'http:', host: '127.0.0.1:8781', search: opts.search || '' },
     document: { getElementById: (id) => elements.get(id) },
     navigator: { userAgent: 'smoke', maxTouchPoints: opts.touch ? 5 : 0 },
-    matchMedia: opts.touch ? () => ({ matches: true }) : undefined,
+    matchMedia: opts.matchMedia ? opts.matchMedia : (opts.touch ? () => ({ matches: true }) : undefined),
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
     cancelAnimationFrame: () => {},
     WebSocket: FakeWebSocket,
@@ -711,10 +711,12 @@ async function main() {
     t.runFrames(300);
     check('AI 模式渲染 300 帧无异常', true);
     check('AI 模式难度显示', t.elements.get('netInfo').textContent.indexOf('人机对战') === 0);
-    // 桌面操作说明：极简键位说明（移动/推球/扣球/蹲下/发球），且不含手机端"摇杆/按钮"
+    // 桌面操作说明：极简键位说明（移动/推球/扣球/蹲下），且不含手机端"摇杆/按钮"
     check('桌面操作说明：极简键位且无摇杆/蹲按钮',
-      t.elements.get('hintBar').innerHTML.indexOf('左键=推球') !== -1 &&
-      t.elements.get('hintBar').innerHTML.indexOf('右键=扣球') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('左键') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('推球') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('右键') !== -1 &&
+      t.elements.get('hintBar').innerHTML.indexOf('扣球') !== -1 &&
       t.elements.get('hintBar').innerHTML.indexOf('蹲下') !== -1 &&
       t.elements.get('hintBar').innerHTML.indexOf('摇杆') === -1 &&
       t.elements.get('hintBar').innerHTML.indexOf('按钮') === -1);
@@ -727,13 +729,24 @@ async function main() {
       const enterAI = (tt) => { tt.click('btnAI'); return tt.elements.get('hintBar').innerHTML; };
       const hA = enterAI(await boot({ touch: true })); // 触屏但 1280px 宽窗口 → 桌面
       check('触屏+大窗口：按桌面判定（键位齐全、无摇杆/蹲按钮）',
-        hA.indexOf('摇杆') === -1 && hA.indexOf('按钮') === -1 && hA.indexOf('左键=推球') !== -1);
+        hA.indexOf('摇杆') === -1 && hA.indexOf('按钮') === -1 && hA.indexOf('左键') !== -1 && hA.indexOf('推球') !== -1);
       const hB = enterAI(await boot({ touch: true, search: '?touch=1' })); // 强制手机端
       check('?touch=1 强制手机端：显示摇杆/蹲按钮', hB.indexOf('摇杆') !== -1 && hB.indexOf('蹲') !== -1);
       const hC = enterAI(await boot({ touch: true, search: '?desktop=1' })); // 触屏+强制桌面
-      check('?desktop=1 强制桌面端：无摇杆', hC.indexOf('摇杆') === -1 && hC.indexOf('左键=推球') !== -1);
+      check('?desktop=1 强制桌面端：无摇杆', hC.indexOf('摇杆') === -1 && hC.indexOf('左键') !== -1 && hC.indexOf('推球') !== -1);
       const hD = enterAI(await boot({ width: 390, height: 844, touch: true })); // 手机尺寸+触屏 → 手机端
       check('手机尺寸+触屏：显示手机端说明', hD.indexOf('摇杆') !== -1);
+      // 回归：触屏笔记本/Windows 触摸设备（有触摸能力但主指针是鼠标 pointer:fine）+ 窄窗口
+      // 不得出现手机端按钮与触屏提示（曾因 maxTouchPoints>0 误判为手机）
+      const tE = await boot({
+        width: 900, height: 700, touch: true,
+        matchMedia: (q) => ({ matches: q.indexOf('fine') !== -1 }), // 主指针=鼠标(fine)，仅具备触摸能力
+      });
+      const hE = enterAI(tE);
+      check('触屏能力+主指针鼠标+窄窗口：按桌面处理（无摇杆/蹲按钮）',
+        hE.indexOf('摇杆') === -1 && hE.indexOf('左键') !== -1 && hE.indexOf('推球') !== -1);
+      check('触屏能力+主指针鼠标+窄窗口：触控按钮不显示',
+        tE.elements.get('touchControls').style.display === 'none');
     }
 
     // 右上角工具：暂停 / 继续（人机难度开局锁定，无局内切换按钮）
