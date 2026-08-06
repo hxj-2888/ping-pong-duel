@@ -93,7 +93,7 @@ const ELEMENT_IDS = [
   'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'recordsPanel', // 通关记录面板（records.js 渲染）
-  'menuScrollBtns', 'menuScrollUp', 'menuScrollDown', // 主页上/下滑动钮
+  'menuScrollBar', 'menuScrollThumb', // 主页右端滑动条（拖动/点按滚动）
 ];
 
 function boot(opts) {
@@ -671,25 +671,31 @@ async function main() {
     check('右上角退出：返回主菜单', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
   }
 
-  // ---------- 1.5 主页上/下滑动钮（菜单内容超高时显示，点击按比例滚动） ----------
+  // ---------- 1.5 主页右端滑动条（内容超高时显示；拖动拇指/点按轨道滚动） ----------
   {
     const t = await boot();
     const menuEl = t.elements.get('menu');
-    // 模拟矮屏菜单内容超高（clientHeight 600 / scrollHeight 900）
-    Object.assign(menuEl, {
-      clientHeight: 600, scrollHeight: 900, scrollTop: 0,
-      scrollBy(o) { this.scrollTop += (o && o.top) || 0; },
-    });
+    const bar = t.elements.get('menuScrollBar');
+    const th = t.elements.get('menuScrollThumb');
+    // 模拟矮屏菜单内容超高（clientHeight 600 / scrollHeight 900，轨道高 500）
+    Object.assign(menuEl, { clientHeight: 600, scrollHeight: 900, scrollTop: 0 });
+    Object.assign(bar, { clientHeight: 500 });
     t.ppd.updateMenuScroll();
-    check('主页滚动钮：内容超高时显示', t.elements.get('menuScrollBtns').style.display !== 'none');
-    t.elements.get('menuScrollDown').dispatch('pointerdown', { preventDefault() {} });
-    check('主页滚动钮：下滑滚动生效', menuEl.scrollTop > 0);
-    t.elements.get('menuScrollUp').dispatch('pointerdown', { preventDefault() {} });
-    check('主页滚动钮：上滑滚动生效', menuEl.scrollTop === 0);
-    // 内容不超高时隐藏
+    check('主页滑动条：内容超高时显示', bar.style.display !== 'none');
+    // 拖动拇指：pointerdown → window pointermove 按位移比例滚动
+    th.dispatch('pointerdown', { clientY: 50, preventDefault() {} });
+    const move = t.winHandlers['pointermove'][t.winHandlers['pointermove'].length - 1];
+    move({ clientY: 300 });
+    check('主页滑动条：拖动拇指滚动生效', menuEl.scrollTop > 0);
+    // 点按轨道（非拇指）：滚动到点击位置
+    menuEl.scrollTop = 0;
+    t.ppd.syncMenuThumb();
+    bar.dispatch('pointerdown', { target: bar, clientY: 750, preventDefault() {} });
+    check('主页滑动条：点按轨道滚动生效', menuEl.scrollTop > 0);
+    // 内容放得下时隐藏
     Object.assign(menuEl, { clientHeight: 900, scrollHeight: 600 });
     t.ppd.updateMenuScroll();
-    check('主页滚动钮：内容不超高时隐藏', t.elements.get('menuScrollBtns').style.display === 'none');
+    check('主页滑动条：内容不超高时隐藏', bar.style.display === 'none');
   }
 
   // ---------- 2. 人机对战 ----------

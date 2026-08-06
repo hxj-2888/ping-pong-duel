@@ -133,25 +133,77 @@
     规则：11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发
   `;
 
-  // ---------- 主页上/下滑动钮（菜单内容超高时显示，点击按一屏比例滚动） ----------
+  // ---------- 主页右端滑动条（内容超高时显示：拖动拇指或点按轨道滚动） ----------
+  function syncMenuThumb() {
+    const menu = PPD.ui.menu, bar = PPD.ui.menuScrollBar, th = PPD.ui.menuScrollThumb;
+    if (!menu || !bar || !th) return;
+    const max = Math.max(0, menu.scrollHeight - menu.clientHeight);
+    const trackH = bar.clientHeight || 1;
+    const thumbH = Math.max(24, (menu.clientHeight / Math.max(1, menu.scrollHeight)) * trackH);
+    th.style.height = thumbH + 'px';
+    const top = max > 0 ? (menu.scrollTop / max) * Math.max(0, trackH - thumbH) : 0;
+    th.style.top = Math.max(0, top) + 'px';
+  }
   function updateMenuScroll() {
     const menu = PPD.ui.menu;
-    const btns = PPD.ui.menuScrollBtns;
-    if (!menu || !btns) return;
-    // 内容超高才显示滚动钮（避免矮屏菜单被截断却无法滚动）
+    const bar = PPD.ui.menuScrollBar;
+    if (!menu || !bar) return;
+    // 内容超高才显示滑动条（避免矮屏菜单被截断却无法滚动）
     const over = menu.scrollHeight > menu.clientHeight + 4;
-    PPD.show(btns, over);
+    PPD.show(bar, over);
+    if (over) syncMenuThumb();
   }
-  function scrollMenu(dir) {
-    const menu = PPD.ui.menu;
-    if (!menu) return;
-    menu.scrollBy({ top: dir * Math.max(80, menu.clientHeight * 0.55), behavior: 'smooth' });
-  }
-  if (PPD.ui.menuScrollUp) {
-    PPD.ui.menuScrollUp.addEventListener('pointerdown', (e) => { if (e && e.preventDefault) e.preventDefault(); PPD.GameAudio.ensure(); scrollMenu(-1); });
-    PPD.ui.menuScrollDown.addEventListener('pointerdown', (e) => { if (e && e.preventDefault) e.preventDefault(); PPD.GameAudio.ensure(); scrollMenu(1); });
+  if (PPD.ui.menuScrollBar) {
+    const bar = PPD.ui.menuScrollBar, th = PPD.ui.menuScrollThumb;
+    // 拖动拇指：按指针位移比例换算 scrollTop（窗口级监听，移出条外仍跟手）
+    const thumbDrag = (e) => {
+      if (e.preventDefault) e.preventDefault();
+      PPD.GameAudio.ensure();
+      const menu = PPD.ui.menu;
+      const trackH = bar.clientHeight || 1;
+      const thumbH = parseFloat(th.style.height) || 24;
+      const avail = Math.max(1, trackH - thumbH);
+      const max = Math.max(0, menu.scrollHeight - menu.clientHeight);
+      const startY = e.clientY;
+      const startTop = parseFloat(th.style.top) || 0;
+      const move = (ev) => {
+        const top = Math.max(0, Math.min(avail, startTop + (ev.clientY - startY)));
+        th.style.top = top + 'px';
+        menu.scrollTop = (top / avail) * max;
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    };
+    th.addEventListener('pointerdown', thumbDrag);
+    // 点按轨道（拇指之外）：滚动到点击位置
+    bar.addEventListener('pointerdown', (e) => {
+      if (e.target === th) return;
+      if (e.preventDefault) e.preventDefault();
+      PPD.GameAudio.ensure();
+      const menu = PPD.ui.menu;
+      const trackH = bar.clientHeight || 1;
+      const thumbH = parseFloat(th.style.height) || 24;
+      const avail = Math.max(1, trackH - thumbH);
+      const rect = bar.getBoundingClientRect ? bar.getBoundingClientRect() : null;
+      const y = rect ? e.clientY - rect.top : 0;
+      const top = Math.max(0, Math.min(avail, y - thumbH / 2));
+      const max = Math.max(0, menu.scrollHeight - menu.clientHeight);
+      menu.scrollTop = (top / avail) * max;
+      syncMenuThumb();
+    });
+    // 滚动时同步拇指位置（滚轮/触控板滚动也跟手）
+    PPD.ui.menu.addEventListener('scroll', () => {
+      if (PPD.ui.menuScrollBar && PPD.ui.menuScrollBar.style.display !== 'none') syncMenuThumb();
+    });
   }
   PPD.updateMenuScroll = updateMenuScroll;
+  PPD.syncMenuThumb = syncMenuThumb;
 
   // ---------- 启动 ----------
   // 各难度下拉的地狱选项：按解锁状态全量同步（人机 + AI 观战主页/暂停面板）
@@ -203,7 +255,8 @@
     updateServeAim: PPD.updateServeAim,
     setServeAim: PPD.TT.setServeAim,
     solveServeTo: PPD.TT.solveServeTo,
-    updateMenuScroll: PPD.updateMenuScroll, // 主页滚动钮显隐（冒烟测试用）
+    updateMenuScroll: PPD.updateMenuScroll, // 主页滑动条显隐（冒烟测试用）
+    syncMenuThumb: PPD.syncMenuThumb,       // 主页滑动条拇指位置同步（冒烟测试用）
     // 地狱解锁（冒烟测试用）
     isHellUnlocked: PPD.isHellUnlocked,
     unlockHell: PPD.unlockHell,

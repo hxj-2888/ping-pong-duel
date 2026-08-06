@@ -43,10 +43,9 @@
     btnJoin: document.getElementById('btnJoin'),
     btnNetMode: document.getElementById('btnNetMode'),
     joinInput: document.getElementById('joinInput'),
-    // 主页上/下滑动钮（内容超高时显示）
-    menuScrollBtns: document.getElementById('menuScrollBtns'),
-    menuScrollUp: document.getElementById('menuScrollUp'),
-    menuScrollDown: document.getElementById('menuScrollDown'),
+    // 主页右端滑动条（内容超高时显示）
+    menuScrollBar: document.getElementById('menuScrollBar'),
+    menuScrollThumb: document.getElementById('menuScrollThumb'),
     // 设置（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效
     btnSettings: document.getElementById('btnSettings'),
     btnSettingsGame: document.getElementById('btnSettingsGame'),

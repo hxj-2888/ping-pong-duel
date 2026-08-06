@@ -24,20 +24,19 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   display: flex; flex-direction: column; align-items: center; gap: 22px;
   padding: 48px 0 28px;
 }
-/* 主页上/下滑动钮（内容超高时才显示，底部居中，半透明不挡操作） */
-.menu-scroll-btns {
-  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 14px; z-index: 11;
-  background: rgba(10, 15, 26, 0.55); border: 1px solid var(--line); border-radius: 30px;
-  padding: 6px 10px; backdrop-filter: blur(4px);
+/* 主页右端滑动条（内容超高时才显示）：拖动拇指或点按轨道滚动 */
+.menu-scroll-bar {
+  position: fixed; top: 88px; bottom: calc(88px + env(safe-area-inset-bottom)); right: 5px; z-index: 12;
+  width: 10px; border-radius: 6px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.08);
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer;
 }
-.menu-scroll-btn {
-  width: 42px; height: 42px; border-radius: 50%; font-size: 15px; line-height: 1;
-  background: rgba(255,255,255,0.10); border: 1px solid var(--line); color: #cfe0ff;
-  cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+.menu-scroll-thumb {
+  position: absolute; left: 1px; right: 1px; top: 0; border-radius: 5px;
+  background: rgba(58,134,255,0.60);
+  touch-action: none; cursor: grab;
 }
-.menu-scroll-btn:hover { background: rgba(255,255,255,0.20); }
-.menu-scroll-btn:active { background: rgba(58,134,255,0.55); }
+.menu-scroll-thumb:active { background: rgba(58,134,255,0.85); cursor: grabbing; }
 .logo { text-align: center; }
 .logo h1 { font-size: 52px; letter-spacing: 6px; background: linear-gradient(90deg, var(--red), #ffd166, var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .logo p { color: #8fa3c8; letter-spacing: 2px; margin-top: 6px; font-size: 13px; }
@@ -210,6 +209,12 @@ input:focus { border-color: var(--blue); }
 
 @media (max-width: 720px) {
   .logo h1 { font-size: 34px; }
+  /* 主页标题置顶常驻：手机端菜单滚动时仍能看到「乒乓对决」（内容从渐变下穿过） */
+  #menu .logo {
+    position: sticky; top: 0; z-index: 2;
+    width: 100%; padding-bottom: 10px;
+    background: linear-gradient(180deg, rgba(13,18,32,0.97) 55%, rgba(13,18,32,0.82) 80%, rgba(13,18,32,0));
+  }
   #hintBar { white-space: normal; width: 92%; text-align: center; }
   /* 触控按钮上方留出提示栏位置，避免重叠 */
   #hintBar { bottom: calc(104px + env(safe-area-inset-bottom)); font-size: 12px; }
