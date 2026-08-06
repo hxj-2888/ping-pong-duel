@@ -140,36 +140,22 @@
     const txx = Math.round(tx0 * 25), tzz = Math.round(tz0 * 25);
     const ck = `${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx}:${tzz}`;
     let plan = serveToCache.get(ck);
-    // 未命中 → 8 邻域（±1 网格，落点差 ≤0.18m 即复用）：连续移动时相邻网格常已求解，零成本跟随
+    // 未命中 → 邻近已解加权插值：收集周围 ±1 网格的解，按落点距离 1/d² 加权平均——
+    // 高速选落点时轨迹随鼠标连续平滑（避免复用单个网格解导致的落点跳变抖动）
     if (!plan) {
+      const near = [];
+      const seen = new Set();
       for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) {
         if (dx === 0 && dz === 0) continue;
-        const p2 = serveToCache.get(`${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx + dx}:${tzz + dz}`);
-        if (p2 && p2.land && Math.hypot(p2.land.x - tx0, p2.land.z - tz0) <= 0.18) { plan = p2; break; }
+        const k2 = `${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx + dx}:${tzz + dz}`;
+        if (seen.has(k2)) continue;
+        seen.add(k2);
+        const c = serveToCache.get(k2);
+        if (c && c.land) near.push(c);
       }
-    }
-    // 未命中 → 2×2 邻域插值：4 角齐 → 双线性插值；不足 4 角但 ≥2 个 → 按落点距离加权平均——
-    // 移动中落到已解网格之间零求解实时跟手（发球轨迹随鼠标连续平滑，不掉帧）
-    if (!plan) {
-      const fx = tx0 * 25 - txx, fz = tz0 * 25 - tzz; // 网格内偏移 0..1
-      const n = (dx, dz) => serveToCache.get(`${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx + dx}:${tzz + dz}`);
-      const c00 = n(0, 0), c10 = n(1, 0), c01 = n(0, 1), c11 = n(1, 1);
-      const cells = [c00, c10, c01, c11].filter((c) => c && c.land);
-      if (cells.length === 4) {
-        const w00 = (1 - fx) * (1 - fz), w10 = fx * (1 - fz), w01 = (1 - fx) * fz, w11 = fx * fz;
-        const ws = [w00, w10, w01, w11];
-        let vx = 0, vy = 0, vz = 0, sx = 0, sp = 0, lx = 0, ly = 0, lz = 0;
-        for (let i = 0; i < 4; i++) {
-          const c = cells[i], w = ws[i];
-          vx += w * c.vel.x; vy += w * c.vel.y; vz += w * c.vel.z;
-          sx += w * c.spin.x; sp += w * c.speed;
-          lx += w * c.land.x; ly += w * c.land.y; lz += w * c.land.z;
-        }
-        plan = { vel: { x: vx, y: vy, z: vz }, spin: { x: sx, y: 0, z: 0 }, speed: sp, land: { x: lx, y: ly, z: lz } };
-      } else if (cells.length >= 2) {
-        // 加权平均（按解落点与目标距离的反比加权，近者权大）——近似跟随
+      if (near.length) {
         let tw = 0, vx = 0, vy = 0, vz = 0, sx = 0, sp = 0, lx = 0, ly = 0, lz = 0;
-        for (const c of cells) {
+        for (const c of near) {
           const d = Math.hypot(c.land.x - tx0, c.land.z - tz0) + 0.02;
           const w = 1 / (d * d);
           tw += w;

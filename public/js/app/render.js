@@ -22,6 +22,46 @@
   // ---------- 发球预计轨迹（真实物理采样） ----------
   let servePathKey = null;
   let servePathPts = null;
+  let smoothServeState = null; // 预览轨迹平滑状态：plan 跳变（离散求解 vel 不连续）时弧线每帧向新轨迹插值
+
+  // 轨迹点重采样到目标长度（平滑时长度随落台截断变化，先对齐长度再插值）
+  function resamplePts(pts, n) {
+    if (pts.length === n) return pts;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const t = (i / (n - 1)) * (pts.length - 1);
+      const i0 = Math.floor(t), i1 = Math.min(pts.length - 1, i0 + 1);
+      const f = t - i0;
+      out.push({
+        x: pts[i0].x + (pts[i1].x - pts[i0].x) * f,
+        y: pts[i0].y + (pts[i1].y - pts[i0].y) * f,
+        z: pts[i0].z + (pts[i1].z - pts[i0].z) * f,
+      });
+    }
+    return out;
+  }
+
+  // 预览轨迹指数平滑：每次 plan 变化时向新轨迹插值 25%（~40ms 收敛），消除高速选落点时的弧线抖动；
+  // 实发仍用精确 plan，落点不受影响（所见即所得）
+  function smoothServePts(target) {
+    if (!target || target.length < 2) return target;
+    if (!smoothServeState || smoothServeState.length !== target.length) {
+      smoothServeState = resamplePts(target, target.length);
+      return smoothServeState;
+    }
+    const prev = resamplePts(smoothServeState, target.length);
+    const k = 0.25;
+    const out = [];
+    for (let i = 0; i < target.length; i++) {
+      out.push({
+        x: prev[i].x + (target[i].x - prev[i].x) * k,
+        y: prev[i].y + (target[i].y - prev[i].y) * k,
+        z: prev[i].z + (target[i].z - prev[i].z) * k,
+      });
+    }
+    smoothServeState = out;
+    return out;
+  }
 
   // 待发时（servePlan 未生成）的示意方案：本地弹道学求解，朝对方半台的上旋弧线。
   // 纯函数，不触碰求解器缓存 —— 仅供预览，按键后 startServeStroke 会生成精确方案覆盖。
@@ -79,6 +119,7 @@
   function servePath(engine) {
     if (engine.phase !== 'serve' || !engine.ball.inHand) {
       servePathKey = null;
+      smoothServeState = null;
       return null;
     }
     const server = engine.server;
@@ -87,6 +128,7 @@
     if (p.serveAimBlocked) {
       servePathKey = null;
       servePathPts = null;
+      smoothServeState = null;
       return null;
     }
     const plan = p.servePlan || defaultServePlan(engine, server);
@@ -96,7 +138,7 @@
     const key = `${server}:${Math.round(H.x * 4)}:${Math.round(H.y * 10)}:${plan.vel.z.toFixed(2)}:${plan.vel.x.toFixed(2)}:${plan.vel.y.toFixed(2)}`;
     if (key === servePathKey) return servePathPts;
     servePathKey = key;
-    servePathPts = sampleServePath(H, plan, server);
+    servePathPts = smoothServePts(sampleServePath(H, plan, server));
     return servePathPts;
   }
 
@@ -105,6 +147,7 @@
   function servePathFromSnap(snap) {
     if (snap.ph !== 0 || !snap.bh) {
       servePathKey = null;
+      smoothServeState = null;
       return null;
     }
     const server = snap.sv;
@@ -114,16 +157,17 @@
     if (snap.sb) {
       servePathKey = null;
       servePathPts = null;
+      smoothServeState = null;
       return null;
     }
     const plan = snap.sp
       ? { vel: { x: snap.sp[0], y: snap.sp[1], z: snap.sp[2] }, spin: { x: snap.sp[3], y: snap.sp[4], z: snap.sp[5] } }
       : defaultServePlanAt(H, facing);
     if (!plan) return null;
-    const key = `${server}:${Math.round(H.x * 4)}:${plan.vel.z.toFixed(2)}:${plan.vel.x.toFixed(2)}:${plan.vel.y.toFixed(2)}`;
+    const key = `${server}:${Math.round(H.x * 4)}:${Math.round(H.y * 10)}:${plan.vel.z.toFixed(2)}:${plan.vel.x.toFixed(2)}:${plan.vel.y.toFixed(2)}`;
     if (key === servePathKey) return servePathPts;
     servePathKey = key;
-    servePathPts = sampleServePath(H, plan, server);
+    servePathPts = smoothServePts(sampleServePath(H, plan, server));
     return servePathPts;
   }
 
@@ -233,6 +277,7 @@
   }
 
   // 把屏幕指针位置换算为"对方半台上的瞄准落点"（世界坐标，夹取到台面安全区）
+  // 鼠标指向球桌外（看台/地面/空中）时不计算落点（返回 null，轨迹消失），避免"台外鼠标却瞄准台面边缘"的误导
   function serveAimFromPointer(clientX, clientY, side) {
     const w = PPD.app.resizeW, h = PPD.app.resizeH;
     const R = PPD.TT.RULES;
