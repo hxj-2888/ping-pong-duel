@@ -18,7 +18,7 @@ const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
 function sanitizeRecord(b) {
   if (!b || typeof b !== 'object') return null;
   const name = String(b.name || '玩家').slice(0, 20);
-  const mode = b.mode === 'ai' ? 'ai' : 'other';
+  const mode = b.mode === 'ai' || b.mode === 'local' || b.mode === 'online' ? b.mode : 'other';
   const winner = b.winner === 0 ? 0 : 1;
   const sc = Array.isArray(b.score)
     ? b.score.slice(0, 2).map((v) => Math.max(0, Math.min(99, Math.round(Number(v) || 0))))

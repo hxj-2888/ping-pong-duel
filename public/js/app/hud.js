@@ -70,15 +70,21 @@
           if (PPD.app.mode === 'ai' && e.s === 0 && PPD.app.aiLevel === 3 && PPD.markHellCleared) {
             PPD.markHellCleared();
           }
-          // 个人生涯：人机模式每局结束都记录胜负（winner=胜方 0=玩家 1=电脑；后端留最近 60 条）
-          if (PPD.app.mode === 'ai' && PPD.saveRecord) {
+          // 个人生涯：人机/本地双人/联机每局结束都记录（winner=玩家视角胜负；后端留最近 60 条）
+          const recMode = PPD.app.mode === 'ai' ? 'ai' : (PPD.app.mode === 'local' ? 'local' : 'online');
+          if ((PPD.app.mode === 'ai' || PPD.app.mode === 'local' || PPD.app.mode === 'online') && PPD.saveRecord) {
             const eng = PPD.app.engine;
+            const n = PPD.app.names || [];
+            let recName, recWinner;
+            if (PPD.app.mode === 'ai') { recName = n[0] || '玩家'; recWinner = e.s === 0 ? 0 : 1; }
+            else if (PPD.app.mode === 'local') { recName = n[0] || '玩家1'; recWinner = e.s === 0 ? 0 : 1; }
+            else { recName = n[PPD.app.side] || '玩家'; recWinner = e.s === PPD.app.side ? 0 : 1; }
             PPD.saveRecord({
-              name: (PPD.app.names && PPD.app.names[0]) || '玩家',
-              mode: 'ai',
-              winner: e.s === 0 ? 0 : 1,
+              name: recName,
+              mode: recMode,
+              winner: recWinner,
               score: eng && eng.score ? [eng.score[0], eng.score[1]] : [0, 0],
-              difficulty: PPD.app.aiLevel,
+              difficulty: PPD.app.mode === 'ai' ? PPD.app.aiLevel : 1,
               ts: Date.now(),
             });
           }
@@ -216,8 +222,8 @@
     } else {
       lastInBox = {};
     }
-    // 可扣杀/可高吊指示（节流 0.12s）：本地双人/人机/联机对"人类控制方"实时判定
-    if ((elSm || elLb) && PPD.app.engine) {
+    // 可扣杀/可高吊指示（节流 0.12s；仅判定虚线开启时求解，虚线关闭时省掉隐藏求解开销）
+    if ((elSm || elLb) && PPD.app.showHitRanges && PPD.app.engine) {
       const now = performance ? performance.now() : Date.now();
       if (now - lastSmashCheck > 120) {
         lastSmashCheck = now;
@@ -235,6 +241,8 @@
   }
 
   // ---------- HUD ----------
+  // 上次写入的 DOM 值缓存：分数/名字/发球点只在变化时才写（省每帧 DOM 写入/重排）
+  let lastHud = { p1: '', p2: '', s1: -1, s2: -1, dotLeft: null };
   function updateHud() {
     let score = [0, 0], server = 0, phId = 0, names = PPD.app.names;
     if (PPD.app.mode === 'local' && PPD.app.engine) {
@@ -263,14 +271,19 @@
     const disp = (PPD.app.mode === 'online' && PPD.app.side === 1)
       ? [names[1], names[0]]
       : names;
-    PPD.ui.hudP1.textContent = `${disp[0] || '玩家1'}`;
-    PPD.ui.hudP2.textContent = `${disp[1] || '玩家2'}`;
+    // HUD 值变化才写 DOM（省每帧写入/重排）
+    const p1 = `${disp[0] || '玩家1'}`, p2 = `${disp[1] || '玩家2'}`;
+    if (lastHud.p1 !== p1) { lastHud.p1 = p1; PPD.ui.hudP1.textContent = p1; }
+    if (lastHud.p2 !== p2) { lastHud.p2 = p2; PPD.ui.hudP2.textContent = p2; }
     // 联机时比分也按自己视角调换：左边永远是自己的分数
-    PPD.$id('score1').textContent = PPD.app.mode === 'online' && PPD.app.side === 1 ? score[1] : score[0];
-    PPD.$id('score2').textContent = PPD.app.mode === 'online' && PPD.app.side === 1 ? score[0] : score[1];
+    const sc1 = PPD.app.mode === 'online' && PPD.app.side === 1 ? score[1] : score[0];
+    const sc2 = PPD.app.mode === 'online' && PPD.app.side === 1 ? score[0] : score[1];
+    if (lastHud.s1 !== sc1) { lastHud.s1 = sc1; PPD.$id('score1').textContent = sc1; }
+    if (lastHud.s2 !== sc2) { lastHud.s2 = sc2; PPD.$id('score2').textContent = sc2; }
     const dot = PPD.ui.serveDot;
     const dotSide = PPD.app.mode === 'online' && PPD.app.side === 1 ? 1 - server : server;
-    dot.style.left = dotSide === 0 ? 'calc(50% - 70px)' : 'calc(50% + 55px)';
+    const dotLeft = dotSide === 0 ? 'calc(50% - 70px)' : 'calc(50% + 55px)';
+    if (lastHud.dotLeft !== dotLeft) { lastHud.dotLeft = dotLeft; dot.style.left = dotLeft; }
     dot.style.opacity = 1;
 
     // 阶段横幅（仅在变化时）

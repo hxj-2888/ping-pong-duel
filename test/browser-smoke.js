@@ -92,7 +92,8 @@ const ELEMENT_IDS = [
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
-  'recordsPanel', // 个人生涯面板（records.js 渲染）
+  'recordsPanel', // 个人生涯小方框（records.js 渲染摘要，点击展开整页）
+  'careerPanel', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', 'btnCareerBack', // 个人生涯单开页（分页）
 ];
 
 function boot(opts) {

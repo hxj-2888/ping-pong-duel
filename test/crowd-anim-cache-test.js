@@ -145,11 +145,12 @@ check('分屏：viewSide 1 首帧各自重建', static2Ctx.counters.arc === crow
 check('分屏：回到 viewSide 0 不重建（缓存保持）', staticCtx.counters.arc === crowdLen);
 check('分屏：回到 viewSide 1 不重建（缓存保持）', static2Ctx.counters.arc === crowdLen);
 
-// ---------- 6. 低画质：不建缓存、不画观众 ----------
+// ---------- 6. 低画质：无观众，但地板+围挡走静态层缓存（首帧烘焙、每帧 1 blit） ----------
 resetAll();
 TTG.drawFloor(staticCtx, cam, VW, VH, 1 / 60, 0, null, true);
+TTG.drawFloor(staticCtx, cam, VW, VH, 2 / 60, 0, null, true);
 check('低画质零观众绘制（arc=0）', sArc() === 0 && aArc() === 0);
-check('低画质零 blit（无缓存）', blits() === 0);
+check('低画质 floor 走静态层缓存（两帧各 1 blit）', blits() === 2);
 
 // ---------- 7. 无缓存环境（无 document）回退逐帧直画 ----------
 delete global.document;

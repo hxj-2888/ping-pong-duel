@@ -68,6 +68,13 @@
     return animState.get(side);
   }
 
+  // 平滑/衰减系数常量（提出 1-exp(-k·dt)，避免每帧每角色重复 Math.exp）
+  const SMOOTH_STEP = 1 - Math.exp(-6 / 60);
+  const SMOOTH_TORSO = 1 - Math.exp(-10 / 60);
+  const SMOOTH_ARM = 1 - Math.exp(-16 / 60);
+  const SMOOTH_ARM_L = 1 - Math.exp(-14 / 60);
+  const DECAY_KICK = Math.exp(-8 / 60);
+
   function drawCharacter(ctx, cam, pl, ball, time, viewSide, hideOwn, hideLegs) {
     // 动画状态属于角色而非视角：联机时对手和自己是两套独立状态
     const anim = getAnim(pl.side);
@@ -86,7 +93,7 @@
     const speed = Math.hypot(vx, vz);
     anim.stride += speed * dt * 3.0;
     // 移动幅度平滑：停止时双脚收回中立站姿，不会定格在跨步中途；蹲下时步幅收小
-    anim.stepAmp = lerp(anim.stepAmp, Math.min(1, speed * 0.9) * (1 - 0.45 * crouch), 1 - Math.exp(-6 * dt));
+    anim.stepAmp = lerp(anim.stepAmp, Math.min(1, speed * 0.9) * (1 - 0.45 * crouch), SMOOTH_STEP);
     const stride = anim.stride;
     const bob = speed * 0.025 * Math.sin(stride * 2) * (1 - 0.6 * crouch);
 
@@ -103,8 +110,8 @@
       pitchTarget += drive ? 0.30 * swing : 0.16 * swing;
       rollTarget += drive ? -0.12 * swing : -0.06 * swing;
     }
-    anim.torsoPitch = lerp(anim.torsoPitch, pitchTarget, 1 - Math.exp(-10 * dt));
-    anim.torsoRoll = lerp(anim.torsoRoll, rollTarget, 1 - Math.exp(-10 * dt));
+    anim.torsoPitch = lerp(anim.torsoPitch, pitchTarget, SMOOTH_TORSO);
+    anim.torsoRoll = lerp(anim.torsoRoll, rollTarget, SMOOTH_TORSO);
 
     // 髋关节（蹲下时髋部降低，形成蹲姿）
     const hips = v3(x, (B.hipY - 0.30 * crouch) + bob * 0.35, z + f * 0.06);
@@ -159,8 +166,8 @@
     // 击球动量回摆（只影响手腕朝向，不改变臂长）
     // 注意：回摆必须是有界的小幅衰减，原实现逐帧累加会把手臂甩到身体后方
     const kick = pl.sb ? vscale(vnorm(pl.paddle ? pl.paddle.n : v3(0, 0, f)), -pl.sb * 0.12) : v3(0, 0, 0);
-    anim.armSmooth = vadd(anim.armSmooth, vscale(vsub(wristR, anim.armSmooth), 1 - Math.exp(-16 * dt)));
-    anim.armKick = vscale(anim.armKick, Math.exp(-8 * dt));
+    anim.armSmooth = vadd(anim.armSmooth, vscale(vsub(wristR, anim.armSmooth), SMOOTH_ARM));
+    anim.armKick = vscale(anim.armKick, DECAY_KICK);
     if (pl.sb > 0.05) anim.armKick = vadd(anim.armKick, vscale(kick, 0.05));
     let dirR = vsub(vadd(vadd(anim.armSmooth, anim.armKick), kick), shoulderR);
     if (vlen(dirR) < 1e-4) dirR = v3(0, -0.35, f * 0.5);
@@ -177,7 +184,7 @@
     } else {
       wristL = vadd(shoulderL, v3(0, -0.32, f * 0.34));
     }
-    anim.armLSmooth = vadd(anim.armLSmooth, vscale(vsub(wristL, anim.armLSmooth), 1 - Math.exp(-14 * dt)));
+    anim.armLSmooth = vadd(anim.armLSmooth, vscale(vsub(wristL, anim.armLSmooth), SMOOTH_ARM_L));
     let dirL = vsub(anim.armLSmooth, shoulderL);
     if (vlen(dirL) < 1e-4) dirL = v3(0, -0.4, f * 0.3);
     wristL = vadd(shoulderL, vscale(vnorm(dirL), ARM_LEN));

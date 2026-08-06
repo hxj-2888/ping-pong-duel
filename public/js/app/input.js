@@ -246,8 +246,12 @@
   bindAIName(PPD.ui.pauseAiNameA, 0);
   bindAIName(PPD.ui.pauseAiNameB, 1);
   window.addEventListener('keydown', (e) => {
-    // Esc：设置面板打开时优先关闭设置；否则在比赛中暂停/继续
+    // Esc：个人生涯页 > 设置面板 > 比赛中暂停/继续
     if (e.code === 'Escape') {
+      if (PPD.ui.careerPanel && PPD.ui.careerPanel.style.display !== 'none' && PPD.closeCareer) {
+        PPD.closeCareer();
+        return;
+      }
       if (PPD.ui.settingsPanel && PPD.ui.settingsPanel.style.display !== 'none') {
         PPD.closeSettings();
         return;

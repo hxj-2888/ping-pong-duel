@@ -9,6 +9,7 @@
   let lastTime = 0;
   let lastRender = 0;
   let acc = 0;
+  let aiTick = 0; // AI 控制降频计数（每 2 物理步 = 60Hz 一次）
   // FPS 滚动均值（约 1s 窗口）：右上角估测帧数
   const FRAME_HIST = 60;
   let frameHist = new Array(FRAME_HIST).fill(16.67);
@@ -101,7 +102,10 @@
           });
           // 人机专属微调：地狱默认 ×0.97 接球率（AI 观战保留 catch 1.0 强版展示，人机对战高手可战胜）。
           // 暂停面板滑杆（aiTuneB）可覆盖微调
-          PPD.AIC.control(PPD.app.engine, 1, step, PPD.app.aiLevel, { hellCatchMul: 0.97, ...(PPD.app.aiTuneB || {}) });
+          // AI 控制降频到 60Hz（每 2 物理步一次、dt 加倍保持累计时间一致）——省 predictCrossing 高频求解
+          if (aiTick++ % 2 === 0) {
+            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevel, { hellCatchMul: 0.97, ...(PPD.app.aiTuneB || {}) });
+          }
           PPD.TT.step(PPD.app.engine, step);
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
@@ -121,8 +125,11 @@
         const step = 1 / 120;
         let n = 0;
         while (acc >= step && n < 8) {
-          PPD.AIC.control(PPD.app.engine, 0, step, PPD.app.aiLevelA, PPD.app.aiTuneA);
-          PPD.AIC.control(PPD.app.engine, 1, step, PPD.app.aiLevelB, PPD.app.aiTuneB);
+          // AI 观战：双方 AI 控制降频到 60Hz（每 2 物理步一次、dt 加倍保持累计时间一致）
+          if (aiTick++ % 2 === 0) {
+            PPD.AIC.control(PPD.app.engine, 0, step * 2, PPD.app.aiLevelA, PPD.app.aiTuneA);
+            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevelB, PPD.app.aiTuneB);
+          }
           PPD.TT.step(PPD.app.engine, step);
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;

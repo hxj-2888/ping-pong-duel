@@ -439,17 +439,13 @@
   }
 
   function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low) {
-    if (low) { // 低画质：仅地板+围挡，无观众席/看台
-      drawFloorBg(ctx, cam, vw, vh);
-      return;
-    }
     if (!crowdList) crowdList = crowdLayout();
     // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit；
     // 动画层按 30Hz 烘焙叠加，帧间隔内只 blit（背景/看台/静止观众无需每帧重画）
     if (crowdCacheSupported()) {
       const backing = (ctx.canvas && ctx.canvas.width) || 0;
       const key = `${viewSide}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}`;
-      // 按 viewSide 取/建本视口的静态+动画缓存（本地分屏两视口互不踢缓存）
+      // 按 viewSide 取/建本视口的静态+动画缓存（本地双人两视口互不踢缓存）
       let entry = crowdCaches[viewSide];
       if (!entry) {
         entry = crowdCaches[viewSide] = {
@@ -460,6 +456,21 @@
       const st = entry.static, an = entry.anim;
       if (!st.ctx) st.ctx = st.canvas.getContext('2d');
       if (!an.ctx) an.ctx = an.canvas.getContext('2d');
+      if (low) {
+        // 低画质：地板+围挡缓存（无观众席/看台），相机/尺寸/DPR 变化才重建
+        if (st.key !== key) {
+          st.key = key;
+          const dpr = Math.max(1, backing / Math.max(1, vw));
+          st.canvas.width = Math.max(1, Math.round(vw * dpr));
+          st.canvas.height = Math.max(1, Math.round(vh * dpr));
+          const fc = st.ctx;
+          fc.setTransform(dpr, 0, 0, dpr, 0, 0);
+          fc.clearRect(0, 0, vw, vh);
+          drawFloorBg(fc, cam, vw, vh);
+        }
+        ctx.drawImage(st.canvas, 0, 0, vw, vh);
+        return;
+      }
       const anim = crowdAnimActive(fan);
       // 静态层：相机/尺寸/DPR 变化才重建（含静止观众 rest 姿态）
       if (st.key !== key) {
@@ -485,6 +496,7 @@
       ctx.drawImage(st.canvas, 0, 0, vw, vh);
       if (an.active) ctx.drawImage(an.canvas, 0, 0, vw, vh);
     } else {
+      if (low) { drawFloorBg(ctx, cam, vw, vh); return; }
       drawFloorBg(ctx, cam, vw, vh);
       drawBenches(ctx, cam); // 先画座位（观众坐在其上）
       drawCrowd(ctx, cam, time, viewSide, fan);
@@ -576,6 +588,70 @@
     }
   }
 
+  // 径向渐变精灵缓存（按半径分桶烘焙一次，drawImage 替代每帧 createRadialGradient——球/阴影优化）
+  const radialSprites = new Map();
+  // 球体精灵：主体渐变 + 描边（含高光偏移，烘焙时按半径）
+  function ballSprite(r) {
+    const key = Math.max(2, Math.round(r));
+    let s = radialSprites.get('b' + key);
+    if (!s) {
+      const size = Math.ceil(key * 2 + 8);
+      const cv = document.createElement('canvas');
+      cv.width = size; cv.height = size;
+      const c = cv.getContext('2d');
+      const cx = size / 2;
+      const g = c.createRadialGradient(cx - key * 0.35, cx - key * 0.4, key * 0.12, cx, cx, key);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.75, '#e8edf4'); g.addColorStop(1, '#aab6c6');
+      c.fillStyle = g;
+      c.beginPath(); c.arc(cx, cx, key, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(40,55,75,0.8)'; c.lineWidth = 1; c.stroke();
+      s = { canvas: cv, size };
+      radialSprites.set('b' + key, s);
+    }
+    return s;
+  }
+  // 球影精灵：中心黑 → 边缘透明（最终透明度由调用方 globalAlpha 控制）
+  function ballShadowSprite(r) {
+    const key = Math.max(2, Math.round(r));
+    let s = radialSprites.get('bs' + key);
+    if (!s) {
+      const size = Math.ceil(key * 2 + 8);
+      const cv = document.createElement('canvas');
+      cv.width = size; cv.height = size;
+      const c = cv.getContext('2d');
+      const cx = size / 2;
+      const g = c.createRadialGradient(cx, cx, 0, cx, cx, key);
+      g.addColorStop(0, 'rgba(0,0,0,1)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, size, size);
+      s = { canvas: cv, size };
+      radialSprites.set('bs' + key, s);
+    }
+    return s;
+  }
+  // 球员脚下阴影精灵（软化椭圆三停，透明度烘焙固定）
+  function playerShadowSprite(r) {
+    const key = Math.max(4, Math.round(r));
+    let s = radialSprites.get('ps' + key);
+    if (!s) {
+      const size = Math.ceil(key * 2 + 8);
+      const cv = document.createElement('canvas');
+      cv.width = size; cv.height = size;
+      const c = cv.getContext('2d');
+      const cx = size / 2;
+      const g = c.createRadialGradient(cx, cx, 0, cx, cx, key);
+      g.addColorStop(0, 'rgba(0,0,0,0.34)');
+      g.addColorStop(0.6, 'rgba(0,0,0,0.18)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, size, size);
+      s = { canvas: cv, size };
+      radialSprites.set('ps' + key, s);
+    }
+    return s;
+  }
+
   function drawBall(ctx, cam, pos, spin, time, shadowOnly) {
     // 影子：球在台面上方时投在台面，否则投在地面；球越高影子越大越淡
     const overTable = Math.abs(pos.x) <= R.TABLE_WIDTH / 2 &&
@@ -585,30 +661,42 @@
     if (sh) {
       const h = Math.max(0, pos.y - shY);
       const sr = Math.max(2, R.BALL_RADIUS * (2.2 + h * 1.5) * sh.s);
-      const g = ctx.createRadialGradient(sh.x, sh.y, 0, sh.x, sh.y, sr);
       const alpha = Math.max(0.16, 0.44 - h * 0.30);
-      g.addColorStop(0, `rgba(0,0,0,${alpha.toFixed(3)})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(sh.x, sh.y, sr, 0, Math.PI * 2);
-      ctx.fill();
+      if (crowdCacheSupported()) {
+        const sp = ballShadowSprite(sr);
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(sp.canvas, sh.x - sp.size / 2, sh.y - sp.size / 2, sp.size, sp.size);
+        ctx.globalAlpha = 1;
+      } else {
+        const g = ctx.createRadialGradient(sh.x, sh.y, 0, sh.x, sh.y, sr);
+        g.addColorStop(0, `rgba(0,0,0,${alpha.toFixed(3)})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sh.x, sh.y, sr, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     if (shadowOnly) return;
     const p = cam.project(pos);
     if (!p) return;
     const r = Math.max(1.6, R.BALL_RADIUS * p.s);
-    const g = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.4, r * 0.12, p.x, p.y, r);
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.75, '#e8edf4');
-    g.addColorStop(1, '#aab6c6');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(40,55,75,0.8)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (crowdCacheSupported()) {
+      const sp = ballSprite(r);
+      ctx.drawImage(sp.canvas, p.x - sp.size / 2, p.y - sp.size / 2, sp.size, sp.size);
+    } else {
+      const g = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.4, r * 0.12, p.x, p.y, r);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.75, '#e8edf4');
+      g.addColorStop(1, '#aab6c6');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(40,55,75,0.8)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
     // 旋转高光（表现旋转）
     const sp = Math.hypot(spin.x, spin.y, spin.z);
     if (sp > 5) {
@@ -760,14 +848,19 @@
       const cy = Math.min(q.y, H - 12);
       if (cy < 0) continue;
       const r = Math.max(4, 0.34 * q.s);
-      const g = ctx.createRadialGradient(q.x, cy, 0, q.x, cy, r);
-      g.addColorStop(0, 'rgba(0,0,0,0.34)');
-      g.addColorStop(0.6, 'rgba(0,0,0,0.18)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(q.x, cy, r, 0, Math.PI * 2);
-      ctx.fill();
+      if (crowdCacheSupported()) {
+        const sp = playerShadowSprite(r);
+        ctx.drawImage(sp.canvas, q.x - sp.size / 2, cy - sp.size / 2, sp.size, sp.size);
+      } else {
+        const g = ctx.createRadialGradient(q.x, cy, 0, q.x, cy, r);
+        g.addColorStop(0, 'rgba(0,0,0,0.34)');
+        g.addColorStop(0.6, 'rgba(0,0,0,0.18)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(q.x, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 

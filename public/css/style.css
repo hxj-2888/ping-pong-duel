@@ -84,6 +84,38 @@ input:focus { border-color: var(--blue); }
 .records-panel .rec-title { color: #ffd166; font-weight: 700; letter-spacing: 1px; font-size: 12px; margin-bottom: 2px; }
 .records-panel .rec-stats { color: #ffd166; font-size: 12px; margin-bottom: 2px; }
 .records-panel .rec-item { color: #9fb1cf; }
+/* 个人生涯（主框内小行）：点击展开整页 */
+.records-mini {
+  cursor: pointer; padding: 4px 0; font-size: 12px; color: #ffd166;
+  border-top: 1px dashed rgba(255,255,255,0.14); margin-top: 2px;
+  text-align: center; transition: 0.15s;
+}
+.records-mini:hover { color: #fff; }
+
+/* 个人生涯单开页面（全屏整页：标题/统计/分页列表） */
+.career-panel {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
+}
+.career-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  width: min(680px, 94vw); max-height: 88vh;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 24px 28px; overflow: hidden;
+}
+.career-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.career-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
+.career-stats { color: #ffd166; font-size: 13px; text-align: center; }
+.career-list {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: #9fb1cf; line-height: 1.8;
+}
+.career-item { padding: 4px 10px; background: rgba(255,255,255,0.04); border-radius: 8px; }
+.career-empty { text-align: center; color: #7f90ad; padding: 24px 0; }
+.career-pager { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.career-page-label { color: #b9c6dd; font-size: 13px; }
+.career-pager .btn { min-width: 84px; }
 
 .room-panel { background: radial-gradient(900px 500px at 50% 30%, #16233c 0%, #0d1220 65%); z-index: 20; }
 .room-panel h2 { letter-spacing: 3px; color: #cfe0ff; }

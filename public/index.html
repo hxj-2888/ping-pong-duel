@@ -65,10 +65,10 @@
         <div class="row">
           <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
         </div>
-        <div id="statusBar" class="status"></div>
-      </div>
-      <div id="tips" class="tips"></div>
-    <div id="recordsPanel" class="records-panel">🎯 个人生涯：加载中…</div>
+      <div id="statusBar" class="status"></div>
+      <div id="recordsPanel" class="records-mini">个人生涯 · 加载中…</div>
+    </div>
+    <div id="tips" class="tips"></div>
   </div>
   </div>
 
@@ -262,6 +262,23 @@
         </div>
       </details>
       <button id="btnSettingsClose" class="btn primary">完成</button>
+    </div>
+  </div>
+
+  <!-- 个人生涯（单开页面：主菜单小方框点击展开，分页展示战绩记录） -->
+  <div id="careerPanel" class="career-panel" style="display:none">
+    <div class="career-card">
+      <div class="career-header">
+        <h2>个人生涯</h2>
+        <button id="btnCareerBack" class="btn">← 返回主菜单</button>
+      </div>
+      <div id="careerStats" class="career-stats"></div>
+      <div id="careerList" class="career-list"></div>
+      <div class="career-pager">
+        <button id="btnCareerPrev" class="btn small">上一页</button>
+        <span id="careerPageLabel" class="career-page-label">第 1 / 1 页</span>
+        <button id="btnCareerNext" class="btn small">下一页</button>
+      </div>
     </div>
   </div>
 
