@@ -347,3 +347,21 @@ canvas#game { touch-action: none; }
   background: transparent; border: none;
 }
 .tune-row b { color: #ffd166; min-width: 40px; text-align: right; }
+/* 设置面板：说明书（操作说明）折叠块 */
+.manual-details {
+  border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(255,255,255,0.04); overflow: hidden;
+}
+.manual-details summary {
+  cursor: pointer; list-style: none; padding: 8px 12px;
+  font-size: 13px; font-weight: 600; color: #ffd166; user-select: none;
+}
+.manual-details summary::-webkit-details-marker { display: none; }
+.manual-details summary::before { content: '▸ '; }
+.manual-details[open] summary::before { content: '▾ '; }
+.manual-content {
+  max-height: 200px; overflow-y: auto; padding: 0 12px 10px;
+  font-size: 12px; line-height: 1.8; color: #b9c6dd;
+}
+.manual-content .manual-title { color: #ffd166; margin: 6px 0 0; font-weight: 600; }
+.manual-content p { margin: 2px 0; }
