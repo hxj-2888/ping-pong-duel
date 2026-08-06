@@ -244,11 +244,27 @@ function snapshotToClient(room, targetSide) {
 function handleMessage(room, client, msg) {
   switch (msg.t) {
     case 'in': {
-      const i = msg.i || {};
+      // 输入位掩码 k（客户端压缩：8 键 → 1 数，位 0=l 1=r 2=pu 3=sm 4=f 5=b 6=crouch 7=run）；
+      // 兼容旧客户端发 i 对象（未升级端仍可玩）
+      let l = 0, r = 0, f = 0, b = 0, pu = 0, sm = 0, c = 0, rn = 0;
+      if (typeof msg.k === 'number') {
+        l = (msg.k & 1) ? 1 : 0;
+        r = (msg.k & 2) ? 1 : 0;
+        pu = (msg.k & 4) ? 1 : 0;
+        sm = (msg.k & 8) ? 1 : 0;
+        f = (msg.k & 16) ? 1 : 0;
+        b = (msg.k & 32) ? 1 : 0;
+        c = (msg.k & 64) ? 1 : 0;
+        rn = (msg.k & 128) ? 1 : 0;
+      } else {
+        const i = msg.i || {};
+        l = i.l ? 1 : 0; r = i.r ? 1 : 0; f = i.f ? 1 : 0; b = i.b ? 1 : 0;
+        pu = i.pu ? 1 : 0; sm = i.sm ? 1 : 0; c = i.c ? 1 : 0; rn = i.rn ? 1 : 0;
+      }
       TT.setInput(room.engine, client.side, {
-        l: !!i.l, r: !!i.r, f: !!i.f, b: !!i.b, pu: !!i.pu, sm: !!i.sm,
-        lb: !!(i.c && i.pu), // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导）
-        crouch: !!i.c, run: !!i.rn,
+        l, r, f, b, pu, sm,
+        lb: c && pu, // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导）
+        crouch: c, run: rn,
       });
       // 鼠标/手指瞄准：目标落点（世界坐标）随输入帧上报，服务端求解发球方案并随快照返回
       if (Array.isArray(msg.a) && msg.a.length === 2) {

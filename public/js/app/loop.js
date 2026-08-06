@@ -144,12 +144,18 @@
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
       // 输入发送（60Hz + 变化时）：服务器按消息驱动推进，30Hz 输入会把物理压到 30Hz
       // （联机卡顿主因）——提到 60Hz 后 DO 端固定步长追赶与本地 60Hz 一致
-      const myKeys = (PPD.app.keys.l ? 1 : 0) | (PPD.app.keys.r ? 2 : 0) | (PPD.app.keys.pu ? 4 : 0) | (PPD.app.keys.sm ? 8 : 0) | (PPD.app.keys.f ? 16 : 0) | (PPD.app.keys.b ? 32 : 0);
+      // 包体压缩：8 个按键布尔字段 → 1 个位掩码（82B → 17B，约 4.8x），仅传联机必要数据
+      const myKeys = (PPD.app.keys.l ? 1 : 0) | (PPD.app.keys.r ? 2 : 0) | (PPD.app.keys.pu ? 4 : 0) | (PPD.app.keys.sm ? 8 : 0) | (PPD.app.keys.f ? 16 : 0) | (PPD.app.keys.b ? 32 : 0) | (PPD.app.keys.crouch ? 64 : 0) | (PPD.app.keys.run ? 128 : 0);
       if (now - PPD.app.lastInputSent > 16) {
         PPD.app.lastInputSent = now;
-        // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）
-        const a = PPD.app.serveAim ? [PPD.app.serveAim.x, PPD.app.serveAim.z] : undefined;
-        PPD.app.net.send({ t: 'in', i: { l: PPD.app.keys.l, r: PPD.app.keys.r, f: PPD.app.keys.f, b: PPD.app.keys.b, pu: PPD.app.keys.pu, sm: PPD.app.keys.sm, c: PPD.app.keys.crouch, rn: PPD.app.keys.run }, a });
+        // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）；
+        // 瞄准未变化时不带（undefined 省略字段），进一步减包
+        const aim = PPD.app.serveAim;
+        if (aim) {
+          PPD.app.net.send({ t: 'in', k: myKeys, a: [Math.round(aim.x * 100) / 100, Math.round(aim.z * 100) / 100] });
+        } else {
+          PPD.app.net.send({ t: 'in', k: myKeys });
+        }
       }
       if (renderNow || PPD.app.resizeDirty) {
         PPD.app.resizeDirty = false;

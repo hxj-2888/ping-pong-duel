@@ -288,9 +288,14 @@
     if (PPD.app.mode === 'online') {
       if (type === 'pu' && PPD.app.snapB && PPD.app.snapB.ph === 0) PPD.GameAudio.ensure();
       if (PPD.app.net && PPD.app.net.connected) {
-        // 发球时把当前瞄准落点一并上报，保证服务端按瞄准轨迹发球
-        const a = PPD.app.serveAim ? [PPD.app.serveAim.x, PPD.app.serveAim.z] : undefined;
-        PPD.app.net.send({ t: 'in', i: { l: PPD.app.keys.l, r: PPD.app.keys.r, f: PPD.app.keys.f, b: PPD.app.keys.b, pu: PPD.app.keys.pu, sm: PPD.app.keys.sm, c: PPD.app.keys.crouch, rn: PPD.app.keys.run }, a });
+        // 发球时把当前瞄准落点一并上报（位掩码压缩：8 键 → 1 数），保证服务端按瞄准轨迹发球
+        const k = (PPD.app.keys.l ? 1 : 0) | (PPD.app.keys.r ? 2 : 0) | (PPD.app.keys.pu ? 4 : 0) | (PPD.app.keys.sm ? 8 : 0) | (PPD.app.keys.f ? 16 : 0) | (PPD.app.keys.b ? 32 : 0) | (PPD.app.keys.crouch ? 64 : 0) | (PPD.app.keys.run ? 128 : 0);
+        const aim = PPD.app.serveAim;
+        if (aim) {
+          PPD.app.net.send({ t: 'in', k, a: [Math.round(aim.x * 100) / 100, Math.round(aim.z * 100) / 100] });
+        } else {
+          PPD.app.net.send({ t: 'in', k });
+        }
       }
     }
     // 短暂保持按键状态，确保引擎/服务器检测到一次按下边沿

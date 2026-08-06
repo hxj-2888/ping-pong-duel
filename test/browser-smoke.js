@@ -929,7 +929,7 @@ async function main() {
     check('HUD 比分按服务器侧显示', t.elements.get('score1').textContent === '3' && t.elements.get('score2').textContent === '7');
 
     t.key('KeyD'); t.runFrames(5);
-    check('联机输入已发送', t.sentMessages.some((m) => m.t === 'in' && m.i.r === 1));
+    check('联机输入已发送（位掩码 k.r=bit1）', t.sentMessages.some((m) => m.t === 'in' && typeof m.k === 'number' && (m.k & 2) === 2));
     t.key('KeyD', false);
 
     // 联机结算屏：您赢了 / 再来一局（发送 rematch 并收到广播）
@@ -968,7 +968,7 @@ async function main() {
     check('发球点显示在对方（房主）一侧', t.elements.get('serveDot').style.left.indexOf('+') >= 0);
 
     t.key('Comma'); t.runFrames(5);
-    check('加入方按 , 推球已发送', t.sentMessages.some((m) => m.t === 'in' && m.i.pu === 1));
+    check('加入方按 , 推球已发送（位掩码 k.pu=bit2）', t.sentMessages.some((m) => m.t === 'in' && typeof m.k === 'number' && (m.k & 4) === 4));
     t.key('Comma', false);
 
     // 联机结算屏：您输了（对方获胜）
