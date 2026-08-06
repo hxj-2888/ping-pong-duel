@@ -81,6 +81,7 @@
     inBoxStatus: document.getElementById('inBoxStatus'),
     smashStatus: document.getElementById('smashStatus'),
     lobStatus: document.getElementById('lobStatus'),
+    quality: document.getElementById('quality'),
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
     recordsPanel: document.getElementById('recordsPanel'),
@@ -161,6 +162,10 @@
     // 红/蓝双方观众状态：得分方欢呼量 cheer、对方摇头量 shake（0..1，主循环每帧衰减）
     fan: { cheer: [0, 0], shake: [0, 0] },
     showHitRanges: false, // 判定范围虚线（设置面板开关，默认关闭）
+    dpr: 1,              // 当前画布像素比（DPR 上限 2；低画质=1）
+    resizeDirty: false,  // 暂停/结算期间窗口尺寸变化 → 需要补一帧渲染
+    // 画质：mode='auto'（帧率低自动降级）/ 'low'（手动低画质）；low=当前生效的低画质标记
+    quality: { mode: 'auto', low: false, frameMs: 16.67, degradeMs: 0, restoreMs: 0 },
   };
 
   // ---------- 工具 ----------
@@ -170,8 +175,13 @@
   function resize() {
     app.resizeW = window.innerWidth;
     app.resizeH = window.innerHeight;
-    canvas.width = app.resizeW;
-    canvas.height = app.resizeH;
+    // 高分屏清晰度：DPR 上限 2（低画质=1，省填充率）；渲染坐标仍用 CSS 像素（setTransform 缩放）
+    const dpr = Math.min(window.devicePixelRatio || 1, app.quality && app.quality.low ? 1 : 2);
+    app.dpr = dpr;
+    canvas.width = Math.max(1, Math.round(app.resizeW * dpr));
+    canvas.height = Math.max(1, Math.round(app.resizeH * dpr));
+    if (ctx && ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    app.resizeDirty = true; // 尺寸/DPR 变化后即使暂停/结算也要补一帧
   }
 
   // ---------- 地狱模式解锁（localStorage 持久化） ----------
@@ -193,6 +203,26 @@
     showHitRanges = v === null ? false : v === '1';
   } catch (e) { /* ignore */ }
   app.showHitRanges = showHitRanges;
+
+  // ---------- 画质（localStorage 记忆；自动=帧率低时自动降级，低=手动低画质） ----------
+  const QUALITY_KEY = 'ppd_quality';
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(QUALITY_KEY) : null;
+    if (v === 'low') app.quality.mode = 'low';
+  } catch (e) { /* ignore */ }
+  app.quality.low = app.quality.mode === 'low';
+  if (ui.quality) ui.quality.value = app.quality.mode;
+
+  // 手动切换画质：写回记忆 + 立即生效（低画质 → DPR=1 + 清观众席缓存）
+  function setQuality(mode) {
+    app.quality.mode = mode === 'low' ? 'low' : 'auto';
+    app.quality.low = app.quality.mode === 'low';
+    app.quality.degradeMs = 0;
+    app.quality.restoreMs = 0;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(QUALITY_KEY, app.quality.mode); } catch (e) { /* ignore */ }
+    if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
+    PPD.resize();
+  }
 
   // 单个难度下拉的地狱选项：按解锁状态显示（人机 + AI 观战主页/暂停面板共用）
   function syncHellOption(sel) {
@@ -260,6 +290,7 @@
     wsUrl, isLocalHost, isTouch,
     isHellUnlocked, unlockHell, syncHellOptions,
     isHellCleared, markHellCleared, syncHellOptions,
+    setQuality,
     triggerCheer, updateMusicIntensity,
   };
 })();

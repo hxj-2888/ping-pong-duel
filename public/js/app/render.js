@@ -149,7 +149,8 @@
       fx: PPD.app.fx,
       fan: PPD.app.fan,
       servePath: servePath(engine),
-      showHitRanges: PPD.app.showHitRanges, // 判定范围虚线（首页开关）
+      low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
+      showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
     };
   }
 
@@ -191,7 +192,8 @@
       pointReason: snap.pr,
       fx: PPD.app.fx,
       fan: PPD.app.fan,
-      showHitRanges: PPD.app.showHitRanges, // 判定范围虚线（首页开关）
+      low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
+      showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
     };
   }
 

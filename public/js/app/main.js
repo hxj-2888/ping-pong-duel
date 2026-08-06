@@ -109,6 +109,15 @@
     PPD.backToMenu();
   });
 
+  // 画质切换（自动/低）：写回记忆 + 立即生效（DPR、观众席缓存、低画质渲染开关）
+  if (PPD.ui.quality) {
+    PPD.ui.quality.addEventListener('change', () => {
+      PPD.GameAudio.ui && PPD.GameAudio.ui();
+      PPD.setQuality(PPD.ui.quality.value);
+      PPD.setStatus(PPD.app.quality.low ? '画质：低（省电流畅）' : '画质：自动');
+    });
+  }
+
   // 提示
   PPD.ui.tips.innerHTML = `
     国际赛事标准：球台 2.74×1.525m（高 0.76m）· 网高 0.1525m · 球 40mm / 2.7g · 拍面 15×15cm<br>

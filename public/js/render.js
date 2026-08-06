@@ -268,54 +268,8 @@
     }
   }
 
-  // 观众席绘制：坐姿火柴人按视角分阵营——屏幕左侧(x<0)=己方观众（红色），
-  // 右侧=敌方观众（蓝色）；得分方欢呼举手、对方摇头
-  function drawCrowd(ctx, cam, time, viewSide, fan) {
-    if (!crowdList) crowdList = crowdLayout();
-    drawBenches(ctx, cam); // 先画座位（观众坐在其上）
-    const outline = 'rgba(15,20,28,0.45)';
-    const r = 0.028; // 骨线粗
-    const FAN_COL = ['rgba(240,110,92,0.95)', 'rgba(110,160,246,0.95)']; // 红方 / 蓝方
-    for (const s of crowdList) {
-      // 屏幕左侧（世界 x<0）为当前视角己方球迷，右侧为敌方球迷
-      const team = s.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0);
-      const col = FAN_COL[team];
-      const c = (fan && fan.cheer) ? fan.cheer[team] : 0;
-      const sh = (fan && fan.shake) ? fan.shake[team] : 0;
-      const p = seatedPose(s, time, c, sh);
-      const hp = cam.project(p.head);
-      const fp = cam.project(p.hips);
-      if (!hp || !fp) continue;
-      const sc = Math.min(hp.s, fp.s);
-      // 头（圆头，与球员一致）
-      const headR = Math.max(1.2, 0.105 * sc * 0.9);
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(hp.x, hp.y, headR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = outline;
-      ctx.lineWidth = Math.max(0.6, headR * 0.16);
-      ctx.stroke();
-      if (fp.y - hp.y < 10) {
-        // 太远：只画头 + 躯干
-        limb(ctx, cam, p.hips, p.shoulder, r * 0.85, col, null);
-        continue;
-      }
-      // 躯干（髋→肩）
-      limb(ctx, cam, p.hips, p.shoulder, r, col, outline);
-      // 大腿（髋→膝，前伸）
-      limb(ctx, cam, p.hips, p.kneeL, r * 0.9, col, outline);
-      limb(ctx, cam, p.hips, p.kneeR, r * 0.9, col, outline);
-      // 小腿（膝→脚，下落）
-      limb(ctx, cam, p.kneeL, p.footL, r * 0.8, col, outline);
-      limb(ctx, cam, p.kneeR, p.footR, r * 0.8, col, outline);
-      // 手臂（肩→手，搭膝/举手）
-      limb(ctx, cam, p.shL, p.handL, r * 0.75, col, outline);
-      limb(ctx, cam, p.shR, p.handR, r * 0.75, col, outline);
-    }
-  }
-
-  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan) {
+  // 静态地面层：背景渐变 + 木地板 + 格线 + 围挡（相机相关；供逐帧与离屏缓存共用）
+  function drawFloorBg(ctx, cam, vw, vh) {
     // 背景渐变
     const g = ctx.createLinearGradient(0, 0, 0, vh);
     g.addColorStop(0, '#141b2b');
@@ -358,9 +312,120 @@
       ];
       for (const b of barrier) poly(ctx, cam, b, 'rgba(20,42,74,0.9)', 'rgba(0,0,0,0.4)');
     }
+  }
 
-    // 观众席（两端 + 两旁；左侧=己方红、右侧=敌方蓝，得分方欢呼/对方摇头）
-    drawCrowd(ctx, cam, time, viewSide, fan);
+  // 观众席绘制：坐姿火柴人按视角分阵营——屏幕左侧(x<0)=己方观众（红色），
+  // 右侧=敌方观众（蓝色）；得分方欢呼举手、对方摇头
+  const CROWD_OUTLINE = 'rgba(15,20,28,0.45)';
+  const CROWD_R = 0.028; // 骨线粗
+  const FAN_COL = ['rgba(240,110,92,0.95)', 'rgba(110,160,246,0.95)']; // 红方 / 蓝方
+
+  // 画单个观众（供逐帧全量 / 动画层共用）
+  function drawPerson(ctx, cam, s, time, cheer, shake, col) {
+    const c = (cheer && cheer[0] != null) ? cheer : 0;
+    const sh = (shake && shake[0] != null) ? shake : 0;
+    const p = seatedPose(s, time, c, sh);
+    const hp = cam.project(p.head);
+    const fp = cam.project(p.hips);
+    if (!hp || !fp) return;
+    const sc = Math.min(hp.s, fp.s);
+    // 头（圆头，与球员一致）
+    const headR = Math.max(1.2, 0.105 * sc * 0.9);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(hp.x, hp.y, headR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = CROWD_OUTLINE;
+    ctx.lineWidth = Math.max(0.6, headR * 0.16);
+    ctx.stroke();
+    if (fp.y - hp.y < 10) {
+      // 太远：只画头 + 躯干
+      limb(ctx, cam, p.hips, p.shoulder, CROWD_R * 0.85, col, null);
+      return;
+    }
+    // 躯干（髋→肩）
+    limb(ctx, cam, p.hips, p.shoulder, CROWD_R, col, CROWD_OUTLINE);
+    // 大腿（髋→膝，前伸）
+    limb(ctx, cam, p.hips, p.kneeL, CROWD_R * 0.9, col, CROWD_OUTLINE);
+    limb(ctx, cam, p.hips, p.kneeR, CROWD_R * 0.9, col, CROWD_OUTLINE);
+    // 小腿（膝→脚，下落）
+    limb(ctx, cam, p.kneeL, p.footL, CROWD_R * 0.8, col, CROWD_OUTLINE);
+    limb(ctx, cam, p.kneeR, p.footR, CROWD_R * 0.8, col, CROWD_OUTLINE);
+    // 手臂（肩→手，搭膝/举手）
+    limb(ctx, cam, p.shL, p.handL, CROWD_R * 0.75, col, CROWD_OUTLINE);
+    limb(ctx, cam, p.shR, p.handR, CROWD_R * 0.75, col, CROWD_OUTLINE);
+  }
+
+  function drawCrowd(ctx, cam, time, viewSide, fan) {
+    if (!crowdList) crowdList = crowdLayout();
+    for (const s of crowdList) {
+      // 屏幕左侧（世界 x<0）为当前视角己方球迷，右侧为敌方球迷
+      const team = s.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0);
+      const col = FAN_COL[team];
+      const c = (fan && fan.cheer) ? fan.cheer[team] : 0;
+      const sh = (fan && fan.shake) ? fan.shake[team] : 0;
+      drawPerson(ctx, cam, s, time, c, sh, col);
+    }
+  }
+
+  // 动画层：仅重画得分后欢呼/摇头的观众（叠加在离屏缓存之上，瞬态 ~1.7s）
+  function drawCrowdAnimated(ctx, cam, time, viewSide, fan) {
+    if (!fan || !fan.cheer || !fan.shake) return;
+    // 无任何动画（常规对打帧）直接返回，省去整轮观众循环
+    if (!(fan.cheer[0] > 0 || fan.cheer[1] > 0 || fan.shake[0] > 0 || fan.shake[1] > 0)) return;
+    for (const s of crowdList) {
+      const team = s.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0);
+      const c = (fan.cheer && fan.cheer[team]) || 0;
+      const sh = (fan.shake && fan.shake[team]) || 0;
+      if (c > 0 || sh > 0) drawPerson(ctx, cam, s, time, c, sh, FAN_COL[team]);
+    }
+  }
+
+  // ---------- 观众席离屏缓存（最大帧开销：~380 观众 × 5,600 次路径 + ~11k 临时对象） ----------
+  // 相机多数帧静止（±0.62m 死区）→ 静态层（地板/看台/静止观众）预渲染进离屏 canvas，
+  // 相机平移超 0.04m 桶或尺寸/DPR 变化才重建，否则每帧一次 drawImage 整层 blit。
+  // 得分后 1.7s 的欢呼/摇头观众由动画层动态叠加。
+  // 无 document.createElement 的环境（测试桩/极端环境）自动回退逐帧直画。
+  const CROWD_CAM_BUCKET = 0.04;
+  let crowdCache = null; // { key, canvas, ctx }
+  function clearCrowdCache() { crowdCache = null; }
+  function crowdCacheSupported() {
+    return typeof document !== 'undefined' && !!document.createElement &&
+      typeof document.createElement('canvas').getContext === 'function';
+  }
+  function rebuildCrowdCache(cam, vw, vh, viewSide, mainCtx) {
+    const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
+    crowdCache.canvas.width = Math.max(1, Math.round(vw * dpr));
+    crowdCache.canvas.height = Math.max(1, Math.round(vh * dpr));
+    const cc = crowdCache.ctx;
+    cc.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cc.clearRect(0, 0, vw, vh);
+    drawFloorBg(cc, cam, vw, vh);
+    drawBenches(cc, cam);
+    drawCrowd(cc, cam, 0, viewSide, null); // 静止 rest 姿态（time=0, 无欢呼）
+  }
+
+  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low) {
+    drawFloorBg(ctx, cam, vw, vh);
+    if (low) return; // 低画质：跳过观众席 + 看台
+    if (!crowdList) crowdList = crowdLayout();
+    // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit
+    if (crowdCacheSupported()) {
+      const backing = (ctx.canvas && ctx.canvas.width) || 0;
+      const key = `${viewSide}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}`;
+      if (!crowdCache) crowdCache = { canvas: document.createElement('canvas'), ctx: null, key: '' };
+      if (!crowdCache.ctx) crowdCache.ctx = crowdCache.canvas.getContext('2d');
+      if (crowdCache.key !== key) {
+        crowdCache.key = key;
+        rebuildCrowdCache(cam, vw, vh, viewSide, ctx);
+      }
+      ctx.drawImage(crowdCache.canvas, 0, 0, vw, vh);
+      // 动画层：得分后欢呼/摇头的少数观众叠加（其余保持缓存静止画面）
+      drawCrowdAnimated(ctx, cam, time, viewSide, fan);
+    } else {
+      drawBenches(ctx, cam); // 先画座位（观众坐在其上）
+      drawCrowd(ctx, cam, time, viewSide, fan);
+    }
   }
 
   // 球台下方投影阴影：两层柔化四边形（接触影 + 外围柔影），增强立体感
@@ -647,7 +712,8 @@
   // view: { cam, players, ball, time, side, fan }
   function drawScene(ctx, view, vw, vh) {
     const { cam, time } = view;
-    drawFloor(ctx, cam, vw, vh, time, view.side, view.fan);
+    const low = !!view.low;
+    drawFloor(ctx, cam, vw, vh, time, view.side, view.fan, low);
     drawPlayerShadows(ctx, cam, view.players);
 
     // 球台对侧的玩家（对手）先画：随后绘制的球台表面会盖住其腿部，
@@ -668,7 +734,7 @@
     drawEffects(ctx, cam, view.fx, time);
     // 发球预测轨迹与对抗尾影画在球台之上、角色/球之下（避免被不透明台面遮挡）
     if (view.servePath) drawServePath(ctx, cam, view.servePath);
-    if (view.trail && view.trail.length > 1) drawTrail(ctx, cam, view.trail, time);
+    if (view.trail && view.trail.length > 1 && !low) drawTrail(ctx, cam, view.trail, time);
     // 判定范围虚线（首页开关控制）：与实际判定一致——接球碰撞箱（进箱即命中，
     // 以球员为中心、向网前偏移 0.42m；蹲下时箱体下探可接贴地球）
     if (view.showHitRanges) {
@@ -712,5 +778,5 @@
     }
   }
 
-  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawCrowd, crowdLayout, seatedPose, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade };
+  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, drawCrowdAnimated, crowdLayout, seatedPose, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache };
 });
