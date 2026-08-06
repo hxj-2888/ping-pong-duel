@@ -86,6 +86,15 @@ async function main() {
     check('P0 向右移动', st1.s.p[0].x > 0.05);
     check('P1 向左移动', st1.s.p[1].x < -0.05);
 
+    // 双方回中再发球：发球目标瞄准对手位置一半（clamp ±0.72），对手在边缘时发球轨迹贴边临界、
+    // 60Hz 服务器实时计时下偶发出界（曾致「无回球时发球方得分」间歇失败）
+    a.send({ t: 'in', i: { l: 1, r: 0, pu: 0, sm: 0 } });
+    b.send({ t: 'in', i: { l: 0, r: 1, pu: 0, sm: 0 } });
+    await sleep(400);
+    a.send({ t: 'in', i: { l: 0, r: 0, pu: 0, sm: 0 } });
+    b.send({ t: 'in', i: { l: 0, r: 0, pu: 0, sm: 0 } });
+    await sleep(200);
+
     // 让 P0 发球（按 W）
     a.send({ t: 'in', i: { l: 0, r: 0, pu: 1, sm: 0 } });
     await sleep(150);
@@ -123,13 +132,15 @@ async function main() {
     a.ws.close();
     await sleep(300);
     console.log(failures === 0 ? '\n全部联机测试通过 ✓' : `\n${failures} 项失败 ✗`);
-    process.exit(failures === 0 ? 0 : 1);
+    process.exitCode = failures === 0 ? 0 : 1;
   } catch (e) {
     console.error('测试异常:', e.message);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
+    // 必须先杀掉子进程再退出：process.exit 会跳过 finally，泄漏的服务器会让后续运行连到旧进程（串扰）
     child.kill();
   }
+  setTimeout(() => process.exit(process.exitCode || 0), 300);
 }
 
 main();

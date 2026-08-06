@@ -35,9 +35,10 @@
     { name: '简单', react: 0.30, err: 0.26, agility: 0.45, smashY: 1.45, smashProb: 0, catchProb: 0.55, lowShotProb: 0, lobProb: 0, smashDef: 0, trickBase: 0, failSkip: 0, trickyProb: 0 },
     { name: '中等', react: 0.12, err: 0.12, agility: 0.75, smashY: 1.00, smashProb: 0.90, catchProb: 0.95, lowShotProb: 0, lobProb: 0.15, smashDef: 0, trickBase: 0.20, failSkip: 0.5, trickyProb: 0.40 },
     { name: '困难', react: 0.05, err: 0.04, agility: 1.00, smashY: 1.00, smashProb: 1, catchProb: 0.975, lowShotProb: 0.20, lobProb: 0.15, smashDef: 0.30, trickBase: 0.24, failSkip: 0.8, trickyProb: 0.25 },
-    // 地狱：反应/站位/扣杀全面拉满，刻意漏球 <3%（留 2% 保持可战胜）；
-    // 与困难的差距全在能力：更快时机把控、高吊球、刁钻方向射球、低平快球、强扣杀与接扣杀
-    { name: '地狱', react: 0.01, err: 0.01, agility: 1.00, smashY: 1.00, smashProb: 1, catchProb: 0.98, lowShotProb: 0.50, lobProb: 0.12, smashDef: 0.50, trickBase: 0.28, failSkip: 1.0, trickyProb: 0.40 },
+    // 地狱：反应/站位/扣杀全面拉满，**0% 刻意漏球**（catchProb=1.0，接球率上限同步提到 1.0）；
+    // 与困难的差距全在能力：更快时机把控、高吊球、刁钻方向射球、低平快球、强扣杀与接扣杀。
+    // 扣杀激进：smashY 0.95（更低球也能扣）+ failSkip 0.9（10% 时即使无法完美扣杀也出手，降级扣杀）
+    { name: '地狱', react: 0.01, err: 0.01, agility: 1.00, smashY: 0.95, smashProb: 1, catchProb: 1.0, lowShotProb: 0.50, lobProb: 0.12, smashDef: 0.50, trickBase: 0.28, failSkip: 0.9, trickyProb: 0.40 },
   ];
 
   // 每个引擎实例、每个方位各一份 AI 状态（确定性种子随机，便于测试）。
@@ -137,7 +138,10 @@
     const t = tune || {};
     // 有效参数：基准 × 倍率（反应越大越快=延迟越小；其余越大越强），并夹取安全范围
     const react = L.react / (t.reactMul == null ? 1 : t.reactMul);
-    const catchProb = clamp(L.catchProb * (t.catchMul == null ? 1 : t.catchMul), 0.20, 0.99);
+    // 人机对战专属微调（hellCatchMul，仅地狱生效）：观战保留 catch 1.0 的强版展示，
+    // 人机对战默认 ×0.97（3% 刻意漏球，高手可战胜）——玩家可在暂停面板用 catchMul 覆盖
+    const catchBase = L.catchProb * (level === 3 && t.hellCatchMul != null ? t.hellCatchMul : 1);
+    const catchProb = clamp(catchBase * (t.catchMul == null ? 1 : t.catchMul), 0.20, 1.0); // 上限 1.0：地狱 100% 不刻意漏球
     const smashProb = clamp(L.smashProb * (t.smashMul == null ? 1 : t.smashMul), 0, 1);
     const agility = clamp(L.agility * (t.agilityMul == null ? 1 : t.agilityMul), 0, 1);
     // 接扣杀成功率：等级基准 × 接球率微调（数值越高应对越强），封顶 50%
@@ -332,9 +336,10 @@
               if (rnd(s) < 0.5) lp = 1;        // 变招一：改打低平快球
               else { lb = 1; pu = 1; }         // 变招二：改放高吊球
             } else if (s.preSwing) pu = 1;
+            // 可扣杀优先于低平快球：球够高就扣杀，低球才用低平/高吊技巧（强化扣杀展示）
+            else if (smashReady(b, L) && rnd(s) < smashProb && smashAttemptAllowed(s, engine, side, L)) sm = 1;
             else if (s.lowThisBall) lp = 1;
             else if (s.lobThisBall) { lb = 1; pu = 1; }
-            else if (smashReady(b, L) && rnd(s) < smashProb && smashAttemptAllowed(s, engine, side, L)) sm = 1;
             else pu = 1;
           }
         }

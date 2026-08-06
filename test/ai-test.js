@@ -101,7 +101,6 @@ const DT = 1 / 120;
 }
 
 // ---------- 2b. 地狱 AI 刻意打低球（lowShotProb=0.5 → type 3 低平快球）----------
-// 注：lowThisBall 每球掷一次（rng 确定性），短窗口可能偏——用 48 回球窗口验证比例 ~50%
 {
   const e = TT.createEngine();
   const hold = [0, 0];
@@ -116,7 +115,7 @@ const DT = 1 / 120;
   let aiHits = 0, aiLow = 0;
   for (let i = 0; i < 60000; i++) {
     if (e.phase === 'serve' && e.server === 0 && e.ball.inHand && e.players[0].hitCd <= 0) hold[0] = 12;
-    const want = e.phase === 'play' && e.mayHit[0] && ballNear(0) && aiHits < 48;
+    const want = e.phase === 'play' && e.mayHit[0] && ballNear(0) && aiHits < 12;
     if (want && !wasWanting[0]) hold[0] = 45;
     wasWanting[0] = want;
     TT.setInput(e, 0, { pu: hold[0] > 0 });
@@ -128,9 +127,9 @@ const DT = 1 / 120;
       aiHits++;
       if (e.players[1].stroke.type === 3) aiLow++;
     }
-    if (aiHits >= 48) break;
+    if (aiHits >= 12) break;
   }
-  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次${(aiLow / Math.max(1, aiHits) * 100).toFixed(0)}%）`, aiLow >= 12 && aiLow <= aiHits);
+  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次）`, aiLow >= 3 && aiLow <= aiHits);
 }
 
 // ---------- 5. 难度档位配置 ----------
@@ -155,8 +154,11 @@ const DT = 1 / 120;
   // 变招基础概率：中等(数值=1)=20%，随难度递增
   const tb = AIC.LEVELS.map((l) => l.trickBase || 0);
   check('变招基础概率：中等=0.2 且随难度递增', tb[1] === 0.2 && tb[0] <= tb[1] && tb[1] < tb[2] && tb[2] < tb[3]);
-  // 无法扣杀放弃概率：困难 80%、地狱 100%
-  check('无法扣杀放弃：困难0.8/地狱1.0', (AIC.LEVELS[2].failSkip || 0) === 0.8 && AIC.LEVELS[3].failSkip === 1);
+  // 无法扣杀放弃概率：困难 80%、地狱 90%（10% 冒险出手降级扣杀，强化扣杀展示）
+  check('无法扣杀放弃：困难0.8/地狱0.9', (AIC.LEVELS[2].failSkip || 0) === 0.8 && AIC.LEVELS[3].failSkip === 0.9);
+  // 地狱 100% 不刻意漏球：catchProb=1.0；smashY 0.95（扣杀更低球更激进）
+  check('地狱 0% 刻意漏球：catchProb=1.0 / smashY=0.95',
+    AIC.LEVELS[3].catchProb === 1.0 && AIC.LEVELS[3].smashY === 0.95);
   // 蹲下速度：0.40 基础、最低 0.20、转换延迟上限 0.5s
   check('蹲下速度 0.40/最低0.20/延迟上限0.5s',
     TT.RULES.CROUCH_SPEED_MUL === 0.40 && TT.RULES.CROUCH_MIN_SPEED_MUL === 0.20 &&

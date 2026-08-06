@@ -108,7 +108,9 @@
         }
       }
       p.run = inp.run ? 1 : 0;
-      p.lob = inp.lb ? 1 : 0; // 高吊球意图(AI 专用,普通蹲防不受影响)
+      // 高吊球意图：普通来球蹲下+推球=高吊；扣杀来球(hitType===2)时不转高吊——
+      // 反击扣杀用蹲防推球（贴网低净空防守），高吊弧线对快球解不出、易打空
+      p.lob = (inp.lb && state.ball.hitType !== 2) ? 1 : 0;
       p.lean = ctx.damp(p.lean, p.vx * 0.055, 8, dt);
       p.swingBack = Math.max(0, p.swingBack - dt * 3.2);
 

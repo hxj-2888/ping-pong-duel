@@ -57,8 +57,9 @@
             crouch: humanCrouch,
             run: PPD.app.keyP1.run || PPD.app.keyP2.run,
           });
-          // 电脑对手（蓝方）：难度 + 地狱通关后的数值调控倍率（暂停面板滑杆，即时生效）
-          PPD.AIC.control(PPD.app.engine, 1, step, PPD.app.aiLevel, PPD.app.aiTuneB);
+          // 电脑对手（蓝方）：难度 + 地狱通关后的数值调控倍率（暂停面板滑杆，即时生效）。
+          // 人机专属微调：地狱默认 ×0.97 接球率（AI 观战保留 1.0 强版展示，人机对战高手可战胜）
+          PPD.AIC.control(PPD.app.engine, 1, step, PPD.app.aiLevel, { hellCatchMul: 0.97, ...(PPD.app.aiTuneB || {}) });
           PPD.TT.step(PPD.app.engine, step);
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
