@@ -68,7 +68,11 @@ check('P1 向左移动（x<0）', snapB && snapB.s.p[1].x < -0.05);
 check('快照含 z/vz', snapA && typeof snapA.s.p[0].z === 'number' && typeof snapA.s.p[0].vz === 'number');
 
 // ---------- 4. 发球流程 ----------
-feed(wsA, { t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 1, sm: 0 } }); // 推球边沿
+// 移动检查后把发球方回中（台边站位解不出合法发球，与真实游戏一致——发球前须站回可发球位置）
+feed(wsA, { t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
+core.rooms.get(code).engine.players[0].x = 0;
+core.rooms.get(code).engine.players[0].padX = 0;
+feed(wsA, { t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 1, sm: 0 } }); // 推球边沿发球
 feed(wsA, { t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
 for (let i = 0; i < 30; i++) { feed(wsA, { t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } }); }
 const snapServe = lastOf(wsA, 'state');

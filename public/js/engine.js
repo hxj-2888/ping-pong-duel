@@ -19,20 +19,20 @@
 })(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
 
-  // Node 中直接 require 各模块；浏览器中读取各模块挂载的全局工厂
+  // Node 中直接 require 各模块（静态字面量，Workers 打包器可解析）；
+  // 浏览器中读取各模块挂载的全局工厂
   const isNode = typeof module === 'object' && module.exports;
-  const loadPart = (nodePath, globalName) =>
-    isNode ? require(nodePath) : root[globalName];
-
   const ctx = {};
-  const parts = [
-    loadPart('./engine/rules.js', 'TTRules'),
-    loadPart('./engine/math.js', 'TTMath'),
-    loadPart('./engine/state.js', 'TTState'),
-    loadPart('./engine/physics.js', 'TTPhysics'),
-    loadPart('./engine/shots.js', 'TTShots'),
-    loadPart('./engine/strokes.js', 'TTStrokes'),
-  ];
+  const parts = isNode
+    ? [
+        require('./engine/rules.js'),
+        require('./engine/math.js'),
+        require('./engine/state.js'),
+        require('./engine/physics.js'),
+        require('./engine/shots.js'),
+        require('./engine/strokes.js'),
+      ]
+    : [root.TTRules, root.TTMath, root.TTState, root.TTPhysics, root.TTShots, root.TTStrokes];
   for (const part of parts) {
     const api = part(ctx);
     for (const key of Object.keys(api)) ctx[key] = api[key];

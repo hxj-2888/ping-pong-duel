@@ -75,7 +75,11 @@ async function main() {
   const snapB = await B.next('state');
   check('P1 向左移动（x<0）', snapB.s.p[1].x < -0.05);
 
-  // 4. 发球
+  // 4. 发球（先回中：台边站位解不出合法发球，与真实游戏一致——发球前须站回可发球位置）
+  for (let i = 0; i < 25; i++) {
+    A.send({ t: 'in', i: { l: 1, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
+    await new Promise((r) => setTimeout(r, 25));
+  }
   A.send({ t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 1, sm: 0 } });
   await new Promise((r) => setTimeout(r, 30));
   A.send({ t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
