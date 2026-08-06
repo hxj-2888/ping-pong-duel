@@ -114,11 +114,11 @@
       }
       return { plan: best, done: false };
     };
-    // 粗搜（快）→ 细搜（全覆盖）：粗搜 angles 每 2° 一档（6 角，96 次模拟，中断后毫秒级），
-    // 配合瞄准防抖（移动中不求解）单次成本无感；边缘落点才触发细搜兜底
+    // 粗搜（快）→ 细搜（全覆盖）：粗搜 angles 每 5° 一档（3 角，48 次模拟，中断后单次 ~2ms），
+    // 发球角度范围窄（-6°~-26°），3 档覆盖高中低抛命中率高；边缘落点才触发细搜兜底
     let r = trySearch(
       speeds.slice(0, 4),
-      angles.filter((a) => a % 2 === 0),
+      angles.filter((a) => a % 5 === 0),
       spins.slice(0, 4)
     );
     if (!r.done && !coarseOnly) r = trySearch(speeds, angles, spins);
@@ -140,15 +140,47 @@
     const txx = Math.round(tx0 * 25), tzz = Math.round(tz0 * 25);
     const ck = `${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx}:${tzz}`;
     let plan = serveToCache.get(ck);
-    // 未命中 → 8 邻域（±1 网格，落点差 ≤0.12m 即复用）：快速移动时相邻网格常已求解，几乎零成本
+    // 未命中 → 8 邻域（±1 网格，落点差 ≤0.18m 即复用）：连续移动时相邻网格常已求解，零成本跟随
     if (!plan) {
       for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) {
         if (dx === 0 && dz === 0) continue;
         const p2 = serveToCache.get(`${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx + dx}:${tzz + dz}`);
-        if (p2 && p2.land && Math.hypot(p2.land.x - tx0, p2.land.z - tz0) <= 0.12) { plan = p2; break; }
+        if (p2 && p2.land && Math.hypot(p2.land.x - tx0, p2.land.z - tz0) <= 0.18) { plan = p2; break; }
       }
     }
-    if (plan) return plan;
+    // 未命中 → 2×2 邻域插值：4 角齐 → 双线性插值；不足 4 角但 ≥2 个 → 按落点距离加权平均——
+    // 移动中落到已解网格之间零求解实时跟手（发球轨迹随鼠标连续平滑，不掉帧）
+    if (!plan) {
+      const fx = tx0 * 25 - txx, fz = tz0 * 25 - tzz; // 网格内偏移 0..1
+      const n = (dx, dz) => serveToCache.get(`${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx + dx}:${tzz + dz}`);
+      const c00 = n(0, 0), c10 = n(1, 0), c01 = n(0, 1), c11 = n(1, 1);
+      const cells = [c00, c10, c01, c11].filter((c) => c && c.land);
+      if (cells.length === 4) {
+        const w00 = (1 - fx) * (1 - fz), w10 = fx * (1 - fz), w01 = (1 - fx) * fz, w11 = fx * fz;
+        const ws = [w00, w10, w01, w11];
+        let vx = 0, vy = 0, vz = 0, sx = 0, sp = 0, lx = 0, ly = 0, lz = 0;
+        for (let i = 0; i < 4; i++) {
+          const c = cells[i], w = ws[i];
+          vx += w * c.vel.x; vy += w * c.vel.y; vz += w * c.vel.z;
+          sx += w * c.spin.x; sp += w * c.speed;
+          lx += w * c.land.x; ly += w * c.land.y; lz += w * c.land.z;
+        }
+        plan = { vel: { x: vx, y: vy, z: vz }, spin: { x: sx, y: 0, z: 0 }, speed: sp, land: { x: lx, y: ly, z: lz } };
+      } else if (cells.length >= 2) {
+        // 加权平均（按解落点与目标距离的反比加权，近者权大）——近似跟随
+        let tw = 0, vx = 0, vy = 0, vz = 0, sx = 0, sp = 0, lx = 0, ly = 0, lz = 0;
+        for (const c of cells) {
+          const d = Math.hypot(c.land.x - tx0, c.land.z - tz0) + 0.02;
+          const w = 1 / (d * d);
+          tw += w;
+          vx += w * c.vel.x; vy += w * c.vel.y; vz += w * c.vel.z;
+          sx += w * c.spin.x; sp += w * c.speed;
+          lx += w * c.land.x; ly += w * c.land.y; lz += w * c.land.z;
+        }
+        plan = { vel: { x: vx / tw, y: vy / tw, z: vz / tw }, spin: { x: sx / tw, y: 0, z: 0 }, speed: sp / tw, land: { x: lx / tw, y: ly / tw, z: lz / tw } };
+      }
+    }
+    if (plan) { serveToCache.set(ck, plan); return plan; }
     // 粗搜优先（~48 次物理模拟，毫秒级）：落点够近（≤0.12m）直接用，避免每次瞄准移动触发全量细搜尖峰；
     // 粗搜无解或偏差大（边缘落点）才细搜兜底（结果同样进缓存）
     plan = searchServeTo(state, pi, tx0, tz0, fast, true);
@@ -159,7 +191,8 @@
       plan = searchServeTo(state, pi, tx0, tz0, fast, false);
     }
     serveToCache.set(ck, plan);
-    if (serveToCache.size > 400) serveToCache.clear();
+    // LRU 淘汰最旧（不整体 clear）：落点区域网格 ~1000+，整体清空会让连续移动重新求解掉帧
+    if (serveToCache.size > 2500) serveToCache.delete(serveToCache.keys().next().value);
     return plan;
   }
 
