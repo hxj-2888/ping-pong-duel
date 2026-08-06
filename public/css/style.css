@@ -242,8 +242,22 @@ input:focus { border-color: var(--blue); }
   /* 右上角工具独占顶行：HUD 下移、左侧模式信息隐藏 */
   #hud { top: 64px; }
   #netInfo { display: none; }
-  #phaseBanner { top: 118px; }
-  #pointToast { top: 162px; }
+  /* 手机端：虚线指示并入比分栏下方的黑色条（居中横排紧凑），不遮观众席/场景 */
+  #hitRangeInfo {
+    top: 122px;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 14px;
+    max-width: calc(100vw - 12px);
+    padding: 5px 10px;
+    border-radius: 10px;
+  }
+  #hitRangeInfo .hr-title { display: none; } /* 手机端紧凑：隐藏标题行 */
+  #phaseBanner { top: 170px; }
+  #pointToast { top: 212px; }
 }
 
 /* ---------- 手机端触控按钮 ---------- */

@@ -161,7 +161,11 @@
   // ---------- 观众席（坐姿火柴人，与球员同一画风：圆头 + 骨线骨架） ----------
   // 场地两端 + 两侧共四个方向的观众席，一次性生成固定站位（确定性伪随机）
   let crowdList = null;
-  function crowdLayout() {
+  let crowdListDensity = 1; // 当前观众布局的密度（0.5=手机减半），变化时重建布局
+  // 观众布局：两端/两侧看台坐姿火柴人。density 密度（默认 1）：0.5 步长加倍、人数减半（手机端省填充率）
+  function crowdLayout(density) {
+    const d = density == null ? 1 : density;
+    const step = 0.46 / d;
     const list = [];
     let seed = 20260804;
     const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -173,14 +177,14 @@
     for (const ez of [-6.35, 6.35]) {
       for (let row = 3; row >= 0; row--) {
         const z = ez + row * 0.5;
-        for (let x = -5.2; x <= 5.2; x += 0.46) list.push(person(x, 0.25 + row * 0.48, z));
+        for (let x = -5.2; x <= 5.2; x += step) list.push(person(x, 0.25 + row * 0.48, z));
       }
     }
     // 两侧看台（x = ±3.62/4.17/4.72，四排，面向球台；由外到内生成）
     for (const sx of [-1, 1]) {
       for (let row = 3; row >= 0; row--) {
         const x = sx * (3.62 + row * 0.55);
-        for (let z = -5.5; z <= 5.5; z += 0.46) list.push(person(x, 0.25 + row * 0.48, z + (rnd() - 0.5) * 0.2));
+        for (let z = -5.5; z <= 5.5; z += step) list.push(person(x, 0.25 + row * 0.48, z + (rnd() - 0.5) * 0.2));
       }
     }
     return list;
@@ -330,6 +334,14 @@
     const hp = cam.project(p.head);
     const fp = cam.project(p.hips);
     if (!hp || !fp) return;
+    // 屏幕外剔除（相机后方 project 返回 null 已跳过；这里再剔屏幕外——手机窄视口大量观众在屏外，
+    // 省静态层/动画层烘焙与直画填充率）
+    const CW = ctx.canvas ? ctx.canvas.width : 0;
+    const CH = ctx.canvas ? ctx.canvas.height : 0;
+    if (CW > 0 && CH > 0) {
+      const m = 60;
+      if (hp.x < -m || hp.x > CW + m || fp.y < -m || fp.y > CH + m) return;
+    }
     const sc = Math.min(hp.s, fp.s);
     // 头（圆头，与球员一致）
     const headR = Math.max(1.2, 0.105 * sc * 0.9);
@@ -369,8 +381,8 @@
     limb(ctx, cam, p.shR, p.handR, CROWD_R * 0.75, col, CROWD_OUTLINE);
   }
 
-  function drawCrowd(ctx, cam, time, viewSide, fan) {
-    if (!crowdList) crowdList = crowdLayout();
+  function drawCrowd(ctx, cam, time, viewSide, fan, density) {
+    if (!crowdList || crowdListDensity !== density) { crowdList = crowdLayout(density); crowdListDensity = density; }
     for (const s of crowdList) {
       // 屏幕左侧（世界 x<0）为当前视角己方球迷，右侧为敌方球迷
       const team = s.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0);
@@ -438,8 +450,8 @@
     }
   }
 
-  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low) {
-    if (!crowdList) crowdList = crowdLayout();
+  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low, density) {
+    if (!crowdList || crowdListDensity !== density) { crowdList = crowdLayout(density); crowdListDensity = density; }
     // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit；
     // 动画层按 30Hz 烘焙叠加，帧间隔内只 blit（背景/看台/静止观众无需每帧重画）
     if (crowdCacheSupported()) {
@@ -499,7 +511,7 @@
       if (low) { drawFloorBg(ctx, cam, vw, vh); return; }
       drawFloorBg(ctx, cam, vw, vh);
       drawBenches(ctx, cam); // 先画座位（观众坐在其上）
-      drawCrowd(ctx, cam, time, viewSide, fan);
+      drawCrowd(ctx, cam, time, viewSide, fan, density);
     }
   }
 
@@ -891,7 +903,7 @@
   function drawScene(ctx, view, vw, vh) {
     const { cam, time } = view;
     const low = !!view.low;
-    drawFloor(ctx, cam, vw, vh, time, view.side, view.fan, low);
+    drawFloor(ctx, cam, vw, vh, time, view.side, view.fan, low, view.density);
     drawPlayerShadows(ctx, cam, view.players);
 
     // 球台对侧的玩家（对手）先画：随后绘制的球台表面会盖住其腿部，
