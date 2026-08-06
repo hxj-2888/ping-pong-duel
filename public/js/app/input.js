@@ -325,7 +325,7 @@
   });
 
   PPD.canvas.addEventListener('pointerdown', (e) => {
-    // 鼠标：左键推球 / 右键扣球（右键不发球菜单）；触屏：单击推球 / 双击扣球
+    // 鼠标：左键推球 / 右键扣球（右键不发球菜单）；触屏：单击推球 / 扣球键扣球
     if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
     if (!PPD.app.mode) return;
     PPD.app.lastPointerX = e.clientX;

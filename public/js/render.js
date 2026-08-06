@@ -369,32 +369,30 @@
     }
   }
 
-  // 动画层：仅重画得分后欢呼/摇头的观众（叠加在离屏缓存之上，瞬态 ~1.7s）
-  function drawCrowdAnimated(ctx, cam, time, viewSide, fan) {
-    if (!fan || !fan.cheer || !fan.shake) return;
-    // 无任何动画（常规对打帧）直接返回，省去整轮观众循环
-    if (!(fan.cheer[0] > 0 || fan.cheer[1] > 0 || fan.shake[0] > 0 || fan.shake[1] > 0)) return;
-    for (const s of crowdList) {
-      const team = s.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0);
-      const c = (fan.cheer && fan.cheer[team]) || 0;
-      const sh = (fan.shake && fan.shake[team]) || 0;
-      if (c > 0 || sh > 0) drawPerson(ctx, cam, s, time, c, sh, FAN_COL[team]);
-    }
-  }
+  // 动画层：得分后欢呼/摇头按 30Hz 烘焙进离屏缓存（见 drawFloor / CROWD_ANIM_HZ），
+  // 帧间隔内只 blit 缓存，不再逐帧重绘全部观众。
 
   // ---------- 观众席离屏缓存（最大帧开销：~380 观众 × 5,600 次路径 + ~11k 临时对象） ----------
   // 相机多数帧静止（±0.62m 死区）→ 静态层（地板/看台/静止观众）预渲染进离屏 canvas，
-  // 相机平移超 0.04m 桶或尺寸/DPR 变化才重建，否则每帧一次 drawImage 整层 blit。
-  // 得分后 1.7s 的欢呼/摇头观众由动画层动态叠加。
+  // 相机平移超 CROWD_CAM_BUCKET 或尺寸/DPR 变化才重建，否则每帧一次 drawImage 整层 blit。
+  // 得分后 ~1.7s 的欢呼/摇头动画：按 30Hz 烘焙进缓存（人眼对挥手/起身 30Hz 无感知），
+  // 帧间隔内只 blit 不重绘——此前动画期间每帧全量重绘 ~376 观众，是移动端 DPR3 掉帧主因。
   // 无 document.createElement 的环境（测试桩/极端环境）自动回退逐帧直画。
-  const CROWD_CAM_BUCKET = 0.04;
-  let crowdCache = null; // { key, canvas, ctx }
+  const CROWD_CAM_BUCKET = 0.06; // 相机移动重建阈值(m)（0.04→0.06：平移重建阈值 0.02→0.03m，频率降约 1/3，视觉不可察）
+  const CROWD_ANIM_HZ = 30;      // 欢呼动画刷入缓存的频率（Hz）
+  let crowdCache = null; // { key, canvas, ctx, anim, animT }
   function clearCrowdCache() { crowdCache = null; }
   function crowdCacheSupported() {
     return typeof document !== 'undefined' && !!document.createElement &&
       typeof document.createElement('canvas').getContext === 'function';
   }
-  function rebuildCrowdCache(cam, vw, vh, viewSide, mainCtx) {
+  // 动画是否进行中（任一观众有欢呼/摇头量）——true 期间缓存按 CROWD_ANIM_HZ 烘焙动画位姿
+  function crowdAnimActive(fan) {
+    if (!fan) return false;
+    return !!((fan.cheer && (fan.cheer[0] > 0 || fan.cheer[1] > 0)) ||
+              (fan.shake && (fan.shake[0] > 0 || fan.shake[1] > 0)));
+  }
+  function rebuildCrowdCache(cam, vw, vh, viewSide, mainCtx, time, fan) {
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
     crowdCache.canvas.width = Math.max(1, Math.round(vw * dpr));
     crowdCache.canvas.height = Math.max(1, Math.round(vh * dpr));
@@ -403,27 +401,36 @@
     cc.clearRect(0, 0, vw, vh);
     drawFloorBg(cc, cam, vw, vh);
     drawBenches(cc, cam);
-    drawCrowd(cc, cam, 0, viewSide, null); // 静止 rest 姿态（time=0, 无欢呼）
+    // 动画中：以当前时间烘焙欢呼/摇头位姿；否则静止 rest 姿态（time=0, 无欢呼）
+    drawCrowd(cc, cam, time || 0, viewSide, fan || null);
   }
 
   function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low) {
-    drawFloorBg(ctx, cam, vw, vh);
-    if (low) return; // 低画质：跳过观众席 + 看台
+    if (low) { // 低画质：仅地板+围挡，无观众席/看台
+      drawFloorBg(ctx, cam, vw, vh);
+      return;
+    }
     if (!crowdList) crowdList = crowdLayout();
-    // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit
+    // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit；
+    // 缓存含不透明背景/看台/观众，主画布无需每帧重画 floorBg；欢呼动画按 30Hz 烘焙进缓存
     if (crowdCacheSupported()) {
       const backing = (ctx.canvas && ctx.canvas.width) || 0;
       const key = `${viewSide}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}`;
-      if (!crowdCache) crowdCache = { canvas: document.createElement('canvas'), ctx: null, key: '' };
+      if (!crowdCache) crowdCache = { canvas: document.createElement('canvas'), ctx: null, key: '', anim: false, animT: null };
       if (!crowdCache.ctx) crowdCache.ctx = crowdCache.canvas.getContext('2d');
-      if (crowdCache.key !== key) {
+      const anim = crowdAnimActive(fan);
+      // 浮点容差 1e-6：60/120Hz 渲染帧长累积误差下也稳定按 CROWD_ANIM_HZ 烘焙
+      const animDue = anim && (crowdCache.animT == null || time - crowdCache.animT >= 1 / CROWD_ANIM_HZ - 1e-6);
+      // 重建条件：相机/尺寸/DPR 变化、动画开始或结束（回静止位姿）、动画中 30Hz 刷新
+      if (crowdCache.key !== key || (crowdCache.anim && !anim) || animDue) {
         crowdCache.key = key;
-        rebuildCrowdCache(cam, vw, vh, viewSide, ctx);
+        crowdCache.anim = anim;
+        crowdCache.animT = anim ? time : null;
+        rebuildCrowdCache(cam, vw, vh, viewSide, ctx, anim ? time : 0, anim ? fan : null);
       }
       ctx.drawImage(crowdCache.canvas, 0, 0, vw, vh);
-      // 动画层：得分后欢呼/摇头的少数观众叠加（其余保持缓存静止画面）
-      drawCrowdAnimated(ctx, cam, time, viewSide, fan);
     } else {
+      drawFloorBg(ctx, cam, vw, vh);
       drawBenches(ctx, cam); // 先画座位（观众坐在其上）
       drawCrowd(ctx, cam, time, viewSide, fan);
     }
@@ -779,5 +786,5 @@
     }
   }
 
-  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, drawCrowdAnimated, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache };
+  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache };
 });
