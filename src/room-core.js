@@ -49,6 +49,7 @@ export class RoomCore {
         const i = msg.i || {};
         TT.setInput(room.engine, att.side, {
           l: !!i.l, r: !!i.r, f: !!i.f, b: !!i.b, pu: !!i.pu, sm: !!i.sm,
+          lb: !!(i.c && i.pu), // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导，无需新按键）
           crouch: !!i.c, run: !!i.rn,
         });
         // 鼠标/手指瞄准：目标落点（世界坐标）随输入帧上报，服务端求解发球方案并随快照返回

@@ -27,7 +27,8 @@
         let n = 0;
         while (acc >= step && n < 8) {
           for (const [i, k] of [[0, PPD.app.keyP1], [1, PPD.app.keyP2]]) {
-            PPD.TT.setInput(PPD.app.engine, i, k);
+            // 蹲下+推球 = 高吊（推球进阶技巧）：由输入层自动补 lb，无需新按键
+            PPD.TT.setInput(PPD.app.engine, i, { ...k, lb: (k.crouch && k.pu) ? 1 : 0 });
           }
           PPD.TT.step(PPD.app.engine, step);
           PPD.handleEngineEvents(PPD.app.engine);
@@ -42,15 +43,18 @@
         const step = 1 / 120;
         let n = 0;
         while (acc >= step && n < 8) {
-          // 人类（P1）：WASD 与方向键均可
+          // 人类（P1）：WASD 与方向键均可；蹲下+推球 = 高吊（输入层补 lb，无需新按键）
+          const humanPu = PPD.app.keyP1.pu || PPD.app.keyP2.pu;
+          const humanCrouch = PPD.app.keyP1.crouch || PPD.app.keyP2.crouch;
           PPD.TT.setInput(PPD.app.engine, 0, {
             l: PPD.app.keyP1.l || PPD.app.keyP2.l,
             r: PPD.app.keyP1.r || PPD.app.keyP2.r,
             f: PPD.app.keyP1.f || PPD.app.keyP2.f,
             b: PPD.app.keyP1.b || PPD.app.keyP2.b,
-            pu: PPD.app.keyP1.pu || PPD.app.keyP2.pu,
+            pu: humanPu,
             sm: PPD.app.keyP1.sm || PPD.app.keyP2.sm,
-            crouch: PPD.app.keyP1.crouch || PPD.app.keyP2.crouch,
+            lb: (humanCrouch && humanPu) ? 1 : 0,
+            crouch: humanCrouch,
             run: PPD.app.keyP1.run || PPD.app.keyP2.run,
           });
           // 电脑对手（蓝方）：难度 + 地狱通关后的数值调控倍率（暂停面板滑杆，即时生效）

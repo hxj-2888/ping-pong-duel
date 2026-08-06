@@ -31,7 +31,12 @@
       serveAimSet: false,  // 鼠标/手指瞄准是否已生效（发球时直接复用 servePlan）
       serveAim: null,      // 瞄准的目标落点（世界坐标）
       serveAimBlocked: false, // 瞄准目标解不出合法发球（轨迹消失、发不出球）
-      crouch: 0,           // 蹲下（Ctrl）：速度变慢、击球点变低
+      crouch: 0,           // 蹲下（Ctrl）：0~1 连续值（转换延迟见 crouchTarget/toggleLag），越低接球点越低
+      crouchTarget: 0,     // 蹲下目标（按键输入）
+      toggleLast: -10,     // 上次蹲/站翻转时刻（用于 3 秒内反复蹲站累积延迟判定）
+      toggleLag: 0,        // 当前蹲↔站转换延迟（初始 0，反复蹲站累积，最多 0.5s）
+      crouchDur: 0,        // 本次持续蹲下时长（蹲越久移动越慢，站起后恢复）
+      aimBias: 0,          // 回球目标 x 偏移（刁钻方向射球，人机按技巧概率设定；±0.72 内）
       run: 0,              // 跑步（Shift）：速度变快
       swingBack: 0,
     };
@@ -54,16 +59,16 @@
       ball: {
         vis: true, inHand: true,
         pos: ctx.vec(0, 0.8, 0), vel: ctx.vec(0, 0, 0), spin: ctx.vec(0, 0, 0),
-        hitBy: -1, lastBounce: -1, netTouched: false,
+        hitBy: -1, hitType: -1, lastBounce: -1, netTouched: false,
       },
       players: [createPlayer(0), createPlayer(1)],
       inputs: [
-        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, crouch: 0, run: 0 },
-        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, crouch: 0, run: 0 },
+        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, lb: 0, crouch: 0, run: 0 },
+        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, lb: 0, crouch: 0, run: 0 },
       ],
       prev: [
-        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, crouch: 0, run: 0 },
-        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, crouch: 0, run: 0 },
+        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, lb: 0, crouch: 0, run: 0 },
+        { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lp: 0, lb: 0, crouch: 0, run: 0 },
       ],
       events: [],
     };
@@ -76,6 +81,7 @@
     k.l = keys.l ? 1 : 0; k.r = keys.r ? 1 : 0;
     k.f = keys.f ? 1 : 0; k.b = keys.b ? 1 : 0;
     k.pu = keys.pu ? 1 : 0; k.sm = keys.sm ? 1 : 0; k.lp = keys.lp ? 1 : 0;
+    k.lb = keys.lb ? 1 : 0;
     k.crouch = keys.crouch ? 1 : 0;
     k.run = keys.run ? 1 : 0;
   }
@@ -85,12 +91,13 @@
     if (state.events.length > 8) state.events.shift();
   }
 
-  // 发球持球点：球位于球拍正前方（与拍面中心同高，拍面法线前方 0.10m）
+  // 发球持球点：球位于球拍正前方（与拍面中心同高，拍面法线前方 0.10m）；
+  // 蹲伏值需 ≥0.5 才按蹲下发球高度（浮点残值不算，避免发球点高度抖动）
   function serveBallPos(p) {
     const f = p.facing;
     // 球始终位于球拍正前方 0.10m（不随站位被钳到奇怪位置）；
-    // 若站位导致发球解不出合法轨迹，则按“无法发球”处理，需调整站位后再发
-    return ctx.vec(p.padX, 0.98, p.z + f * (0.42 + 0.10));
+    // 若站位导致发球解不出合法轨迹，则按”无法发球”处理，需调整站位后再发
+    return ctx.vec(p.padX, p.crouch >= 0.5 ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, p.z + f * (0.42 + 0.10));
   }
 
   function resetBallToServer(state) {
@@ -99,7 +106,7 @@
     b.inHand = true; b.vis = true;
     b.pos = serveBallPos(p);
     b.vel = ctx.vec(0, 0, 0); b.spin = ctx.vec(0, 0, 0);
-    b.hitBy = -1; b.lastBounce = -1; b.netTouched = false;
+    b.hitBy = -1; b.hitType = -1; b.lastBounce = -1; b.netTouched = false;
     // 新一轮发球：清空上一轮的瞄准方案，等待玩家重新瞄准
     p.servePlan = null;
     p.serveAimSet = false;

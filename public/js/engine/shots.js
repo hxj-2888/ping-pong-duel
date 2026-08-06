@@ -155,7 +155,7 @@
     const H = ctx.serveBallPos(p); // 发球点位于球拍正前方
     // 缓存必须区分发球方：两侧朝向相反，共用缓存会把 P1 的轨迹给 P2
     // 缓存必须包含发球点 z（球员可前后移动，站位不同发球轨迹不同）
-    const cacheKey = `${pi}:${f > 0 ? 1 : 0}:${Math.round(H.x * 2)}:${Math.round(opp.x * 2)}:${fast ? 1 : 0}:${Math.round(H.z * 4)}`;
+    const cacheKey = `${pi}:${f > 0 ? 1 : 0}:${Math.round(H.x * 8)}:${Math.round(opp.x * 2)}:${fast ? 1 : 0}:${Math.round(H.z * 16)}:${Math.round(H.y * 8)}`;
     if (serveCache.has(cacheKey)) return serveCache.get(cacheKey);
     const speeds = fast
       ? [5.6, 5.4, 5.8, 5.2, 6.0, 6.2, 6.4, 6.6]
@@ -216,16 +216,18 @@
     return !!serveLanding(launch, vel, spin, pi);
   }
 
-  function computeShot(state, pi, type) {
+  function computeShot(state, pi, type, opts) {
     const p = state.players[pi], b = state.ball, f = p.facing;
     const opp = state.players[1 - pi];
+    const soft = !!(opts && opts.soft) && type === 2;
     const tz = type === 2 ? f * 1.18 : type === 3 ? f * 1.20 : f * 0.55;
-    const tx = ctx.clamp(opp.x * 0.85 + (b.pos.x - p.x) * 0.25, -0.72, 0.72);
+    // 落点 x：默认对准对手站位；人机"刁钻方向射球"通过 p.aimBias 打向对方反方向/边角
+    const tx = ctx.clamp(opp.x * 0.85 + (b.pos.x - p.x) * 0.25 + (p.aimBias || 0), -0.72, 0.72);
     const target = ctx.vec(tx, ctx.RULES.TABLE_HEIGHT + ctx.RULES.BALL_RADIUS, tz);
-    const padSpeed = type === 2 ? 10.4 : type === 3 ? 7.5 : 2.8; // 扣球更快、低平快球快而平的抽击
+    const padSpeed = type === 2 ? (soft ? 8.0 : 10.4) : type === 3 ? 7.5 : 2.8; // 扣球更快（减力扣球稍慢）、低平快球快而平的抽击
     const e = type === 1 ? 0.20 : type === 3 ? 0.50 : 0.85;
     const outSpeed = (1 + e) * padSpeed + e * ctx.vlen(b.vel);
-    const spin = ctx.vec(type === 1 ? -f * 34 : type === 3 ? f * 50 : f * 120, 0, 0); // 扣球强上旋下坠、低平快球中等上旋
+    const spin = ctx.vec(type === 1 ? -f * 34 : type === 3 ? f * 50 : (soft ? f * 80 : f * 120), 0, 0); // 扣球强上旋下坠（减力扣球略弱）、低平快球中等上旋
     // 推球：按击球高度留净空（网顶上方约 1.2~5.5cm），弧线抬高、干净过网；
     // 扣球：贴网下压更狠（净空 0.6~8cm）+ 更快 + 强上旋——更容易造成低球/快球；
     // 低平快球：贴网平击（净空 0.8~5cm），过网后略下坠、落地深而低
@@ -235,15 +237,35 @@
     const maxClear = type === 2 ? 0.08 : type === 3 ? 0.05 : null;
     // 蹲下（Ctrl）：用更高弧线、更快的防守性回球（放高球），
     // 球越低越用力（贴地球也能接起），普通低球保持 1.35×
-    const defensive = type === 1 && p.crouch;
+    // 高吊球：高净空高弧线——喂给对手制造扣杀机会（到达对方箱体时球高 ≥1.0）。
+    //   仅由 lb 输入触发（AI 的 lobProb / 玩家"蹲下+推球"由输入层转成 lb），
+    //   自动蹲防（救低球/接扣杀）保持低净空防守路径；opts.lob 供指示判定
+    const defensive = type === 1 && (p.crouch >= 0.5 || p.lob);
+    const isLob = defensive && (p.lob || (opts && opts.lob));
     const low = defensive ? ctx.clamp(1 - b.pos.y / ctx.RULES.HITBOX_Y_BOTTOM, 0, 1) : 0;
     const defSpeed = 1.35 + 0.55 * low;
-    const vel = solveRally(b.pos, target,
+    let vel = solveRally(b.pos, target,
       outSpeed * (defensive ? defSpeed : (type === 2 ? 1.10 : type === 3 ? 1.0 : 1.05)),
-      spin, minClear, maxClear, defensive, type === 3);
-    // 低平快球解不出合法轨迹（站位/球况不佳）时退回高吊推球，保证命中不落空
-    if (!vel && type === 3) return computeShot(state, pi, 1);
-    return vel ? { vel, outSpeed, spin } : null;
+      spin, isLob ? 0.55 : minClear, isLob ? 1.3 : maxClear, defensive, type === 3);
+    // 高吊解不出合法轨迹（低球救球等球况）时退回普通蹲防弧线，保证命中不落空
+    if (!vel && isLob) {
+      vel = solveRally(b.pos, target, outSpeed * defSpeed, spin, minClear, maxClear, defensive, false);
+    }
+    // 解不出合法轨迹时逐级降级，保证命中不落空：
+    //   低平快球 → 高吊推球；扣球 → 减力扣球 → 高吊推球（扣球不会因求解失败而挥空丢分）
+    //   degraded 标志标记"非完整击球"（人机据此判定无法扣杀而放弃扣杀）
+    if (!vel) {
+      if (type === 3) { const f3 = computeShot(state, pi, 1); if (f3) { f3.degraded = true; return f3; } return null; }
+      if (type === 2 && !soft) {
+        const reduced = computeShot(state, pi, 2, { soft: true });
+        if (reduced) { reduced.degraded = true; return reduced; }
+        const push = computeShot(state, pi, 1);
+        if (push) { push.degraded = true; return push; }
+        return null;
+      }
+      return null;
+    }
+    return vel ? { vel, outSpeed, spin, degraded: false } : null;
   }
 
   function solveRally(p0, target, speed, spin, minClear, maxClear, defensive, lowFlat) {

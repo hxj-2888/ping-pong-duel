@@ -305,8 +305,9 @@ async function main() {
     t.runFrames(2);
     check('蹲下按钮：P1 蹲下生效', t.app.engine.players[0].crouch === 1);
     t.elements.get('btnCrouch').dispatch('pointerup', { preventDefault() {} });
-    t.runFrames(2);
-    check('松开蹲下按钮：恢复站立', t.app.engine.players[0].crouch === 0);
+    // 蹲站转换有延迟（3秒内反复蹲站会累计，首次松开也需 0.15s），多跑几帧等过渡完成
+    t.runFrames(24);
+    check('松开蹲下按钮：恢复站立（转换延迟后）', t.app.engine.players[0].crouch === 0);
 
     // Shift 跑步加速 / Ctrl 蹲下减速（电脑端按键）
     const p0 = t.app.engine.players[0];

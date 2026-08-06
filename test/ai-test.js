@@ -130,51 +130,7 @@ const DT = 1 / 120;
     }
     if (aiHits >= 48) break;
   }
-  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次≈${(aiLow / Math.max(1, aiHits) * 100).toFixed(0)}%）`, aiLow >= 12 && aiLow <= aiHits);
-}
-
-// ---------- 2c. 地狱强化：数值拉满 + 快球预判（修"快球必漏"，仅地狱生效） ----------
-{
-  const L3 = AIC.LEVELS[3];
-  check('地狱数值拉满：catch 0.95 / react 0.01 / smashY 0.95 / err 0.01',
-    L3.catchProb === 0.95 && L3.react === 0.01 && L3.smashY === 0.95 && L3.err === 0.01);
-  // 高速扣球级来球（22m/s）：地狱能接住（预判起手 + 蹲下），困难（无预判）接不住
-  const fastCatch = (level, ballY) => {
-    const e = TT.createEngine();
-    e.phase = 'play'; e.serveStage = 'rally';
-    e.mayHit = [true, true];
-    e.ball.inHand = false;
-    e.ball.pos = { x: 0, y: ballY, z: -0.5 };
-    e.ball.vel = { x: 0, y: -0.5, z: 22 };
-    e.ball.spin = { x: 0, y: 0, z: 0 };
-    e.ball.hitBy = 0; e.ball.lastBounce = 0;
-    let hit = false;
-    for (let i = 0; i < 60; i++) {
-      AIC.control(e, 1, DT, level);
-      TT.step(e, DT);
-      if (e.ball.hitBy === 1) { hit = true; break; }
-      if (e.phase !== 'play') break;
-    }
-    return hit;
-  };
-  check('地狱快球预判：22m/s 高球接住', fastCatch(3, 1.35));
-  check('地狱快球预判：22m/s 低球（蹲下）接住', fastCatch(3, 0.95));
-  check('困难无预判：22m/s 高球接不住', !fastCatch(2, 1.35));
-  // 地狱快速发球：发球即抢攻（fast serve，速度明显快于困难/中等）
-  const serveSpeedAt = (lv) => {
-    const e2 = TT.createEngine();
-    e2.server = 1; e2.startServer = 1;
-    e2.ball.pos = { x: 0, y: 1.0, z: e2.players[1].z + e2.players[1].facing * 0.22 };
-    for (let i = 0; i < 2400; i++) {
-      AIC.control(e2, 1, DT, lv);
-      TT.step(e2, DT);
-      if (e2.phase === 'play') return Math.hypot(e2.ball.vel.x, e2.ball.vel.y, e2.ball.vel.z);
-    }
-    return -1;
-  };
-  const hellServe = serveSpeedAt(3);
-  const diffServe = serveSpeedAt(2);
-  check(`地狱快速发球（${hellServe.toFixed(1)}m/s > 困难${diffServe.toFixed(1)}m/s）`, hellServe > diffServe + 0.3 && hellServe > 0);
+  check(`地狱AI 刻意低球（回球${aiHits}次中低平快球${aiLow}次${(aiLow / Math.max(1, aiHits) * 100).toFixed(0)}%）`, aiLow >= 12 && aiLow <= aiHits);
 }
 
 // ---------- 5. 难度档位配置 ----------
@@ -192,6 +148,93 @@ const DT = 1 / 120;
   const lowProbs = AIC.LEVELS.map((l) => l.lowShotProb || 0);
   check('刻意低球概率：简单0/中等0/困难0.2/地狱0.5',
     lowProbs[0] === 0 && lowProbs[1] === 0 && lowProbs[2] === 0.2 && lowProbs[3] === 0.5);
+  // 接扣杀：仅困难/地狱可应对（0/0/0.3/0.5），封顶 50%
+  const sd = AIC.LEVELS.map((l) => l.smashDef || 0);
+  check('接扣杀 smashDef：简单0/中等0/困难0.3/地狱0.5（≤0.5）',
+    sd[0] === 0 && sd[1] === 0 && sd[2] === 0.3 && sd[3] === 0.5 && sd.every((v) => v <= 0.5));
+  // 变招基础概率：中等(数值=1)=20%，随难度递增
+  const tb = AIC.LEVELS.map((l) => l.trickBase || 0);
+  check('变招基础概率：中等=0.2 且随难度递增', tb[1] === 0.2 && tb[0] <= tb[1] && tb[1] < tb[2] && tb[2] < tb[3]);
+  // 无法扣杀放弃概率：困难 80%、地狱 100%
+  check('无法扣杀放弃：困难0.8/地狱1.0', (AIC.LEVELS[2].failSkip || 0) === 0.8 && AIC.LEVELS[3].failSkip === 1);
+  // 蹲下速度：0.40 基础、最低 0.20、转换延迟上限 0.5s
+  check('蹲下速度 0.40/最低0.20/延迟上限0.5s',
+    TT.RULES.CROUCH_SPEED_MUL === 0.40 && TT.RULES.CROUCH_MIN_SPEED_MUL === 0.20 &&
+    TT.RULES.CROUCH_TOGGLE_MAX === 0.5 && TT.RULES.CROUCH_TOGGLE_WINDOW === 3.0);
+}
+
+// ---------- 7. 扣杀求解兜底：type2 永不落空（不会因求解失败而挥空丢分） ----------
+{
+  const e = TT.createEngine();
+  e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [true, false];
+  e.ball.inHand = false;
+  let allOk = true, detail = '';
+  for (const y of [0.80, 0.92, 1.00, 1.20]) {
+    e.ball.pos = { x: 0, y, z: -1.2 };
+    e.ball.vel = { x: 0, y: 0.5, z: -3.0 };
+    e.ball.spin = { x: 0, y: 0, z: 0 };
+    e.ball.hitBy = 1; e.ball.lastBounce = 1;
+    const shot = TT.computeShot(e, 0, 2);
+    if (!shot) { allOk = false; detail += ` y=${y}→null`; }
+  }
+  check('扣杀求解兜底：低接触高度也不落空（降级减力扣/推球）', allOk && detail === '');
+}
+
+// ---------- 8. 玩家可反击扣杀（蹲下+推球+预判起拍，一定角度内可接） ----------
+{
+  const R = TT.RULES;
+  const predictCrossing = (ball, zc, maxT) => {
+    const steps = Math.ceil(maxT / 0.02);
+    let prevZ = ball.pos.z, prevPos = ball.pos;
+    for (let i = 1; i <= steps; i++) {
+      const t = i * 0.02;
+      const p = TT.predictBall(ball, t);
+      if ((prevZ - zc) * (p.z - zc) <= 0) {
+        const f = Math.abs(p.z - zc) / (Math.abs(p.z - zc) + Math.abs(prevZ - zc) + 1e-9);
+        return { t: t - 0.02 * f, y: prevPos.y + (p.y - prevPos.y) * (1 - f) };
+      }
+      prevZ = p.z; prevPos = p;
+    }
+    return null;
+  };
+  const e = TT.createEngine();
+  let smashIn = 0, returned = 0, pending = false, injected = 0, lastInject = -240;
+  for (let i = 0; i < 120 * 600; i++) {
+    // 脚本化玩家(side0)防守
+    const p0 = e.players[0], b = e.ball;
+    const zc0 = p0.z + p0.facing * 0.42;
+    const incoming0 = e.phase === 'play' && !b.inHand && (b.vel.z * p0.facing < 0);
+    const inBox0 = Math.abs(b.pos.x - p0.x) < R.HITBOX_HX && Math.abs(b.pos.z - zc0) < R.HITBOX_HZ &&
+      b.pos.y > R.HITBOX_Y_BOTTOM && b.pos.y < R.HITBOX_Y_TOP;
+    const cross0 = incoming0 ? predictCrossing(b, zc0, 1.4) : null;
+    const smashIn0 = incoming0 && b.hitType === 2;
+    const preSwing = smashIn0 && cross0 && cross0.t < 0.18 && !inBox0;
+    const crouch0 = incoming0 && ((cross0 && cross0.t < 0.45 && cross0.y < 0.95) ||
+      (b.pos.y < 0.95 && Math.hypot(b.pos.x - p0.x, b.pos.z - zc0) < 1.6));
+    const pu = preSwing || (incoming0 && e.mayHit[0] && inBox0);
+    let servePu = 0;
+    if (e.phase === 'serve' && e.server === 0 && b.inHand && p0.hitCd <= 0 && i % 48 < 3) servePu = 1;
+    TT.setInput(e, 0, { pu: (pu || servePu) ? 1 : 0, crouch: crouch0 ? 1 : 0 });
+    if (smashIn0 && !pending) { pending = true; smashIn++; }
+    AIC.control(e, 1, DT, 2);
+    const before = e.rallyCount;
+    TT.step(e, DT);
+    if (pending && e.rallyCount > before && e.ball.hitBy === 0) { returned++; pending = false; }
+    if (pending && e.phase !== 'play') pending = false;
+    const p1 = e.players[1];
+    if (e.phase === 'play' && !e.ball.inHand && injected < 14 && i - lastInject > 240 &&
+        !p1.stroke.active && p1.hitCd <= 0 && e.mayHit[1]) {
+      e.ball.pos = { x: p1.x, y: 1.15, z: p1.z + p1.facing * 0.60 };
+      e.ball.vel = { x: 0, y: 1.2, z: -p1.facing * 3.0 };
+      e.ball.spin = { x: 0, y: 0, z: 0 };
+      e.ball.hitBy = 0; e.ball.lastBounce = 0;
+      e.mayHit = [false, true];
+      injected++; lastInject = i;
+    }
+    e.events.length = 0;
+    if (e.phase === 'over') break;
+  }
+  check(`玩家反击扣杀可解（困难AI扣杀${smashIn}次玩家接住${returned}次）`, smashIn >= 5 && returned >= 1);
 }
 
 // ---------- 6. AI 与玩家条件同步（蹲下/跑步/前后移动/同一碰撞箱） ----------

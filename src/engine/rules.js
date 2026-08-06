@@ -38,7 +38,12 @@
     CROUCH_HITBOX_Y_TOP: 1.30,   // 蹲下箱顶
     CROUCH_HITBOX_Y_BOTTOM: 0.02,// 蹲下箱底（贴地：任何还在空中的低球都能接，落地球已判分）
     RUN_SPEED_MUL: 1.30,     // 跑步（Shift）速度倍率
-    CROUCH_SPEED_MUL: 0.50,  // 蹲下（Ctrl）速度倍率
+    CROUCH_SPEED_MUL: 0.40,  // 蹲下（Ctrl）速度倍率（蹲得越久越慢，最低 CROUCH_MIN_SPEED_MUL）
+    CROUCH_MIN_SPEED_MUL: 0.20, // 蹲下速度下限（蹲满 CROUCH_DECAY_TIME 秒后达到）
+    CROUCH_DECAY_TIME: 2.0,  // 蹲下从 0.40 衰减到 0.20 所需秒数
+    CROUCH_TOGGLE_MAX: 0.5,  // 蹲↔站转换延迟上限（3 秒内反复蹲站会累积到该值）
+    CROUCH_TOGGLE_STEP: 0.15,// 3 秒内每次蹲/站翻转额外增加的转换延迟（秒）
+    CROUCH_TOGGLE_WINDOW: 3.0, // 反复蹲站判定窗口（秒）：窗口内连续翻转才累积延迟
     CROUCH_PADDLE_Y: 0.80,   // 蹲下时球拍待机高度
     GRAVITY: 9.81,
     WIN_SCORE: 11,

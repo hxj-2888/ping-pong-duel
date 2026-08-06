@@ -137,9 +137,32 @@
   }
   // 感知辅助上升沿跟踪：球进"人类控制方"箱体的一瞬间播一次提示音
   let lastInBox = {};
+  // "可扣杀"指示：与 AI 同一判定（computeShot 扣杀求解不降级即"可扣杀"），节流避免频繁求解
+  let lastSmashCheck = 0;
+  function canSmashNow(engine, i) {
+    const b = engine && engine.ball;
+    if (!b || !engine.players || engine.phase !== 'play' || b.inHand) return false;
+    const p = engine.players[i], f = p.facing;
+    const zc = p.z + f * 0.42;
+    if (b.vel.z * f >= 0) return false;                       // 未朝本方来
+    if (Math.abs(b.pos.z - zc) > 2.6) return false;            // 太远（求解无意义且省开销）
+    const shot = PPD.TT.computeShot(engine, i, 2);
+    return !!(shot && !shot.degraded);
+  }
+  // "可高吊"指示：蹲下+推球（推球进阶技巧）能否放出高吊——与人机 lb 同一求解判定
+  function canLobNow(engine, i) {
+    const b = engine && engine.ball;
+    if (!b || !engine.players || engine.phase !== 'play' || b.inHand) return false;
+    const p = engine.players[i], f = p.facing;
+    const zc = p.z + f * 0.42;
+    if (b.vel.z * f >= 0) return false;
+    if (Math.abs(b.pos.z - zc) > 2.6) return false;
+    const shot = PPD.TT.computeShot(engine, i, 1, { lob: true });
+    return !!(shot && !shot.degraded);
+  }
   function updateHitRangeLive() {
     const mode = PPD.app.mode;
-    const elH = PPD.ui.ballHeight, elS = PPD.ui.inBoxStatus;
+    const elH = PPD.ui.ballHeight, elS = PPD.ui.inBoxStatus, elSm = PPD.ui.smashStatus, elLb = PPD.ui.lobStatus;
     // 左上角判定面板跟随主页开关：关闭时隐藏全部提示内容（接球箱/蹲下最低/球高/进箱）
     const panel = PPD.ui.hitRangeInfo;
     if (panel && panel.style.display !== (PPD.app.showHitRanges ? '' : 'none')) {
@@ -188,6 +211,22 @@
       }
     } else {
       lastInBox = {};
+    }
+    // 可扣杀/可高吊指示（节流 0.12s）：本地双人/人机/联机对"人类控制方"实时判定
+    if ((elSm || elLb) && PPD.app.engine) {
+      const now = performance ? performance.now() : Date.now();
+      if (now - lastSmashCheck > 120) {
+        lastSmashCheck = now;
+        const smSides = mode === 'local' ? [0, 1] : (mode === 'ai' ? [0] : [PPD.app.side]);
+        let anySmash = false, anyLob = false;
+        for (const i of smSides) {
+          if (canSmashNow(PPD.app.engine, i)) anySmash = true;
+          if (canLobNow(PPD.app.engine, i)) anyLob = true;
+          if (anySmash && anyLob) break;
+        }
+        if (elSm) { elSm.textContent = anySmash ? '可扣杀 ✓' : '暂不可'; elSm.className = anySmash ? 'on' : 'off'; }
+        if (elLb) { elLb.textContent = anyLob ? '可高吊 ✓' : '暂不可'; elLb.className = anyLob ? 'on' : 'off'; }
+      }
     }
   }
 

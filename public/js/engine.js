@@ -62,9 +62,27 @@
       const inp = state.inputs[i], prev = state.prev[i];
       const f = p.facing;
       p.hitCd = Math.max(0, p.hitCd - dt);
+      // 蹲/站转换：初始 0 秒（瞬蹲/瞬站），但 3 秒内反复蹲站会加大转换延迟（每次 +0.15s，最多 0.5s）
+      const crouchTarget = inp.crouch ? 1 : 0;
+      if (crouchTarget !== p.crouchTarget) {
+        if (state.t - p.toggleLast < ctx.RULES.CROUCH_TOGGLE_WINDOW) {
+          p.toggleLag = Math.min(ctx.RULES.CROUCH_TOGGLE_MAX, p.toggleLag + ctx.RULES.CROUCH_TOGGLE_STEP);
+        } else {
+          p.toggleLag = 0;
+        }
+        p.toggleLast = state.t;
+        p.crouchTarget = crouchTarget;
+      }
+      const toggleT = Math.max(0.001, p.toggleLag);
+      p.crouch += Math.max(-dt / toggleT, Math.min(dt / toggleT, crouchTarget - p.crouch));
+      // 蹲得越久越慢（crouchDur 累积 → 速度倍率从 0.40 衰减到 0.20；站起后恢复）
+      if (p.crouch > 0.5) p.crouchDur += dt;
+      else p.crouchDur = Math.max(0, p.crouchDur - dt * 2);
       // 球拍定位模式：按键直接移动球拍，人跟随球拍（而不是人带动球拍）
-      // 跑步（Shift）加速 / 蹲下（Ctrl）减速
-      const moveSpeed = ctx.RULES.PLAYER_SPEED * (inp.run ? ctx.RULES.RUN_SPEED_MUL : (inp.crouch ? ctx.RULES.CROUCH_SPEED_MUL : 1));
+      // 跑步（Shift）加速 / 蹲下（Ctrl）减速（蹲越久越慢）
+      const crouchSpeedMul = ctx.RULES.CROUCH_SPEED_MUL -
+        (ctx.RULES.CROUCH_SPEED_MUL - ctx.RULES.CROUCH_MIN_SPEED_MUL) * Math.min(1, p.crouchDur / ctx.RULES.CROUCH_DECAY_TIME);
+      const moveSpeed = ctx.RULES.PLAYER_SPEED * (inp.run ? ctx.RULES.RUN_SPEED_MUL : (1 + (crouchSpeedMul - 1) * p.crouch));
       const dir = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
       p.padX = ctx.clamp(p.padX + dir * moveSpeed * dt, -ctx.RULES.MAX_X, ctx.RULES.MAX_X);
       p.vx = ctx.damp(p.vx, dir * moveSpeed, 10, dt);
@@ -89,8 +107,8 @@
           p.z = p.side === 0 ? -rl : rl; // 从端线进入：退到端线后
         }
       }
-      p.crouch = inp.crouch ? 1 : 0;
       p.run = inp.run ? 1 : 0;
+      p.lob = inp.lb ? 1 : 0; // 高吊球意图(AI 专用,普通蹲防不受影响)
       p.lean = ctx.damp(p.lean, p.vx * 0.055, 8, dt);
       p.swingBack = Math.max(0, p.swingBack - dt * 3.2);
 
@@ -107,7 +125,8 @@
         const puEdge = inp.pu && !prev.pu;
         const smEdge = inp.sm && !prev.sm;
         const lpEdge = inp.lp && !prev.lp;
-        if (puEdge || smEdge || lpEdge) {
+        const lbEdge = inp.lb && !prev.lb;
+        if (puEdge || smEdge || lpEdge || lbEdge) {
           const type = smEdge ? 2 : lpEdge ? 3 : 1;
           if (state.phase === 'serve' && state.ball.inHand && state.server === i) {
             ctx.startServeStroke(state, i, type);
@@ -129,7 +148,7 @@
     if (!p.stroke.active) {
       const f = p.facing;
       // 发球持拍位置跟随球员，球始终在拍前 0.10m（serveBallPos）
-      p.paddle.p = ctx.vec(p.padX, p.crouch ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, p.z + f * 0.42);
+      p.paddle.p = ctx.vec(p.padX, p.crouch >= 0.5 ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, p.z + f * 0.42);
       p.paddle.n = ctx.vec(0, 0, f);
       p.paddle.v = ctx.vec(0, 0, 0);
       }
@@ -145,7 +164,7 @@
         const f = p.facing;
         // 待机球拍保持在己方半场一侧（不越过球网）
         const z = f > 0 ? Math.min(p.z + f * 0.42, -0.1) : Math.max(p.z + f * 0.42, 0.1);
-        p.paddle.p = ctx.vec(p.padX, p.crouch ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, z);
+        p.paddle.p = ctx.vec(p.padX, p.crouch >= 0.5 ? ctx.RULES.CROUCH_PADDLE_Y : 0.98, z);
         p.paddle.n = ctx.vec(0, 0, f);
         p.paddle.v = ctx.vec(0, 0, 0);
         }

@@ -55,6 +55,7 @@
       b.vel = { ...st.validVel };
       b.spin = { ...st.validSpin };
       b.hitBy = pi;
+      b.hitType = st.type;
       b.lastBounce = pi;
       b.netTouched = false;
       state.mayHit = [false, false];
@@ -93,6 +94,7 @@
     b.spin.x = ctx.lerp(b.spin.x, targetSpin, 0.88);
     b.spin.y = 0; b.spin.z = 0;
     b.hitBy = pi;
+    b.hitType = st.type;
     b.lastBounce = pi;
     b.netTouched = false;
     state.mayHit = [false, false];
@@ -125,8 +127,8 @@
         z: p.z + f * 0.42,
         hx: ctx.RULES.HITBOX_HX,
         hz: ctx.RULES.HITBOX_HZ,
-        yTop: p.crouch ? ctx.RULES.CROUCH_HITBOX_Y_TOP : ctx.RULES.HITBOX_Y_TOP,
-        yBottom: p.crouch ? ctx.RULES.CROUCH_HITBOX_Y_BOTTOM : ctx.RULES.HITBOX_Y_BOTTOM,
+        yTop: ctx.RULES.HITBOX_Y_TOP + (ctx.RULES.CROUCH_HITBOX_Y_TOP - ctx.RULES.HITBOX_Y_TOP) * p.crouch,
+        yBottom: ctx.RULES.HITBOX_Y_BOTTOM + (ctx.RULES.CROUCH_HITBOX_Y_BOTTOM - ctx.RULES.HITBOX_Y_BOTTOM) * p.crouch,
       },
     };
   }
@@ -139,6 +141,7 @@
     b.spin = { ...plan.spin };
     b.inHand = false;
     b.hitBy = pi;
+    b.hitType = -1; // 发球不算扣杀
     b.lastBounce = -1;
     b.netTouched = false;
     state.phase = 'play';
@@ -172,13 +175,16 @@
         state.ball.inHand && st.ct >= 0 && st.t >= st.ct) {
       applyServeHit(state, pi);
     } else if (!st.hit && state.phase === 'play' && !state.ball.inHand &&
-               st.windup > 0 && st.t >= st.windup && st.t <= st.windup + st.live) {
-      // 进箱即命中：球进入球员接球碰撞箱（跟随球员当前位置，蹲下时箱体下探）
+               st.windup > 0 && st.t <= st.windup + st.live &&
+               // 扣杀(type2)判箱从挥拍开始(t=0)即生效：球已入箱就按入箱瞬间的高度击球——
+               // 避免 0.08s 起拍延迟把高空球压到过低位置(仅高于网顶 1.75cm 时解不出高速扣球而被迫降级成推球)；
+               // 推球/低平保留起拍延迟(挥拍蓄力动画 + 时机感)
+               (st.type === 2 || st.t >= st.windup)) {
       const b = state.ball;
       st.box.x = p.x;
       st.box.z = p.z + p.facing * 0.42;
-      st.box.yTop = p.crouch ? ctx.RULES.CROUCH_HITBOX_Y_TOP : ctx.RULES.HITBOX_Y_TOP;
-      st.box.yBottom = p.crouch ? ctx.RULES.CROUCH_HITBOX_Y_BOTTOM : ctx.RULES.HITBOX_Y_BOTTOM;
+      st.box.yTop = ctx.RULES.HITBOX_Y_TOP + (ctx.RULES.CROUCH_HITBOX_Y_TOP - ctx.RULES.HITBOX_Y_TOP) * p.crouch;
+      st.box.yBottom = ctx.RULES.HITBOX_Y_BOTTOM + (ctx.RULES.CROUCH_HITBOX_Y_BOTTOM - ctx.RULES.HITBOX_Y_BOTTOM) * p.crouch;
       const inBox = Math.abs(b.pos.x - st.box.x) < st.box.hx &&
         Math.abs(b.pos.z - st.box.z) < st.box.hz &&
         b.pos.y > st.box.yBottom && b.pos.y < st.box.yTop;

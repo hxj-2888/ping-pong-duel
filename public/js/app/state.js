@@ -79,6 +79,8 @@
     hitPaddleVal: document.getElementById('hitPaddleVal'),
     ballHeight: document.getElementById('ballHeight'),
     inBoxStatus: document.getElementById('inBoxStatus'),
+    smashStatus: document.getElementById('smashStatus'),
+    lobStatus: document.getElementById('lobStatus'),
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
     recordsPanel: document.getElementById('recordsPanel'),
