@@ -9,6 +9,21 @@
   function setupNet(hostMode) {
     const net = new PPD.NetClient(PPD.wsUrl()); // 连接时按 本地/公网 选择端点
     PPD.app.net = net;
+    // 加入超时自愈：DO 驱逐/网络抖动时服务器可能不响应 join（升级后消息丢失），
+    // 6s 无 room 响应 → 重连重试（最多 2 次），仍失败才提示
+    let joinTries = 0;
+    let joinTimer = null;
+    const clearJoinTimer = () => { if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; } };
+    const scheduleJoinRetry = () => {
+      clearJoinTimer();
+      joinTimer = setTimeout(() => {
+        if (joinTries >= 2) { PPD.setStatus('加入超时，请确认房间码后重试'); return; }
+        joinTries++;
+        PPD.setStatus('加入超时，自动重连中…');
+        net.close();
+        net.connect();
+      }, 6000);
+    };
     net.on('open', () => {
       PPD.setStatus('已连接服务器');
       // 心跳：连接期间每 5s 一次。作用：
@@ -21,9 +36,11 @@
         net.send({ t: 'create', name: PPD.app.names[0] });
       } else {
         net.send({ t: 'join', room: PPD.ui.joinInput.value.trim(), name: PPD.app.names[0] });
+        scheduleJoinRetry();
       }
     });
     net.on('room', (m) => {
+      clearJoinTimer();
       PPD.GameAudio.ensure();
       PPD.app.roomCode = m.code;
       PPD.app.names[0] = m.name;
@@ -115,6 +132,7 @@
       PPD.setStatus(e.e || '连接错误');
     });
     net.on('close', () => {
+      clearJoinTimer();
       if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
       if (PPD.app.mode === 'online') {
         PPD.showOverlay('连接已断开', '请检查服务器是否运行。', '返回菜单', PPD.backToMenu);

@@ -12,7 +12,18 @@ import { RoomCore } from './room-core.js';
 
 const STORAGE_KEY = 'rooms';
 const RECORDS_KEY = 'records'; // 通关记录（全局单实例，无 TTL 永久保存）
+const DIAG_KEY = 'diag'; // 诊断日志（驱逐恢复排查）
 const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
+
+// 追加诊断日志（最多 50 条）
+async function diag(ctx, s) {
+  try {
+    const arr = (await ctx.storage.get(DIAG_KEY)) || [];
+    arr.push(Date.now() + ' ' + s);
+    if (arr.length > 50) arr.splice(0, arr.length - 50);
+    await ctx.storage.put(DIAG_KEY, arr);
+  } catch (e) { /* ignore */ }
+}
 
 // 校验并规整一条通关记录
 function sanitizeRecord(b) {
@@ -48,8 +59,12 @@ export class GameRoom extends DurableObject {
       'Content-Type': 'application/json',
     };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (url.pathname !== '/api/records') {
+    if (url.pathname !== '/api/records' && url.pathname !== '/api/diag') {
       return new Response(JSON.stringify({ ok: false, e: 'not found' }), { status: 404, headers: cors });
+    }
+    if (url.pathname === '/api/diag') {
+      const arr = (await this.ctx.storage.get(DIAG_KEY)) || [];
+      return new Response(JSON.stringify({ ok: true, diag: arr }), { headers: cors });
     }
     if (request.method === 'GET') {
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '60', 10) || 60, 100);
@@ -92,7 +107,12 @@ export class GameRoom extends DurableObject {
     if (!this.loadPromise) {
       this.loadPromise = (async () => {
         const data = await this.ctx.storage.get(STORAGE_KEY);
-        if (data) this.core.restore(data);
+        if (data) {
+          this.core.restore(data);
+          await diag(this.ctx, '_load 恢复房间数=' + this.core.rooms.size);
+        } else {
+          await diag(this.ctx, '_load storage 无房间数据');
+        }
         this.loaded = true;
       })();
     }
@@ -134,6 +154,9 @@ export class GameRoom extends DurableObject {
   async webSocketMessage(ws, raw) {
     await this._load();
     const att = ws.deserializeAttachment() || {};
+    let t = '';
+    try { t = JSON.parse(raw).t || ''; } catch (e) {}
+    await diag(this.ctx, 'msg=' + t + ' att.room=' + (att.room || '-') + ' rooms=' + this.core.rooms.size + ' slots=' + (this.core.rooms.size ? JSON.stringify([...this.core.rooms.values()][0].slots) : '-'));
     this.core.handleMessage(ws, raw, att);
     await this._save();
   }
