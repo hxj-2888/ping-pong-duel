@@ -450,7 +450,7 @@
     }
   }
 
-  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low, density) {
+  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low, density, noCrowd) {
     if (!crowdList || crowdListDensity !== density) { crowdList = crowdLayout(density); crowdListDensity = density; }
     // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit；
     // 动画层按 30Hz 烘焙叠加，帧间隔内只 blit（背景/看台/静止观众无需每帧重画）
@@ -468,8 +468,8 @@
       const st = entry.static, an = entry.anim;
       if (!st.ctx) st.ctx = st.canvas.getContext('2d');
       if (!an.ctx) an.ctx = an.canvas.getContext('2d');
-      if (low) {
-        // 低画质：地板+围挡缓存（无观众席/看台），相机/尺寸/DPR 变化才重建
+      if (low || noCrowd) {
+        // 低画质 / 联机模式（noCrowd）：地板+围挡缓存（无观众席/看台），相机/尺寸/DPR 变化才重建
         if (st.key !== key) {
           st.key = key;
           const dpr = Math.max(1, backing / Math.max(1, vw));
@@ -508,7 +508,7 @@
       ctx.drawImage(st.canvas, 0, 0, vw, vh);
       if (an.active) ctx.drawImage(an.canvas, 0, 0, vw, vh);
     } else {
-      if (low) { drawFloorBg(ctx, cam, vw, vh); return; }
+      if (low || noCrowd) { drawFloorBg(ctx, cam, vw, vh); return; }
       drawFloorBg(ctx, cam, vw, vh);
       drawBenches(ctx, cam); // 先画座位（观众坐在其上）
       drawCrowd(ctx, cam, time, viewSide, fan, density);
@@ -903,7 +903,7 @@
   function drawScene(ctx, view, vw, vh) {
     const { cam, time } = view;
     const low = !!view.low;
-    drawFloor(ctx, cam, vw, vh, time, view.side, view.fan, low, view.density);
+    drawFloor(ctx, cam, vw, vh, time, view.side, view.fan, low, view.density, view.noCrowd);
     drawPlayerShadows(ctx, cam, view.players);
 
     // 球台对侧的玩家（对手）先画：随后绘制的球台表面会盖住其腿部，
