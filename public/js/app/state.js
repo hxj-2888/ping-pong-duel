@@ -167,7 +167,7 @@
     dpr: 1,              // 当前画布像素比（DPR 上限 2；低画质=1）
     resizeDirty: false,  // 暂停/结算期间窗口尺寸变化 → 需要补一帧渲染
     // 画质：mode='high'（默认高画质）/ 'low'（低画质省电）；low=当前低画质标记；
-    // frameRate=渲染帧率上限（30/45/60，物理仍 120Hz 步进）
+    // frameRate=渲染帧率上限（30/45/60/无上限，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 60 },
   };
 
@@ -216,11 +216,15 @@
   app.quality.low = app.quality.mode === 'low';
   if (ui.quality) ui.quality.value = app.quality.mode;
 
-  // ---------- 帧率上限（30/45/60，默认 60；localStorage 记忆） ----------
+  // ---------- 帧率上限（30/45/60/无上限，默认 60；localStorage 记忆） ----------
   const FRAME_RATE_KEY = 'ppd_frame_rate';
   try {
-    const v = parseInt(localStorage.getItem(FRAME_RATE_KEY), 10);
-    if (v === 30 || v === 45 || v === 60) app.quality.frameRate = v;
+    const raw = localStorage.getItem(FRAME_RATE_KEY);
+    if (raw === 'unlimited') app.quality.frameRate = 'unlimited';
+    else {
+      const v = parseInt(raw, 10);
+      if (v === 30 || v === 45 || v === 60) app.quality.frameRate = v;
+    }
   } catch (e) { /* ignore */ }
   if (ui.frameRate) ui.frameRate.value = String(app.quality.frameRate);
 
@@ -233,9 +237,9 @@
     PPD.resize();
   }
 
-  // 切换帧率上限（30/45/60）：渲染门控即时生效（物理仍 120Hz）
+  // 切换帧率上限（30/45/60/无上限）：渲染门控即时生效（物理仍 120Hz；无上限=每帧 RAF 都渲染）
   function setFrameRate(f) {
-    app.quality.frameRate = f === 30 || f === 45 ? f : 60;
+    app.quality.frameRate = f === 30 || f === 45 || f === 'unlimited' ? f : 60;
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(FRAME_RATE_KEY, String(app.quality.frameRate)); } catch (e) { /* ignore */ }
   }
 

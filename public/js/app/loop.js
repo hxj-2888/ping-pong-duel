@@ -19,10 +19,10 @@
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
-    // 渲染帧率门控：按所选上限（30/45/60，默认 60）控制渲染频率；物理仍 120Hz 步进（时钟不前进时放行，兼容测试）
+    // 渲染帧率门控：按所选上限（30/45/60/无上限，默认 60）控制渲染频率；物理仍 120Hz 步进（时钟不前进时放行，兼容测试；无上限=每帧 RAF 都渲染）
     const frameRate = PPD.app.quality && PPD.app.quality.frameRate ? PPD.app.quality.frameRate : 60;
     const renderDt = now - lastRender;
-    const shouldRender = renderDt <= 0 || renderDt >= 1000 / frameRate;
+    const shouldRender = renderDt <= 0 || frameRate === 'unlimited' || renderDt >= 1000 / frameRate;
     // 帧间隔滚动均值（估测帧数依据；renderDt<=0 的测试环境不计入）
     if (renderDt > 0) {
       frameHist[frameIdx] = renderDt;

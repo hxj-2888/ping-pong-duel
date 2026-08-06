@@ -272,6 +272,13 @@ async function main() {
     t.elements.get('frameRate').dispatch('change', {});
     t.runFrames(2);
     check('切帧率上限 30 生效', t.app.quality.frameRate === 30);
+    // 无上限：每帧 RAF 都渲染（shouldRender 恒真）
+    t.elements.get('frameRate').value = 'unlimited';
+    t.elements.get('frameRate').dispatch('change', {});
+    t.runFrames(2);
+    check('切无上限帧率生效', t.app.quality.frameRate === 'unlimited');
+    t.runFrames(8);
+    check('无上限渲染 8 帧无异常', true);
     t.elements.get('frameRate').value = '60';
     t.elements.get('frameRate').dispatch('change', {});
     t.runFrames(2);

@@ -117,12 +117,13 @@
       PPD.setStatus(PPD.app.quality.low ? '画质：低（省电流畅）' : '画质：高');
     });
   }
-  // 帧率上限切换（30/45/60）：渲染门控即时生效（物理仍 120Hz）
+  // 帧率上限切换（30/45/60/无上限）：渲染门控即时生效（物理仍 120Hz）
   if (PPD.ui.frameRate) {
     PPD.ui.frameRate.addEventListener('change', () => {
       PPD.GameAudio.ui && PPD.GameAudio.ui();
-      PPD.setFrameRate(parseInt(PPD.ui.frameRate.value, 10));
-      PPD.setStatus('帧率上限：' + PPD.app.quality.frameRate);
+      const v = PPD.ui.frameRate.value;
+      PPD.setFrameRate(v === 'unlimited' ? 'unlimited' : parseInt(v, 10));
+      PPD.setStatus('帧率上限：' + (PPD.app.quality.frameRate === 'unlimited' ? '无上限' : PPD.app.quality.frameRate));
     });
   }
 
