@@ -8,7 +8,9 @@
   // ---------- 输入 ----------
   const KEYMAP = {
     KeyA: 'P1L', KeyD: 'P1R', KeyW: 'P1F', KeyS: 'P1B',
-    ArrowLeft: 'P2L', ArrowRight: 'P2R', ArrowUp: 'P2U', ArrowDown: 'P2D',
+    // 电脑端适配：方向键四向移动（↑/↓ 为前后移动方向键）；P2 推球/扣球改到 ,/.（右手区）
+    ArrowLeft: 'P2L', ArrowRight: 'P2R', ArrowUp: 'P2F', ArrowDown: 'P2B',
+    Comma: 'P2U', Period: 'P2D',
     ControlLeft: 'P1C', ControlRight: 'P1C',  // Ctrl 蹲下
     ShiftLeft: 'P1S', ShiftRight: 'P1S',      // Shift 跑步
   };

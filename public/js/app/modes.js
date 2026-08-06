@@ -101,7 +101,7 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'WASD/←→=移动 · 左键/↑=推球 · 右键/↓=扣球 · Ctrl=蹲下 · 单击=发球';
+      'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML = '摇杆=移动 · 点按=推球 · 扣=扣球 · 蹲=蹲下 · 发球=点两下';
     }
@@ -123,7 +123,7 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: ←→=移动 · ↑=推球 · ↓=扣球';
+      'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ,=推球 · .=扣球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML = '摇杆=移动 · 点按=推球 · 扣=扣球 · 蹲=蹲下 · 发球=点两下（左半屏 P1，右半屏 P2）';
     }
@@ -158,7 +158,7 @@
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
     PPD.ui.hintBar.innerHTML =
-      'WASD/←→=移动 · 左键/↑=推球 · 右键/↓=扣球 · Ctrl=蹲下 · 单击=发球';
+      'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML =
         '摇杆=移动 · 点按=推球 · 扣=扣球 · 蹲=蹲下 · 发球=点两下';

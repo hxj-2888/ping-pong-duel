@@ -952,9 +952,9 @@ async function main() {
     check('加入方 HUD 比分调换（自己=9）', t.elements.get('score1').textContent === '9' && t.elements.get('score2').textContent === '2');
     check('发球点显示在对方（房主）一侧', t.elements.get('serveDot').style.left.indexOf('+') >= 0);
 
-    t.key('ArrowUp'); t.runFrames(5);
-    check('加入方按 ↑ 推球已发送', t.sentMessages.some((m) => m.t === 'in' && m.i.pu === 1));
-    t.key('ArrowUp', false);
+    t.key('Comma'); t.runFrames(5);
+    check('加入方按 , 推球已发送', t.sentMessages.some((m) => m.t === 'in' && m.i.pu === 1));
+    t.key('Comma', false);
 
     // 联机结算屏：您输了（对方获胜）
     const e4 = TT.createEngine();
