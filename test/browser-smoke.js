@@ -86,7 +86,7 @@ const ELEMENT_IDS = [
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
-  'touchControls', 'joyBase', 'joyKnob', 'btnCrouch',
+  'touchControls', 'joyBase', 'joyKnob', 'btnCrouch', 'btnSmash',
   'gameTools', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
@@ -345,6 +345,22 @@ async function main() {
     // 蹲站转换有延迟（3秒内反复蹲站会累计，首次松开也需 0.15s），多跑几帧等过渡完成
     t.runFrames(24);
     check('松开蹲下按钮：恢复站立（转换延迟后）', t.app.engine.players[0].crouch === 0);
+    // 扣球按钮（手机端）：单按=扣球（进入扣球挥拍 type2；替代原双击扣球）
+    {
+      const e = t.app.engine;
+      TT.resetMatch(e);
+      e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [true, false];
+      e.ball.inHand = false;
+      e.ball.pos = { x: 0, y: 1.20, z: -1.55 };
+      e.ball.vel = { x: 0, y: 0.4, z: 3.0 };
+      e.ball.spin = { x: 0, y: 0, z: 0 };
+      e.ball.hitBy = 1; e.ball.lastBounce = 1;
+      t.runFrames(2);
+      t.elements.get('btnSmash').dispatch('pointerdown', { preventDefault() {} });
+      t.runFrames(3);
+      check('扣球按钮：P1 进入扣球挥拍', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 2);
+      t.elements.get('btnSmash').dispatch('pointerup', { preventDefault() {} });
+    }
 
     // Shift 跑步加速 / Ctrl 蹲下减速（电脑端按键）
     const p0 = t.app.engine.players[0];

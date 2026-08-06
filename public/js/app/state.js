@@ -95,6 +95,7 @@
     joyBase: document.getElementById('joyBase'),
     joyKnob: document.getElementById('joyKnob'),
     btnCrouch: document.getElementById('btnCrouch'),
+    btnSmash: document.getElementById('btnSmash'),
     btnPause: document.getElementById('btnPause'),
     btnExit: document.getElementById('btnExit'),
     pausePanel: document.getElementById('pausePanel'),
@@ -177,8 +178,9 @@
   function resize() {
     app.resizeW = window.innerWidth;
     app.resizeH = window.innerHeight;
-    // 高分屏清晰度：DPR 上限 2（低画质=1，省填充率）；渲染坐标仍用 CSS 像素（setTransform 缩放）
-    const dpr = Math.min(window.devicePixelRatio || 1, app.quality && app.quality.low ? 1 : 2);
+    // 高分屏清晰度：低画质=1（省填充率）；高画质=设备 DPR（电脑上限 2，触屏手机上限 3——
+    // 手机 DPR 常见 3，提到 3 才与电脑端清晰度一致；手机默认高画质即生效）；渲染坐标仍用 CSS 像素（setTransform 缩放）
+    const dpr = Math.min(window.devicePixelRatio || 1, app.quality && app.quality.low ? 1 : (isTouch ? 3 : 2));
     app.dpr = dpr;
     canvas.width = Math.max(1, Math.round(app.resizeW * dpr));
     canvas.height = Math.max(1, Math.round(app.resizeH * dpr));

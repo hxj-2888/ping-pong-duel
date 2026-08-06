@@ -110,6 +110,15 @@
     };
     // 蹲下按钮（手机端）：按住蹲下（与电脑 Ctrl 相同效果）
     hold(PPD.ui.btnCrouch, 'crouch');
+    // 扣球按钮（手机端）：单按=扣球（右键扣杀，与电脑右键同规则——低球会撞网判负）
+    if (PPD.ui.btnSmash) {
+      PPD.ui.btnSmash.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const side = PPD.app.mode === 'online' ? PPD.app.side : 0; // 人机/本地=自己(红方/P1)
+        fireShot(side, 'sm');
+      });
+      PPD.ui.btnSmash.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
     // 全方位摇杆
     const base = PPD.ui.joyBase;
     if (base) {
@@ -231,10 +240,7 @@
     }
   });
 
-  // ---------- 屏幕点击：发球瞄准 + 对打单击推球/双击扣球 ----------
-  const DOUBLE_TAP_MS = 280;
-  let tapAt = 0;
-  let tapSidePending = -1;
+  // ---------- 屏幕点击：发球瞄准 + 对打单击推球（扣球走右下「扣」按钮） ----------
 
   function tapSideFor(x) {
     if (PPD.app.mode === 'ai') return 0;               // 人机：始终控制自己（红方）
@@ -353,18 +359,8 @@
     PPD.app.serveAiming = false;
     const side = tapSideFor(e.clientX);
     if (isTouchEv) {
-      // 对打（触屏）：单击立即推球（消除 280ms 双击判定延迟——快球也能接到）；
-      // 280ms 内同侧第二击发扣球边沿，引擎把蓄力期推球挥拍升级为扣球
-      const now = performance.now();
-      if (now - tapAt <= DOUBLE_TAP_MS && side === tapSidePending) {
-        tapAt = 0;
-        tapSidePending = -1;
-        fireShot(side, 'sm');
-      } else {
-        tapAt = now;
-        tapSidePending = side;
-        fireShot(side, 'pu');
-      }
+      // 对打（触屏）：单击立即推球（扣球请按右下「扣」按钮）
+      fireShot(side, 'pu');
     } else {
       // 对打（鼠标）：左键推球 / 右键扣球
       fireShot(side, e.button === 2 ? 'sm' : 'pu');
