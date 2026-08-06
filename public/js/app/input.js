@@ -321,7 +321,8 @@
     const side = myServeSide();
     if (side === null) { PPD.app.serveAiming = false; return; }
     const now = performance.now();
-    if (now - lastAimT < 40 && Math.hypot(clientX - lastAimX, clientY - lastAimY) < 8) return;
+    // 80ms 节流 + 8px 阈值：瞄准重算频率上限 ~12 次/秒（原 40ms/25 次）——削减瞄准求解/重画的每帧尖峰
+    if (now - lastAimT < 80 && Math.hypot(clientX - lastAimX, clientY - lastAimY) < 8) return;
     lastAimT = now; lastAimX = clientX; lastAimY = clientY;
     const aim = PPD.serveAimFromPointer(clientX, clientY, side);
     if (!aim) return;

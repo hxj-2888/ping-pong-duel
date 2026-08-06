@@ -52,10 +52,11 @@
   }
 
   // 从发球点采样 1.6s 物理轨迹；第一次落对方半台处截断，落点标记更准确。
+  // dt=0.04（40 点）：视觉平滑足够，比原 0.025/64 点重算省 ~37%（瞄准移动时每帧重算成本）
   function sampleServePath(H, plan, server) {
     const c = { pos: { x: H.x, y: H.y, z: H.z }, vel: { ...plan.vel }, spin: { ...plan.spin } };
     const pts = [];
-    const dur = 1.6, dt = 0.025;
+    const dur = 1.6, dt = 0.04;
     let t = 0, done = false;
     const oppSide = 1 - server; // 对方半台 z 符号：0 号在 z<0，1 号在 z>0
     pts.push({ x: c.pos.x, y: c.pos.y, z: c.pos.z });
@@ -91,7 +92,8 @@
     const plan = p.servePlan || defaultServePlan(engine, server);
     if (!plan) return null;
     const H = engine.ball.pos; // 发球待发时球已在发球点
-    const key = `${server}:${Math.round(H.x * 4)}:${plan.vel.z.toFixed(2)}:${plan.vel.x.toFixed(2)}:${plan.vel.y.toFixed(2)}`;
+    // 键含发球点高度：蹲下发球点更低，轨迹不同，须分开缓存
+    const key = `${server}:${Math.round(H.x * 4)}:${Math.round(H.y * 10)}:${plan.vel.z.toFixed(2)}:${plan.vel.x.toFixed(2)}:${plan.vel.y.toFixed(2)}`;
     if (key === servePathKey) return servePathPts;
     servePathKey = key;
     servePathPts = sampleServePath(H, plan, server);

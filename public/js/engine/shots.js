@@ -42,26 +42,32 @@
 
   // ---------- 发球求解：直接搜索速度/角度/旋转并模拟验证 ----------
   const serveCache = new Map();
+  // 瞄准式发球缓存（鼠标移动瞄准按 0.04m 网格量化命中，避免每次移动全量搜索求解）：
+  // 键含发球方/站位/目标落点；发球实发复用 servePlan，量化误差 <2cm 可忽略
+  const serveToCache = new Map();
 
   // 模拟一次发球：合法时返回对方半台第一次落台的位置（轨迹末端），否则返回 null
+  // 回调返回 true 提前中断 physicsStep（落台/出界即停，不再模拟满 1.8s——瞄准求解单次成本大幅下降）
   function serveLanding(launch, vel, spin, pi) {
     const b = { pos: { ...launch }, vel: { ...vel }, spin: { ...spin } };
     let ownBounce = false, oppBounce = false, bad = false;
     let land = null;
     ctx.physicsStep(b, 1.8, (ev) => {
-      if (bad || oppBounce) return;
+      if (bad || oppBounce) return true;
       if (ev.type === 'bounce') {
         const side = b.pos.z > 0 ? 1 : 0;
         if (side === pi) {
-          if (ownBounce) { bad = true; return; }
+          if (ownBounce) { bad = true; return true; }
           ownBounce = true;
         } else {
-          if (!ownBounce) { bad = true; return; }
+          if (!ownBounce) { bad = true; return true; }
           oppBounce = true;
           land = { x: b.pos.x, y: b.pos.y, z: b.pos.z };
+          return true; // 对方半台落台 → 结果已定，中断
         }
       } else if (ev.type === 'net' || ev.type === 'netclip' || ev.type === 'floor') {
         bad = true;
+        return true;
       }
     });
     return (ownBounce && oppBounce && !bad && land) ? land : null;
@@ -84,7 +90,7 @@
     const spins = fast
       ? [-50, -30, -10, 10, 30, 50, 70, 90]
       : [15, 25, 35, 45, 55, 65, 75, 85];
-    const TOL = 0.10; // 实际落点与瞄准点足够接近即接受
+    const TOL = 0.12; // 实际落点与瞄准点足够接近即接受（粗搜更易命中，减少细搜兜底）
     const trySearch = (speedList, angleList, spinList) => {
       let best = null, bestD = Infinity;
       for (const speed of speedList) {
@@ -108,10 +114,11 @@
       }
       return { plan: best, done: false };
     };
-    // 粗搜（快）→ 细搜（全覆盖）
+    // 粗搜（快）→ 细搜（全覆盖）：粗搜 angles 用全量（中断后单次 ~80 步，192 次 ≈ 毫秒级），
+    // 覆盖全部角度提高命中率，边缘落点才触发细搜兜底
     let r = trySearch(
       speeds.slice(0, 4),
-      fast ? angles.filter((a) => a % 4 === 0) : angles.filter((a) => a % 5 === 0),
+      angles,
       spins.slice(0, 4)
     );
     if (!r.done && !coarseOnly) r = trySearch(speeds, angles, spins);
@@ -126,7 +133,34 @@
     const mx = TW - 0.10, mz = TL - 0.14;
     const tx0 = ctx.clamp(tx, -mx, mx);
     const tz0 = f > 0 ? ctx.clamp(tz, 0.10, mz) : ctx.clamp(tz, -mz, -0.10);
-    return searchServeTo(state, pi, tx0, tz0, fast, false);
+    // 瞄准缓存：发球方/站位(0.04m)/发球点高度/目标落点(0.04m)量化命中，鼠标连续移动时复用相邻网格解
+    // 键含 H.y（蹲下发球点更低，须与站立分开缓存，否则蹲下会复用站立轨迹）
+    const H = ctx.serveBallPos(state.players[pi]);
+    const hxk = Math.round(H.x * 25), hzk = Math.round(H.z * 25), hyk = Math.round(H.y * 10);
+    const txx = Math.round(tx0 * 25), tzz = Math.round(tz0 * 25);
+    const ck = `${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx}:${tzz}`;
+    let plan = serveToCache.get(ck);
+    // 未命中 → 8 邻域（±1 网格，落点差 ≤0.12m 即复用）：快速移动时相邻网格常已求解，几乎零成本
+    if (!plan) {
+      for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) {
+        if (dx === 0 && dz === 0) continue;
+        const p2 = serveToCache.get(`${pi}:${fast ? 1 : 0}:${hxk}:${hzk}:${hyk}:${txx + dx}:${tzz + dz}`);
+        if (p2 && p2.land && Math.hypot(p2.land.x - tx0, p2.land.z - tz0) <= 0.12) { plan = p2; break; }
+      }
+    }
+    if (plan) return plan;
+    // 粗搜优先（~48 次物理模拟，毫秒级）：落点够近（≤0.12m）直接用，避免每次瞄准移动触发全量细搜尖峰；
+    // 粗搜无解或偏差大（边缘落点）才细搜兜底（结果同样进缓存）
+    plan = searchServeTo(state, pi, tx0, tz0, fast, true);
+    if (plan && plan.land) {
+      const d = Math.hypot(plan.land.x - tx0, plan.land.z - tz0);
+      if (d > 0.12) plan = searchServeTo(state, pi, tx0, tz0, fast, false);
+    } else {
+      plan = searchServeTo(state, pi, tx0, tz0, fast, false);
+    }
+    serveToCache.set(ck, plan);
+    if (serveToCache.size > 400) serveToCache.clear();
+    return plan;
   }
 
   // 客户端/服务端在待发期间把鼠标或手指瞄准的目标落点写进持拍手：

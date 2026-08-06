@@ -590,6 +590,13 @@
 
   // 径向渐变精灵缓存（按半径分桶烘焙一次，drawImage 替代每帧 createRadialGradient——球/阴影优化）
   const radialSprites = new Map();
+  // 上限防多局累积：不同相机角度/距离 → 半径值域宽，旧条目定期清空避免堆膨胀/GC 压力
+  const RADIAL_SPRITE_MAX = 512;
+  function cacheRadialSprite(key, s) {
+    radialSprites.set(key, s);
+    if (radialSprites.size > RADIAL_SPRITE_MAX) radialSprites.clear();
+    return s;
+  }
   // 球体精灵：主体渐变 + 描边（含高光偏移，烘焙时按半径）
   function ballSprite(r) {
     const key = Math.max(2, Math.round(r));
@@ -606,7 +613,7 @@
       c.beginPath(); c.arc(cx, cx, key, 0, Math.PI * 2); c.fill();
       c.strokeStyle = 'rgba(40,55,75,0.8)'; c.lineWidth = 1; c.stroke();
       s = { canvas: cv, size };
-      radialSprites.set('b' + key, s);
+      return cacheRadialSprite('b' + key, s);
     }
     return s;
   }
@@ -626,7 +633,7 @@
       c.fillStyle = g;
       c.fillRect(0, 0, size, size);
       s = { canvas: cv, size };
-      radialSprites.set('bs' + key, s);
+      return cacheRadialSprite('bs' + key, s);
     }
     return s;
   }
@@ -647,7 +654,7 @@
       c.fillStyle = g;
       c.fillRect(0, 0, size, size);
       s = { canvas: cv, size };
-      radialSprites.set('ps' + key, s);
+      return cacheRadialSprite('ps' + key, s);
     }
     return s;
   }
@@ -751,17 +758,31 @@
   }
 
   // 发球预计轨迹：白虚线弧线 + 末端落点标记
+  // 渐隐分段绘制：把 ~64 段独立 stroke 合成 5 段（每段一条路径一次 stroke）——
+  // 原实现每段 beginPath+stroke 触发 64 次渲染管线提交，是等待发球阶段掉帧主因
   function drawServePath(ctx, cam, pts) {
     if (!pts || pts.length < 2) return;
     ctx.lineCap = 'round';
     ctx.setLineDash([4, 7]);
-    for (let i = 1; i < pts.length; i++) {
-      const pa = cam.project(pts[i - 1]), pb = cam.project(pts[i]);
-      if (!pa || !pb) continue;
-      const k = i / (pts.length - 1);
-      ctx.strokeStyle = `rgba(255,255,255,${(0.75 * (1 - k * 0.55)).toFixed(3)})`;
-      ctx.lineWidth = Math.max(1, 0.018 * Math.min(pa.s, pb.s));
-      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    const N = pts.length;
+    const SEGS = 5;
+    const per = Math.ceil((N - 1) / SEGS);
+    for (let seg = 0; seg < SEGS; seg++) {
+      const iStart = 1 + seg * per;
+      const iEnd = Math.min(N - 1, iStart + per);
+      if (iStart >= N) break;
+      const kEnd = iEnd / (N - 1);
+      ctx.strokeStyle = `rgba(255,255,255,${(0.75 * (1 - kEnd * 0.55)).toFixed(3)})`;
+      let started = false;
+      let w = 1;
+      for (let i = iStart; i <= iEnd; i++) {
+        const pa = cam.project(pts[i - 1]), pb = cam.project(pts[i]);
+        if (!pa || !pb) { started = false; continue; }
+        if (!started) { ctx.beginPath(); ctx.moveTo(pa.x, pa.y); started = true; }
+        ctx.lineTo(pb.x, pb.y);
+        w = Math.max(1, 0.018 * Math.min(pa.s, pb.s));
+      }
+      if (started) { ctx.lineWidth = w; ctx.stroke(); }
     }
     ctx.setLineDash([]);
     // 落点标记（画在采样终点附近，近似展示球最终落台位置）
@@ -827,14 +848,15 @@
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.lineCap = 'round';
+    // 12 棱合成单条路径一次 stroke（原 12 次独立 beginPath/stroke 是虚线碰撞箱帧开销大头）
+    ctx.beginPath();
     for (const [a, b] of edges) {
       const pa = cam.project(cs[a]), pb = cam.project(cs[b]);
       if (!pa || !pb) continue;
-      ctx.beginPath();
       ctx.moveTo(pa.x, pa.y);
       ctx.lineTo(pb.x, pb.y);
-      ctx.stroke();
     }
+    ctx.stroke();
     ctx.setLineDash([]);
   }
 

@@ -37,7 +37,7 @@
         ball.vel.z *= ctx.TABLE_FRICTION;
         ball.vel.z += ball.spin.x * ctx.SPIN_BOUNCE; // 上旋加速前冲 / 下旋减速
         ball.spin.x *= 0.78; ball.spin.y *= 0.9; ball.spin.z *= 0.9;
-        if (cb) cb({ type: 'bounce' });
+        if (cb) { if (cb({ type: 'bounce' })) return; } // 回调返回 true 可提前中断（如求解已出结果）
       }
 
       // 球网
@@ -45,14 +45,14 @@
           ball.pos.y - R < ctx.RULES.TABLE_HEIGHT + ctx.RULES.NET_HEIGHT &&
           Math.sign(prevZ) !== 0 && Math.sign(prevZ) !== Math.sign(ball.pos.z)) {
         if (ball.pos.y > ctx.RULES.TABLE_HEIGHT + ctx.RULES.NET_HEIGHT - 0.008) {
-          if (cb) cb({ type: 'netclip' }); // 擦网顶仍过网
+          if (cb) { if (cb({ type: 'netclip' })) return; } // 擦网顶仍过网
         } else {
           ball.pos.z = Math.sign(prevZ) * 0.012;
           ball.vel.z = -ball.vel.z * 0.22;
           ball.vel.x *= 0.70;
           ball.vel.y *= 0.50;
           ball.spin.x *= 0.5;
-          if (cb) cb({ type: 'net' });
+          if (cb) { if (cb({ type: 'net' })) return; } // 回调返回 true 可提前中断
         }
       }
 
@@ -60,7 +60,7 @@
       if (ball.pos.y - R <= 0.004 && ball.vel.y < 0) {
         ball.pos.y = R;
         ball.vel.y = 0;
-        if (cb) cb({ type: 'floor' });
+        if (cb) { if (cb({ type: 'floor' })) return; } // 回调返回 true 可提前中断
       } else if (ball.pos.y - R <= 0.004 && ball.vel.y <= 0) {
         ball.vel.x *= 1 - 2.5 * h;
         ball.vel.z *= 1 - 2.5 * h;
