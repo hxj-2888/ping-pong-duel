@@ -44,13 +44,23 @@ const staticCtx = makeCountingCtx(staticCanvas);
 const animCtx = makeCountingCtx(animCanvas);
 staticCanvas.getContext = () => staticCtx;
 animCanvas.getContext = () => animCtx;
-// createElement 顺序：第一个=静态层（drawFloor 先建 crowdCache），第二个=动画层（animCache）
+// viewSide 1（本地双人另一视口）各自独立的缓存 canvas
+const static2Canvas = { width: VW, height: VH };
+const anim2Canvas = { width: 0, height: 0 };
+const static2Ctx = makeCountingCtx(static2Canvas);
+const anim2Ctx = makeCountingCtx(anim2Canvas);
+static2Canvas.getContext = () => static2Ctx;
+anim2Canvas.getContext = () => anim2Ctx;
+// createElement 顺序：viewSide0 静态层(1)/动画层(2)，viewSide1 静态层(3)/动画层(4)
+// （按 viewSide 懒创建——本地双人分屏才会建第二组；保持既有断言依赖的 1/2 序号不变）
 let canvasN = 0;
-global.document = { createElement: () => { canvasN++; return canvasN === 1 ? staticCanvas : animCanvas; } };
+global.document = { createElement: () => { canvasN++; return canvasN === 1 ? staticCanvas : canvasN === 2 ? animCanvas : canvasN === 3 ? static2Canvas : anim2Canvas; } };
 function resetAll() {
   canvasN = 0;
   staticCtx.counters.arc = 0; staticCtx.counters.blit = 0;
   animCtx.counters.arc = 0; animCtx.counters.blit = 0;
+  static2Ctx.counters.arc = 0; static2Ctx.counters.blit = 0;
+  anim2Ctx.counters.arc = 0; anim2Ctx.counters.blit = 0;
   TTG.clearCrowdCache();
 }
 const sArc = () => staticCtx.counters.arc; // 静态层全量重绘数（≈观众数×次数）
@@ -122,6 +132,18 @@ check('相机移 0.02m 未过桶 → 不重建', sArc() === crowdLen);
 cam.set(TTG.v3(0.05, 4.8, -5.2), TTG.v3(0, 1.7, 0), VW / 2, VH / 2, VW * 0.9); // 移 0.05m ≥ 半桶
 frames(1, null);
 check('相机移 0.05m 过桶 → 静态层重建', sArc() === 2 * crowdLen);
+
+// ---------- 5b. 分屏回归：viewSide 0/1 各自缓存，互不踢缓存（修复本地双人每帧重建 376 人观众席） ----------
+resetAll();
+cam.set(TTG.v3(0, 4.8, -5.2), TTG.v3(0, 1.7, 0), VW / 2, VH / 2, VW * 0.9); // 相机归位
+TTG.drawFloor(staticCtx, cam, VW, VH, 1 / 60, 0, null, false);  // viewSide 0 首帧 → 建缓存并重建
+TTG.drawFloor(static2Ctx, cam, VW, VH, 2 / 60, 1, null, false); // viewSide 1 首帧 → 各自缓存
+TTG.drawFloor(staticCtx, cam, VW, VH, 3 / 60, 0, null, false);  // 回到 viewSide 0 → 已缓存，不重建
+TTG.drawFloor(static2Ctx, cam, VW, VH, 4 / 60, 1, null, false); // 回到 viewSide 1 → 已缓存，不重建
+check('分屏：viewSide 0 首帧重建（全量观众入静态层）', staticCtx.counters.arc === crowdLen);
+check('分屏：viewSide 1 首帧各自重建', static2Ctx.counters.arc === crowdLen);
+check('分屏：回到 viewSide 0 不重建（缓存保持）', staticCtx.counters.arc === crowdLen);
+check('分屏：回到 viewSide 1 不重建（缓存保持）', static2Ctx.counters.arc === crowdLen);
 
 // ---------- 6. 低画质：不建缓存、不画观众 ----------
 resetAll();

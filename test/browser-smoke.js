@@ -83,7 +83,7 @@ const ELEMENT_IDS = [
   'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot', 'tips',
-  'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAIVsAI',
+  'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch', 'btnSmash',
@@ -92,8 +92,7 @@ const ELEMENT_IDS = [
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
-  'recordsPanel', // 通关记录面板（records.js 渲染）
-  'menuScrollBar', 'menuScrollThumb', // 主页右端滑动条（拖动/点按滚动）
+  'recordsPanel', // 个人生涯面板（records.js 渲染）
 ];
 
 function boot(opts) {
@@ -658,9 +657,9 @@ async function main() {
     eng.phaseT = 2.0;
     t.runFrames(1);
     t.runFrames(3); // 处理渐入动画的 requestAnimationFrame
-    check('本地结算屏：黑屏显示「玩家1 获胜」',
+    check('本地结算屏：黑屏显示「测试员 获胜」（P1 用主菜单昵称）',
       t.elements.get('gameOver').style.display !== 'none' &&
-      t.elements.get('gameOverTitle').textContent === '玩家1 获胜');
+      t.elements.get('gameOverTitle').textContent === '测试员 获胜');
     check('结算屏渐入类已加（黑屏渐变）', t.elements.get('gameOver').classList.contains('show'));
     t.elements.get('btnAgain').dispatch('click', {});
     check('再来一局：比赛重置', eng.phase === 'serve' && eng.score[0] === 0 && eng.score[1] === 0);
@@ -669,33 +668,6 @@ async function main() {
     // 右上角退出按钮
     t.elements.get('btnExit').dispatch('click', {});
     check('右上角退出：返回主菜单', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
-  }
-
-  // ---------- 1.5 主页右端滑动条（内容超高时显示；拖动拇指/点按轨道滚动） ----------
-  {
-    const t = await boot();
-    const menuEl = t.elements.get('menu');
-    const bar = t.elements.get('menuScrollBar');
-    const th = t.elements.get('menuScrollThumb');
-    // 模拟矮屏菜单内容超高（clientHeight 600 / scrollHeight 900，轨道高 500）
-    Object.assign(menuEl, { clientHeight: 600, scrollHeight: 900, scrollTop: 0 });
-    Object.assign(bar, { clientHeight: 500 });
-    t.ppd.updateMenuScroll();
-    check('主页滑动条：内容超高时显示', bar.style.display !== 'none');
-    // 拖动拇指：pointerdown → window pointermove 按位移比例滚动
-    th.dispatch('pointerdown', { clientY: 50, preventDefault() {} });
-    const move = t.winHandlers['pointermove'][t.winHandlers['pointermove'].length - 1];
-    move({ clientY: 300 });
-    check('主页滑动条：拖动拇指滚动生效', menuEl.scrollTop > 0);
-    // 点按轨道（非拇指）：滚动到点击位置
-    menuEl.scrollTop = 0;
-    t.ppd.syncMenuThumb();
-    bar.dispatch('pointerdown', { target: bar, clientY: 750, preventDefault() {} });
-    check('主页滑动条：点按轨道滚动生效', menuEl.scrollTop > 0);
-    // 内容放得下时隐藏
-    Object.assign(menuEl, { clientHeight: 900, scrollHeight: 600 });
-    t.ppd.updateMenuScroll();
-    check('主页滑动条：内容不超高时隐藏', bar.style.display === 'none');
   }
 
   // ---------- 2. 人机对战 ----------

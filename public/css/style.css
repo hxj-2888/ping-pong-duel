@@ -16,27 +16,13 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   gap: 22px; z-index: 10;
   background: radial-gradient(1200px 600px at 50% 20%, #1b2740 0%, #0d1220 60%);
 }
-/* 主菜单可滚动：内容超高时由右侧/底部滚动钮驱动（margin:auto 保证矮屏居中、高屏两端可滚） */
-#menu { overflow-y: auto; scrollbar-width: none; }
-#menu::-webkit-scrollbar { display: none; }
+/* 主菜单可滚动：内容超高时用浏览器原生滚动条（margin:auto 保证矮屏居中、高屏两端可滚） */
+#menu { overflow-y: auto; }
 .menu-scroll {
   margin: auto 0;
   display: flex; flex-direction: column; align-items: center; gap: 22px;
   padding: 48px 0 28px;
 }
-/* 主页右端滑动条（内容超高时才显示）：拖动拇指或点按轨道滚动 */
-.menu-scroll-bar {
-  position: fixed; top: 88px; bottom: calc(88px + env(safe-area-inset-bottom)); right: 5px; z-index: 12;
-  width: 10px; border-radius: 6px;
-  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.08);
-  touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer;
-}
-.menu-scroll-thumb {
-  position: absolute; left: 1px; right: 1px; top: 0; border-radius: 5px;
-  background: rgba(58,134,255,0.60);
-  touch-action: none; cursor: grab;
-}
-.menu-scroll-thumb:active { background: rgba(58,134,255,0.85); cursor: grabbing; }
 .logo { text-align: center; }
 .logo h1 { font-size: 52px; letter-spacing: 6px; background: linear-gradient(90deg, var(--red), #ffd166, var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .logo p { color: #8fa3c8; letter-spacing: 2px; margin-top: 6px; font-size: 13px; }
@@ -96,6 +82,7 @@ input:focus { border-color: var(--blue); }
   background: rgba(13, 22, 42, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
 }
 .records-panel .rec-title { color: #ffd166; font-weight: 700; letter-spacing: 1px; font-size: 12px; margin-bottom: 2px; }
+.records-panel .rec-stats { color: #ffd166; font-size: 12px; margin-bottom: 2px; }
 .records-panel .rec-item { color: #9fb1cf; }
 
 .room-panel { background: radial-gradient(900px 500px at 50% 30%, #16233c 0%, #0d1220 65%); z-index: 20; }
@@ -209,12 +196,13 @@ input:focus { border-color: var(--blue); }
 
 @media (max-width: 720px) {
   .logo h1 { font-size: 34px; }
-  /* 主页标题置顶常驻：手机端菜单滚动时仍能看到「乒乓对决」（内容从渐变下穿过） */
+  /* 手机端固定标题栏：标题固定在顶部（不透明实底），菜单内容在下方独立滚动——不再遮住下面选项 */
+  #menu { justify-content: flex-start; overflow: hidden; }
   #menu .logo {
-    position: sticky; top: 0; z-index: 2;
-    width: 100%; padding-bottom: 10px;
-    background: linear-gradient(180deg, rgba(13,18,32,0.97) 55%, rgba(13,18,32,0.82) 80%, rgba(13,18,32,0));
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3;
+    background: #0d1220; padding: 14px 0 10px;
   }
+  .menu-scroll { flex: 1 1 auto; overflow-y: auto; width: 100%; margin: 0; padding-top: 150px; }
   #hintBar { white-space: normal; width: 92%; text-align: center; }
   /* 触控按钮上方留出提示栏位置，避免重叠 */
   #hintBar { bottom: calc(104px + env(safe-area-inset-bottom)); font-size: 12px; }
@@ -335,6 +323,9 @@ canvas#game { touch-action: none; }
   display: flex; flex-direction: row; gap: 14px; flex-wrap: wrap;
   background: rgba(255,255,255,0.05); border: 1px solid var(--line);
   border-radius: 12px; padding: 12px 14px; margin-bottom: 4px;
+}
+.pause-aivai .ai-label input {
+  flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; border-radius: 8px;
 }
 .tune-side { display: flex; flex-direction: column; gap: 6px; min-width: 190px; flex: 1; }
 .tune-grid { display: flex; flex-direction: column; gap: 5px; }

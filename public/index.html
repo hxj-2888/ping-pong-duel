@@ -68,12 +68,8 @@
         <div id="statusBar" class="status"></div>
       </div>
       <div id="tips" class="tips"></div>
-      <div id="recordsPanel" class="records-panel">🏆 通关记录：加载中…</div>
-    </div>
-    <!-- 主页右端滑动条（内容超高时显示：拖动拇指或点按轨道滚动） -->
-    <div id="menuScrollBar" class="menu-scroll-bar" style="display:none">
-      <div id="menuScrollThumb" class="menu-scroll-thumb"></div>
-    </div>
+    <div id="recordsPanel" class="records-panel">🎯 个人生涯：加载中…</div>
+  </div>
   </div>
 
   <!-- 联机等待 -->
@@ -129,6 +125,9 @@
         <!-- AI 观战：暂停中调整双方 AI 难度与参数（即时生效） -->
         <div id="pauseAIVsAI" class="pause-aivai" style="display:none">
           <div class="tune-side">
+            <label class="ai-label">红方 AI 名字
+              <input id="pauseAiNameA" maxlength="12" placeholder="红方 AI">
+            </label>
             <label class="ai-label">红方 AI
               <select id="pauseAiLevelA">
                 <option value="0">简单</option>
@@ -145,6 +144,9 @@
             </div>
           </div>
           <div class="tune-side">
+            <label class="ai-label">蓝方 AI 名字
+              <input id="pauseAiNameB" maxlength="12" placeholder="蓝方 AI">
+            </label>
             <label class="ai-label">蓝方 AI
               <select id="pauseAiLevelB">
                 <option value="0">简单</option>

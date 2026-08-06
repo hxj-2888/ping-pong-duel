@@ -14,11 +14,12 @@
   if (PPD.ui.hitPaddleVal) PPD.ui.hitPaddleVal.textContent = `低至 ${PPD.TT.RULES.CROUCH_HITBOX_Y_BOTTOM}m`;
 
   // ---------- 事件 → 音效/提示 ----------
-  // 得分方名称（按模式：人机=你/电脑，AI 观战=红方/蓝方 AI，其余=玩家1/2）
+  // 得分方名称（按模式取 PPD.app.names：人机=昵称/电脑，AI 观战=双方 AI 名字，其余=玩家1/2）
   function winnerName(side) {
-    if (PPD.app.mode === 'ai') return side === 0 ? '你' : '电脑';
-    if (PPD.app.mode === 'aivai') return side === 0 ? '红方 AI' : '蓝方 AI';
-    return side === 0 ? '玩家1' : '玩家2';
+    const n = PPD.app.names || [];
+    if (PPD.app.mode === 'ai') return side === 0 ? (n[0] || '你') : '电脑';
+    if (PPD.app.mode === 'aivai') return side === 0 ? (n[0] || '红方 AI') : (n[1] || '蓝方 AI');
+    return side === 0 ? (n[0] || '玩家1') : (n[1] || '玩家2');
   }
 
   function handleEngineEvents(engine) {
@@ -69,13 +70,13 @@
           if (PPD.app.mode === 'ai' && e.s === 0 && PPD.app.aiLevel === 3 && PPD.markHellCleared) {
             PPD.markHellCleared();
           }
-          // 通关记录：人机模式玩家获胜 → 后端保存（失败静默，不影响游戏）
-          if (PPD.app.mode === 'ai' && e.s === 0 && PPD.saveRecord) {
+          // 个人生涯：人机模式每局结束都记录胜负（winner=胜方 0=玩家 1=电脑；后端留最近 60 条）
+          if (PPD.app.mode === 'ai' && PPD.saveRecord) {
             const eng = PPD.app.engine;
             PPD.saveRecord({
               name: (PPD.app.names && PPD.app.names[0]) || '玩家',
               mode: 'ai',
-              winner: 0,
+              winner: e.s === 0 ? 0 : 1,
               score: eng && eng.score ? [eng.score[0], eng.score[1]] : [0, 0],
               difficulty: PPD.app.aiLevel,
               ts: Date.now(),
@@ -179,9 +180,12 @@
       bv = PPD.app.engine.ball.pos;
     }
     elH.textContent = bv ? bv.y.toFixed(2) + 'm' : '—';
-    // 判定对象：人机=红方(你)，联机=自己，本地=P1+P2
+    // 判定对象：人机=红方(昵称)，联机=自己，本地=P1+P2（名字优先，缺省 P1/P2/你）
     const sides = mode === 'local' ? [0, 1] : (mode === 'ai' ? [0] : [PPD.app.side]);
-    const label = (i) => (mode === 'local' ? `P${i + 1}` : '你');
+    const label = (i) => {
+      if (mode === 'local') return PPD.app.names[i] || `P${i + 1}`;
+      return PPD.app.names[PPD.app.side] || '你';
+    };
     const ps = (i) => {
       if (mode === 'online' && PPD.app.snapB) {
         const p = PPD.app.snapB.p[i];
@@ -279,11 +283,14 @@
       if (phId === 0 && PPD.app.mode === 'online') {
         showPhase(server === PPD.app.side ? `你的发球 · ${aimHint}` : '对方发球');
       } else if (phId === 0 && PPD.app.mode === 'ai') {
-        showPhase(server === 0 ? `你的发球 · ${aimHint}` : '电脑发球');
+        const pn = (PPD.app.names && PPD.app.names[0]) || '你';
+        showPhase(server === 0 ? `${pn} 发球 · ${aimHint}` : '电脑发球');
       } else if (phId === 0 && PPD.app.mode === 'local') {
         showPhase(`${server === 0 ? 'P1' : 'P2'} 发球 · ${aimHint}`);
       } else if (phId === 0 && PPD.app.mode === 'aivai') {
-        showPhase(`${server === 0 ? '红方' : '蓝方'} 发球`);
+        const na = (PPD.app.names && PPD.app.names[0]) || '红方';
+        const nb = (PPD.app.names && PPD.app.names[1]) || '蓝方';
+        showPhase(`${server === 0 ? na : nb} 发球`);
       } else if (phId !== 2) {
         showPhase(text);
       }

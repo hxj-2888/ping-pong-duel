@@ -26,6 +26,8 @@
     aiLevelB: document.getElementById('aiLevelB'),
     pauseAiLevelA: document.getElementById('pauseAiLevelA'),
     pauseAiLevelB: document.getElementById('pauseAiLevelB'),
+    pauseAiNameA: document.getElementById('pauseAiNameA'),
+    pauseAiNameB: document.getElementById('pauseAiNameB'),
     pauseAIVsAI: document.getElementById('pauseAIVsAI'),
     tuneAReact: document.getElementById('tuneAReact'),
     tuneACatch: document.getElementById('tuneACatch'),
@@ -43,9 +45,6 @@
     btnJoin: document.getElementById('btnJoin'),
     btnNetMode: document.getElementById('btnNetMode'),
     joinInput: document.getElementById('joinInput'),
-    // 主页右端滑动条（内容超高时显示）
-    menuScrollBar: document.getElementById('menuScrollBar'),
-    menuScrollThumb: document.getElementById('menuScrollThumb'),
     // 设置（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效
     btnSettings: document.getElementById('btnSettings'),
     btnSettingsGame: document.getElementById('btnSettingsGame'),
@@ -233,6 +232,33 @@
   } catch (e) { /* ignore */ }
   if (ui.frameRate) ui.frameRate.value = String(app.quality.frameRate);
 
+  // ---------- 玩家昵称（主菜单 #nameInput）：取名生效 + 本地记忆 ----------
+  const NAME_KEY = 'ppd_name';
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(NAME_KEY) : null;
+    if (saved && ui.nameInput) ui.nameInput.value = saved;
+  } catch (e) { /* ignore */ }
+  function getPlayerName() {
+    return ui.nameInput ? ui.nameInput.value.trim() : '';
+  }
+  // AI 观战双方名字（暂停面板可改，本地记忆，各截断 12 字）
+  const AI_NAMES_KEY = 'ppd_ai_names';
+  function loadAINames() {
+    try {
+      const v = localStorage.getItem(AI_NAMES_KEY);
+      if (v) {
+        const arr = JSON.parse(v);
+        if (Array.isArray(arr) && arr.length === 2) {
+          return arr.map((s) => String(s).slice(0, 12));
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function saveAINames(names) {
+    try { localStorage.setItem(AI_NAMES_KEY, JSON.stringify(names)); } catch (e) { /* ignore */ }
+  }
+
   // 手动切换画质（高/低）：写回记忆 + 立即生效（低画质 → DPR=1 + 清观众席缓存）
   function setQuality(mode) {
     app.quality.mode = mode === 'low' ? 'low' : 'high';
@@ -315,6 +341,7 @@
     isHellUnlocked, unlockHell, syncHellOptions,
     isHellCleared, markHellCleared, syncHellOptions,
     setQuality, setFrameRate,
+    getPlayerName, loadAINames, saveAINames,
     triggerCheer, updateMusicIntensity,
   };
 })();

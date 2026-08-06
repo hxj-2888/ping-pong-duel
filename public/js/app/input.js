@@ -198,6 +198,9 @@
       PPD.show(PPD.ui.pauseAITune, false);
       if (PPD.ui.pauseAiLevelA) PPD.ui.pauseAiLevelA.value = String(PPD.app.aiLevelA);
       if (PPD.ui.pauseAiLevelB) PPD.ui.pauseAiLevelB.value = String(PPD.app.aiLevelB);
+      // AI 观战：暂停可改双方名字（回填当前值，改动即时写回 HUD/胜负显示）
+      if (PPD.ui.pauseAiNameA) PPD.ui.pauseAiNameA.value = PPD.app.names[0] || '红方 AI';
+      if (PPD.ui.pauseAiNameB) PPD.ui.pauseAiNameB.value = PPD.app.names[1] || '蓝方 AI';
       syncTuneSliders();
     } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.isHellCleared()) {
       // 人机 + 地狱已通关：暂停面板变为「电脑 AI 数值调控」（滑杆即时生效）
@@ -229,6 +232,19 @@
       PPD.app.aiLevelB = PPD.readAiLevel(PPD.ui.pauseAiLevelB);
     });
   }
+  // AI 观战：暂停面板修改双方 AI 名字（写回 PPD.app.names → HUD/胜负即时生效；持久化本地）
+  const bindAIName = (el, side) => {
+    if (!el) return;
+    const apply = () => {
+      if (PPD.app.mode !== 'aivai') return;
+      PPD.app.names[side] = el.value.trim() || (side === 0 ? '红方 AI' : '蓝方 AI');
+      if (PPD.saveAINames) PPD.saveAINames(PPD.app.names);
+    };
+    el.addEventListener('input', apply);
+    el.addEventListener('change', apply);
+  };
+  bindAIName(PPD.ui.pauseAiNameA, 0);
+  bindAIName(PPD.ui.pauseAiNameB, 1);
   window.addEventListener('keydown', (e) => {
     // Esc：设置面板打开时优先关闭设置；否则在比赛中暂停/继续
     if (e.code === 'Escape') {

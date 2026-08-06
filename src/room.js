@@ -12,7 +12,7 @@ import { RoomCore } from './room-core.js';
 
 const STORAGE_KEY = 'rooms';
 const RECORDS_KEY = 'records'; // 通关记录（全局单实例，无 TTL 永久保存）
-const RECORDS_CAP = 200;
+const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
 
 // 校验并规整一条通关记录
 function sanitizeRecord(b) {
@@ -52,7 +52,7 @@ export class GameRoom extends DurableObject {
       return new Response(JSON.stringify({ ok: false, e: 'not found' }), { status: 404, headers: cors });
     }
     if (request.method === 'GET') {
-      const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 100);
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '60', 10) || 60, 100);
       const list = (await this.ctx.storage.get(RECORDS_KEY)) || [];
       return new Response(JSON.stringify({ ok: true, records: list.slice(0, limit) }), { headers: cors });
     }

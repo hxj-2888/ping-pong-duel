@@ -32,7 +32,7 @@ const MIME = {
 // ---------- 通关记录（本地后端，records.json 持久化，与 Cloudflare DO /api/records 兼容） ----------
 // RECORDS_FILE 可用环境变量覆盖（测试用临时文件）
 const RECORDS_FILE = process.env.RECORDS_FILE || path.join(__dirname, 'records.json');
-const RECORDS_CAP = 200;
+const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
 
 function sanitizeRecord(b) {
   if (!b || typeof b !== 'object') return null;
@@ -74,7 +74,7 @@ const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
     if (req.method === 'GET') {
       const q = new URLSearchParams(req.url.split('?')[1] || '');
-      const limit = Math.min(parseInt(q.get('limit') || '20', 10) || 20, 100);
+      const limit = Math.min(parseInt(q.get('limit') || '60', 10) || 60, 100);
       res.writeHead(200, cors);
       res.end(JSON.stringify({ ok: true, records: loadRecords().slice(0, limit) }));
       return;

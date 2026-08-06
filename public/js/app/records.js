@@ -1,6 +1,6 @@
 /* ============================================================
- * app/records.js — 通关记录：后端保存（本地 server.js / Cloudflare DO）
- * 与主菜单展示。接口：POST/GET /api/records（两套后端兼容）。
+ * app/records.js — 个人生涯：后端保存（本地 server.js / Cloudflare DO）
+ * 与主菜单展示（总场次/胜率 + 最近 60 条）。接口：POST/GET /api/records。
  * 失败静默（无后端/离线不报错）。
  * ============================================================ */
 (function () {
@@ -53,26 +53,31 @@
     if (beatHell && PPD.markHellCleared) PPD.markHellCleared();
   }
 
-  // 渲染到主菜单 #recordsPanel（最近 5 条）
+  // 渲染到主菜单 #recordsPanel（个人生涯：总场次/胜率 + 最近 60 条）
   async function refreshRecords() {
     const el = PPD.ui.recordsPanel;
     if (!el) return;
-    const list = await fetchRecords(5);
+    const list = await fetchRecords(60);
     if (!list.length) {
-      el.innerHTML = '🏆 通关记录：暂无（人机模式击败困难/地狱后自动保存）';
-      if (PPD.updateMenuScroll) PPD.updateMenuScroll(); // 记录面板高度变化 → 刷新滚动钮显隐
+      el.innerHTML = '🎯 个人生涯：暂无对局（人机模式对局后自动保存）';
       return;
     }
+    const wins = list.filter((r) => r && r.winner === 0).length;
+    const total = list.length;
+    const rate = total ? Math.round((wins / total) * 100) : 0;
     const items = list.map((r) => {
       const d = DIFF[r.difficulty] || '中等';
       const t = new Date(r.ts || Date.now());
       const pad = (n) => String(n).padStart(2, '0');
       const time = `${pad(t.getMonth() + 1)}-${pad(t.getDate())} ${pad(t.getHours())}:${pad(t.getMinutes())}`;
       const sc = `${r.score ? r.score[0] : '?'}:${r.score ? r.score[1] : '?'}`;
-      return `<div class="rec-item">🏆 ${d} · ${sc} · ${time} · ${r.name || '玩家'}</div>`;
+      const wl = r.winner === 0 ? '🏆 胜' : '💔 负';
+      return `<div class="rec-item">${wl} · ${d} · ${sc} · ${time} · ${r.name || '玩家'}</div>`;
     }).join('');
-    el.innerHTML = `<div class="rec-title">🏆 通关记录（最近 ${list.length} 条）</div>${items}`;
-    if (PPD.updateMenuScroll) PPD.updateMenuScroll();
+    el.innerHTML =
+      `<div class="rec-title">🎯 个人生涯（最近 ${total} 条）</div>` +
+      `<div class="rec-stats">总场次 ${total} · 胜 ${wins} · 负 ${total - wins} · 胜率 ${rate}%</div>` +
+      items;
   }
 
   PPD.saveRecord = saveRecord;

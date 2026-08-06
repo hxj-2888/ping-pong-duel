@@ -85,8 +85,7 @@
     PPD.show(PPD.ui.menu, true);
     PPD.show(PPD.ui.roomPanel, false);
     PPD.showTouch(false);
-    if (PPD.updateMenuScroll) PPD.updateMenuScroll(); // 回到主页：刷新滚动钮显隐
-    if (PPD.refreshRecords) PPD.refreshRecords(); // 通关记录：返回主页时刷新
+    if (PPD.refreshRecords) PPD.refreshRecords(); // 个人生涯：返回主页时刷新
   }
 
   function startOnlineGame(side) {
@@ -113,7 +112,8 @@
     PPD.app.mode = 'local';
     PPD.app.paused = false;
     PPD.app.engine = PPD.TT.createEngine();
-    PPD.app.names = ['玩家1', '玩家2'];
+    // 取名生效：P1 用主菜单昵称（空回退 玩家1），P2=玩家2
+    PPD.app.names = [PPD.getPlayerName() || '玩家1', '玩家2'];
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.show(PPD.ui.menu, false);
@@ -145,7 +145,8 @@
     PPD.app.paused = false;
     PPD.app.aiLevel = readAiLevel(PPD.ui.aiLevel);
     PPD.app.engine = PPD.TT.createEngine();
-    PPD.app.names = ['你', '电脑'];
+    // 取名生效：比分表/胜负/记录里的「你」→ 昵称（空回退 你）
+    PPD.app.names = [PPD.getPlayerName() || '你', '电脑'];
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.AIC.reset();
@@ -173,7 +174,12 @@
     PPD.app.aiLevelA = readAiLevel(PPD.ui.aiLevelA);
     PPD.app.aiLevelB = readAiLevel(PPD.ui.aiLevelB);
     PPD.app.engine = PPD.TT.createEngine();
-    PPD.app.names = ['红方 AI', '蓝方 AI'];
+    // AI 观战：双方名字用持久化值（暂停面板可改），缺省 红方 AI/蓝方 AI
+    const aiNames = PPD.loadAINames ? PPD.loadAINames() : null;
+    PPD.app.names = [
+      (aiNames && aiNames[0]) || '红方 AI',
+      (aiNames && aiNames[1]) || '蓝方 AI',
+    ];
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.AIC.reset();

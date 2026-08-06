@@ -394,9 +394,11 @@
   const CROWD_CAM_BUCKET = 0.06; // 相机移动重建阈值(m)（0.04→0.06：平移重建阈值 0.02→0.03m，频率降约 1/3，视觉不可察）
   const CROWD_ANIM_HZ = 30;      // 欢呼动画刷入动画层的频率（Hz）
   const CROWD_ANIM_SCALE = 0.5;  // 动画层分辨率倍率（半分辨率：填充率 1/4，小人物放大后无感知）
-  let crowdCache = null; // 静态层 { key, canvas, ctx }
-  let animCache = null;  // 动画层 { key, canvas, ctx, active, animT }
-  function clearCrowdCache() { crowdCache = null; animCache = null; }
+  // 静态/动画离屏缓存：按 viewSide（分屏两侧队色相反）分键——本地双人两视口各自缓存，
+  // 避免 A 视口重建后 B 视口 key 不同又踢掉重建，导致每帧全量重画 376 人观众席（帧率抖动）。
+  // 每个 entry 懒创建（先静态层后动画层，保持 createElement 顺序，兼容测试桩 canvas 序号）。
+  let crowdCaches = {}; // { [viewSide]: { static:{key,canvas,ctx}, anim:{key,canvas,ctx,active,animT} } }
+  function clearCrowdCache() { crowdCaches = {}; }
   // 仅探测 document.createElement 可用性（不在此创建 canvas——避免每帧分配一个探针画布；getContext 能力在首次建缓存时自然验证）
   function crowdCacheSupported() {
     return typeof document !== 'undefined' && !!document.createElement;
@@ -407,25 +409,25 @@
     return !!((fan.cheer && (fan.cheer[0] > 0 || fan.cheer[1] > 0)) ||
               (fan.shake && (fan.shake[0] > 0 || fan.shake[1] > 0)));
   }
-  // 静态层重建：地板/看台/静止观众（rest 姿态），全分辨率
-  function rebuildCrowdCache(cam, vw, vh, viewSide, mainCtx) {
+  // 静态层重建：地板/看台/静止观众（rest 姿态），全分辨率（写入 entry.static）
+  function rebuildCrowdCache(entry, cam, vw, vh, viewSide, mainCtx) {
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
-    crowdCache.canvas.width = Math.max(1, Math.round(vw * dpr));
-    crowdCache.canvas.height = Math.max(1, Math.round(vh * dpr));
-    const cc = crowdCache.ctx;
+    entry.static.canvas.width = Math.max(1, Math.round(vw * dpr));
+    entry.static.canvas.height = Math.max(1, Math.round(vh * dpr));
+    const cc = entry.static.ctx;
     cc.setTransform(dpr, 0, 0, dpr, 0, 0);
     cc.clearRect(0, 0, vw, vh);
     drawFloorBg(cc, cam, vw, vh);
     drawBenches(cc, cam);
     drawCrowd(cc, cam, 0, viewSide, null); // 静止 rest 姿态（time=0, 无欢呼）
   }
-  // 动画层重建：只画有欢呼/摇头量的观众，快速绘制（去描边）+ 半分辨率；透明底叠在静态层上
-  function rebuildAnimCache(cam, vw, vh, viewSide, mainCtx, time, fan) {
+  // 动画层重建：只画有欢呼/摇头量的观众，快速绘制（去描边）+ 半分辨率；透明底叠在静态层上（写入 entry.anim）
+  function rebuildAnimCache(entry, cam, vw, vh, viewSide, mainCtx, time, fan) {
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
     const s = CROWD_ANIM_SCALE;
-    animCache.canvas.width = Math.max(1, Math.round(vw * dpr * s));
-    animCache.canvas.height = Math.max(1, Math.round(vh * dpr * s));
-    const ac = animCache.ctx;
+    entry.anim.canvas.width = Math.max(1, Math.round(vw * dpr * s));
+    entry.anim.canvas.height = Math.max(1, Math.round(vh * dpr * s));
+    const ac = entry.anim.ctx;
     ac.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
     ac.clearRect(0, 0, vw, vh);
     for (const p of crowdList) {
@@ -447,34 +449,41 @@
     if (crowdCacheSupported()) {
       const backing = (ctx.canvas && ctx.canvas.width) || 0;
       const key = `${viewSide}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}`;
-      if (!crowdCache) crowdCache = { canvas: document.createElement('canvas'), ctx: null, key: '' };
-      if (!crowdCache.ctx) crowdCache.ctx = crowdCache.canvas.getContext('2d');
-      if (!animCache) animCache = { canvas: document.createElement('canvas'), ctx: null, key: '', active: false, animT: null };
-      if (!animCache.ctx) animCache.ctx = animCache.canvas.getContext('2d');
+      // 按 viewSide 取/建本视口的静态+动画缓存（本地分屏两视口互不踢缓存）
+      let entry = crowdCaches[viewSide];
+      if (!entry) {
+        entry = crowdCaches[viewSide] = {
+          static: { canvas: document.createElement('canvas'), ctx: null, key: '' },
+          anim: { canvas: document.createElement('canvas'), ctx: null, key: '', active: false, animT: null },
+        };
+      }
+      const st = entry.static, an = entry.anim;
+      if (!st.ctx) st.ctx = st.canvas.getContext('2d');
+      if (!an.ctx) an.ctx = an.canvas.getContext('2d');
       const anim = crowdAnimActive(fan);
       // 静态层：相机/尺寸/DPR 变化才重建（含静止观众 rest 姿态）
-      if (crowdCache.key !== key) {
-        crowdCache.key = key;
-        rebuildCrowdCache(cam, vw, vh, viewSide, ctx);
+      if (st.key !== key) {
+        st.key = key;
+        rebuildCrowdCache(entry, cam, vw, vh, viewSide, ctx);
       }
       // 动画层：相机 key 变化、动画开始、动画中 30Hz 烘焙（浮点容差 1e-6 稳定节奏）
       if (anim) {
-        const animDue = !animCache.active || animCache.key !== key ||
-          (animCache.animT == null || time - animCache.animT >= 1 / CROWD_ANIM_HZ - 1e-6);
+        const animDue = !an.active || an.key !== key ||
+          (an.animT == null || time - an.animT >= 1 / CROWD_ANIM_HZ - 1e-6);
         if (animDue) {
-          animCache.key = key;
-          animCache.active = true;
-          animCache.animT = time;
-          rebuildAnimCache(cam, vw, vh, viewSide, ctx, time, fan);
+          an.key = key;
+          an.active = true;
+          an.animT = time;
+          rebuildAnimCache(entry, cam, vw, vh, viewSide, ctx, time, fan);
         }
-      } else if (animCache.active) {
+      } else if (an.active) {
         // 动画结束：停止叠加动画层（静止姿态由静态层呈现，无需重建）
-        animCache.active = false;
-        animCache.animT = null;
-        animCache.key = key;
+        an.active = false;
+        an.animT = null;
+        an.key = key;
       }
-      ctx.drawImage(crowdCache.canvas, 0, 0, vw, vh);
-      if (animCache.active) ctx.drawImage(animCache.canvas, 0, 0, vw, vh);
+      ctx.drawImage(st.canvas, 0, 0, vw, vh);
+      if (an.active) ctx.drawImage(an.canvas, 0, 0, vw, vh);
     } else {
       drawFloorBg(ctx, cam, vw, vh);
       drawBenches(ctx, cam); // 先画座位（观众坐在其上）
