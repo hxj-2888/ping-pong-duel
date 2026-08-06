@@ -87,9 +87,10 @@ const ELEMENT_IDS = [
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch',
-  'gameTools', 'btnDiff', 'btnPause', 'btnExit',
+  'gameTools', 'btnDiff', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
+  'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'recordsPanel', // 通关记录面板（records.js 渲染）
 ];
@@ -144,6 +145,7 @@ function boot(opts) {
     WebSocket: FakeWebSocket,
     innerWidth: opts.width || 1280,
     innerHeight: opts.height || 720,
+    devicePixelRatio: 2, // 高分屏：验证 DPR 上限（高画质=2、低画质=1）
     addEventListener(type, fn) { (winHandlers[type] = winHandlers[type] || []).push(fn); },
     Math, JSON, Object, Array, Number, String, Boolean, Date, RegExp, Error, Promise,
     isFinite, isNaN, parseInt, parseFloat,
@@ -252,6 +254,28 @@ async function main() {
     check('关闭后：左上角判定面板整体隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
     t.elements.get('btnSettingsClose').dispatch('click', {});
     check('设置面板关闭', t.elements.get('settingsPanel').style.display === 'none');
+    // 画质：默认高；切低 → 生效标记 + 视图模型 low/虚线临时关闭（用户勾选不变）；帧率默认 60
+    check('画质默认高（DPR 上限 2）', t.app.quality.mode === 'high' && t.app.quality.low === false && t.app.dpr === 2);
+    check('帧率上限默认 60', t.app.quality.frameRate === 60);
+    check('右上角帧数元素存在', !!t.elements.get('fpsMeter'));
+    t.elements.get('quality').value = 'low';
+    t.elements.get('quality').dispatch('change', {});
+    t.runFrames(3);
+    check('切低画质生效（low 标记 + DPR→1）', t.app.quality.low === true && t.app.dpr === 1);
+    const vmLow = t.ppd.viewModelFromEngine(t.app.engine, 0);
+    check('低画质视图模型：low=true 且虚线临时关闭', vmLow.low === true && vmLow.showHitRanges === false);
+    t.elements.get('quality').value = 'high';
+    t.elements.get('quality').dispatch('change', {});
+    t.runFrames(3);
+    check('切回高画质恢复（low 清除 + DPR 回 2）', t.app.quality.low === false && t.app.quality.mode === 'high' && t.app.dpr === 2);
+    t.elements.get('frameRate').value = '30';
+    t.elements.get('frameRate').dispatch('change', {});
+    t.runFrames(2);
+    check('切帧率上限 30 生效', t.app.quality.frameRate === 30);
+    t.elements.get('frameRate').value = '60';
+    t.elements.get('frameRate').dispatch('change', {});
+    t.runFrames(2);
+    check('切回帧率上限 60', t.app.quality.frameRate === 60);
     t.runFrames(10);
     check('本地渲染 10 帧无异常', true);
     check('左上角实时显示球高', /^\d+\.\d{2}m$/.test(t.elements.get('ballHeight').textContent));

@@ -109,12 +109,20 @@
     PPD.backToMenu();
   });
 
-  // 画质切换（自动/低）：写回记忆 + 立即生效（DPR、观众席缓存、低画质渲染开关）
+  // 画质切换（高/低）：写回记忆 + 立即生效（DPR、观众席缓存、低画质渲染开关）
   if (PPD.ui.quality) {
     PPD.ui.quality.addEventListener('change', () => {
       PPD.GameAudio.ui && PPD.GameAudio.ui();
       PPD.setQuality(PPD.ui.quality.value);
-      PPD.setStatus(PPD.app.quality.low ? '画质：低（省电流畅）' : '画质：自动');
+      PPD.setStatus(PPD.app.quality.low ? '画质：低（省电流畅）' : '画质：高');
+    });
+  }
+  // 帧率上限切换（30/45/60）：渲染门控即时生效（物理仍 120Hz）
+  if (PPD.ui.frameRate) {
+    PPD.ui.frameRate.addEventListener('change', () => {
+      PPD.GameAudio.ui && PPD.GameAudio.ui();
+      PPD.setFrameRate(parseInt(PPD.ui.frameRate.value, 10));
+      PPD.setStatus('帧率上限：' + PPD.app.quality.frameRate);
     });
   }
 

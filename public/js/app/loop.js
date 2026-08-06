@@ -9,46 +9,21 @@
   let lastTime = 0;
   let lastRender = 0;
   let acc = 0;
-  // FPS 滚动均值（约 1s 窗口）：供"自动"画质的帧率降级判定
+  // FPS 滚动均值（约 1s 窗口）：右上角估测帧数
   const FRAME_HIST = 60;
   let frameHist = new Array(FRAME_HIST).fill(16.67);
   let frameIdx = 0;
-
-  // "自动"画质降级判定（滞回防抖）：持续 <40fps(>25ms) 约 2s → 低画质；
-  // 恢复 >55fps(<18.2ms) 持续约 2s → 还原
-  function autoQuality(frameMs) {
-    const q = PPD.app.quality;
-    if (q.mode !== 'auto') return;
-    if (frameMs > 25) {
-      q.degradeMs += frameMs;
-      q.restoreMs = 0;
-      if (!q.low && q.degradeMs > 2000) {
-        q.low = true;
-        PPD.app.dpr = 1;
-        if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
-        PPD.resize();
-      }
-    } else if (frameMs < 18.2) {
-      q.restoreMs += frameMs;
-      q.degradeMs = 0;
-      if (q.low && q.restoreMs > 2000) {
-        q.low = false;
-        PPD.resize();
-      }
-    } else {
-      q.degradeMs = 0;
-      q.restoreMs = 0;
-    }
-  }
+  let lastFpsUpdate = 0;
 
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
-    // 渲染 60fps 门控：物理仍 120Hz 步进，渲染最多每秒 60 次（时钟不前进时放行，兼容测试）
+    // 渲染帧率门控：按所选上限（30/45/60，默认 60）控制渲染频率；物理仍 120Hz 步进（时钟不前进时放行，兼容测试）
+    const frameRate = PPD.app.quality && PPD.app.quality.frameRate ? PPD.app.quality.frameRate : 60;
     const renderDt = now - lastRender;
-    const shouldRender = renderDt <= 0 || renderDt >= 1000 / 60;
-    // 帧间隔滚动均值（自动降级依据；renderDt<=0 的测试环境不计入）
+    const shouldRender = renderDt <= 0 || renderDt >= 1000 / frameRate;
+    // 帧间隔滚动均值（估测帧数依据；renderDt<=0 的测试环境不计入）
     if (renderDt > 0) {
       frameHist[frameIdx] = renderDt;
       frameIdx = (frameIdx + 1) % FRAME_HIST;
@@ -56,7 +31,16 @@
       for (let i = 0; i < FRAME_HIST; i++) sum += frameHist[i];
       const avg = sum / FRAME_HIST;
       PPD.app.quality.frameMs = avg;
-      autoQuality(avg);
+      // 右上角估测帧数（上限 60；约 5 次/秒刷新，避免 DOM 抖动）
+      if (now - lastFpsUpdate > 200) {
+        lastFpsUpdate = now;
+        const fps = Math.min(60, Math.round(1000 / avg));
+        if (PPD.ui.fpsMeter) {
+          PPD.ui.fpsMeter.textContent = String(fps);
+          if (fps < 45) PPD.ui.fpsMeter.classList.add('low');
+          else PPD.ui.fpsMeter.classList.remove('low');
+        }
+      }
     }
     // 观众欢呼/摇头强度逐帧衰减（约 1.7s 内平息，与 1.5s 掌声时长接近）
     for (let i = 0; i < 2; i++) {

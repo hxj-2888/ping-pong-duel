@@ -115,6 +115,7 @@
       <button id="btnDiff" class="tool-btn" style="display:none">难度:中等</button>
       <button id="btnPause" class="tool-btn">暂停</button>
       <button id="btnExit" class="tool-btn">退出</button>
+      <span id="fpsMeter" class="fps-meter" title="估测帧数（上限 60）">60</span>
     </div>
     <!-- 暂停面板 -->
     <div id="pausePanel" class="pause-panel" style="display:none">
@@ -221,8 +222,15 @@
       <label class="tune-row">音效音量 <input id="setSfxVol" type="range" min="0" max="100" step="5" value="50"><b>50%</b></label>
       <label class="toggle-label">画质
         <select id="quality">
-          <option value="auto" selected>自动（帧率低时自动降级）</option>
-          <option value="low">低（省电流畅）</option>
+          <option value="high" selected>高画质</option>
+          <option value="low">低画质（省电流畅）</option>
+        </select>
+      </label>
+      <label class="toggle-label">帧率
+        <select id="frameRate">
+          <option value="60" selected>60</option>
+          <option value="45">45</option>
+          <option value="30">30</option>
         </select>
       </label>
       <button id="btnSettingsClose" class="btn primary">完成</button>

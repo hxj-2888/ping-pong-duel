@@ -82,6 +82,8 @@
     smashStatus: document.getElementById('smashStatus'),
     lobStatus: document.getElementById('lobStatus'),
     quality: document.getElementById('quality'),
+    frameRate: document.getElementById('frameRate'),
+    fpsMeter: document.getElementById('fpsMeter'),
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
     recordsPanel: document.getElementById('recordsPanel'),
@@ -164,8 +166,9 @@
     showHitRanges: false, // 判定范围虚线（设置面板开关，默认关闭）
     dpr: 1,              // 当前画布像素比（DPR 上限 2；低画质=1）
     resizeDirty: false,  // 暂停/结算期间窗口尺寸变化 → 需要补一帧渲染
-    // 画质：mode='auto'（帧率低自动降级）/ 'low'（手动低画质）；low=当前生效的低画质标记
-    quality: { mode: 'auto', low: false, frameMs: 16.67, degradeMs: 0, restoreMs: 0 },
+    // 画质：mode='high'（默认高画质）/ 'low'（低画质省电）；low=当前低画质标记；
+    // frameRate=渲染帧率上限（30/45/60，物理仍 120Hz 步进）
+    quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 60 },
   };
 
   // ---------- 工具 ----------
@@ -204,24 +207,36 @@
   } catch (e) { /* ignore */ }
   app.showHitRanges = showHitRanges;
 
-  // ---------- 画质（localStorage 记忆；自动=帧率低时自动降级，低=手动低画质） ----------
+  // ---------- 画质（高/低两档，默认高；localStorage 记忆） ----------
   const QUALITY_KEY = 'ppd_quality';
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(QUALITY_KEY) : null;
-    if (v === 'low') app.quality.mode = 'low';
+    if (v === 'low' || v === 'high') app.quality.mode = v;
   } catch (e) { /* ignore */ }
   app.quality.low = app.quality.mode === 'low';
   if (ui.quality) ui.quality.value = app.quality.mode;
 
-  // 手动切换画质：写回记忆 + 立即生效（低画质 → DPR=1 + 清观众席缓存）
+  // ---------- 帧率上限（30/45/60，默认 60；localStorage 记忆） ----------
+  const FRAME_RATE_KEY = 'ppd_frame_rate';
+  try {
+    const v = parseInt(localStorage.getItem(FRAME_RATE_KEY), 10);
+    if (v === 30 || v === 45 || v === 60) app.quality.frameRate = v;
+  } catch (e) { /* ignore */ }
+  if (ui.frameRate) ui.frameRate.value = String(app.quality.frameRate);
+
+  // 手动切换画质（高/低）：写回记忆 + 立即生效（低画质 → DPR=1 + 清观众席缓存）
   function setQuality(mode) {
-    app.quality.mode = mode === 'low' ? 'low' : 'auto';
+    app.quality.mode = mode === 'low' ? 'low' : 'high';
     app.quality.low = app.quality.mode === 'low';
-    app.quality.degradeMs = 0;
-    app.quality.restoreMs = 0;
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(QUALITY_KEY, app.quality.mode); } catch (e) { /* ignore */ }
     if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
     PPD.resize();
+  }
+
+  // 切换帧率上限（30/45/60）：渲染门控即时生效（物理仍 120Hz）
+  function setFrameRate(f) {
+    app.quality.frameRate = f === 30 || f === 45 ? f : 60;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(FRAME_RATE_KEY, String(app.quality.frameRate)); } catch (e) { /* ignore */ }
   }
 
   // 单个难度下拉的地狱选项：按解锁状态显示（人机 + AI 观战主页/暂停面板共用）
@@ -290,7 +305,7 @@
     wsUrl, isLocalHost, isTouch,
     isHellUnlocked, unlockHell, syncHellOptions,
     isHellCleared, markHellCleared, syncHellOptions,
-    setQuality,
+    setQuality, setFrameRate,
     triggerCheer, updateMusicIntensity,
   };
 })();

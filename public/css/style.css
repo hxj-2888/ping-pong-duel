@@ -261,6 +261,14 @@ canvas#game { touch-action: none; }
   cursor: pointer; transition: 0.15s;
 }
 .tool-btn:hover { background: rgba(255,255,255,0.16); }
+/* 右上角估测帧数（上限 60；低于 45 时变黄提示） */
+.fps-meter {
+  align-self: center; min-width: 34px; text-align: center;
+  background: rgba(10, 15, 26, 0.72); border: 1px solid var(--line); color: #9fe8a0;
+  border-radius: 10px; padding: 7px 8px; font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums; user-select: none;
+}
+.fps-meter.low { color: #ffd479; }
 /* 主菜单右上角 ⚙ 设置按钮（固定于视口右上角，与比赛页 gameTools 同位） */
 .settings-btn {
   position: fixed; top: 14px; right: 14px; z-index: 8;
