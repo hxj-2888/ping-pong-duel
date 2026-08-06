@@ -317,12 +317,11 @@
 
   // 按指针位置更新瞄准：本地/人机直接求解写入引擎（预览与实发一致），
   // 联机则存到 app.serveAim，由主循环随输入帧上报服务端。
-  function updateServeAim(clientX, clientY) {
-    const side = myServeSide();
-    if (side === null) { PPD.app.serveAiming = false; return; }
+  // 节流 50ms（非防抖）：移动中每 50ms 求解一次——求解已优化到毫秒级（粗搜 96 次+中断），
+  // 轨迹半帧跟手且不掉帧；发球点击前 flushServeAim() 强制用最新位置立即求解
+  function doAim(clientX, clientY, side) {
     const now = performance.now();
-    // 80ms 节流 + 8px 阈值：瞄准重算频率上限 ~12 次/秒（原 40ms/25 次）——削减瞄准求解/重画的每帧尖峰
-    if (now - lastAimT < 80 && Math.hypot(clientX - lastAimX, clientY - lastAimY) < 8) return;
+    if (now - lastAimT < 50 && Math.hypot(clientX - lastAimX, clientY - lastAimY) < 6) return;
     lastAimT = now; lastAimX = clientX; lastAimY = clientY;
     const aim = PPD.serveAimFromPointer(clientX, clientY, side);
     if (!aim) return;
@@ -332,11 +331,28 @@
     }
   }
 
-  // 新一轮发球开始（serve-ready）时用最近指针位置恢复瞄准
+  function updateServeAim(clientX, clientY) {
+    const side = myServeSide();
+    if (side === null) { PPD.app.serveAiming = false; return; }
+    doAim(clientX, clientY, side);
+  }
+
+  // 发球点击/触屏点按前调用：强制用最近指针位置立即求解（绕过节流），保证实发落点与瞄准一致
+  function flushServeAim() {
+    if (PPD.app.lastPointerX == null) return;
+    const side = myServeSide();
+    if (side === null) return;
+    lastAimT = 0;
+    doAim(PPD.app.lastPointerX, PPD.app.lastPointerY, side);
+  }
+
+  // 新一轮发球开始（serve-ready）时用最近指针位置恢复瞄准（立即求解一次）
   function refreshServeAim() {
     if (PPD.app.lastPointerX == null) { PPD.app.serveAim = null; return; }
     lastAimT = 0;
-    updateServeAim(PPD.app.lastPointerX, PPD.app.lastPointerY);
+    const side = myServeSide();
+    if (side === null) return;
+    doAim(PPD.app.lastPointerX, PPD.app.lastPointerY, side);
   }
 
   PPD.canvas.addEventListener('pointermove', (e) => {
@@ -356,6 +372,7 @@
     if (serveSide !== null) {
       // 发球阶段：电脑单击直接发球；手机第一下点按进入瞄准、第二下点按发球
       updateServeAim(e.clientX, e.clientY);
+      flushServeAim(); // 点击发球：强制立即用最新指针位置求解（不等防抖），保证实发落点与瞄准一致
       // 瞄准目标解不出合法发球：发不出球，提示玩家调整瞄准
       const blocked = PPD.app.mode === 'online'
         ? (PPD.app.snapB && PPD.app.snapB.sb === 1)
@@ -396,5 +413,6 @@
   PPD.fireShot = fireShot;
   PPD.myServeSide = myServeSide;
   PPD.updateServeAim = updateServeAim;
+  PPD.flushServeAim = flushServeAim;
   PPD.refreshServeAim = refreshServeAim;
 })();

@@ -114,11 +114,11 @@
       }
       return { plan: best, done: false };
     };
-    // 粗搜（快）→ 细搜（全覆盖）：粗搜 angles 用全量（中断后单次 ~80 步，192 次 ≈ 毫秒级），
-    // 覆盖全部角度提高命中率，边缘落点才触发细搜兜底
+    // 粗搜（快）→ 细搜（全覆盖）：粗搜 angles 每 2° 一档（6 角，96 次模拟，中断后毫秒级），
+    // 配合瞄准防抖（移动中不求解）单次成本无感；边缘落点才触发细搜兜底
     let r = trySearch(
       speeds.slice(0, 4),
-      angles,
+      angles.filter((a) => a % 2 === 0),
       spins.slice(0, 4)
     );
     if (!r.done && !coarseOnly) r = trySearch(speeds, angles, spins);
