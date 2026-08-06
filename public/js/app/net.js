@@ -9,17 +9,20 @@
   function setupNet(hostMode) {
     const net = new PPD.NetClient(PPD.wsUrl()); // 连接时按 本地/公网 选择端点
     PPD.app.net = net;
-    // 加入超时自愈：DO 驱逐/网络抖动时服务器可能不响应 join（升级后消息丢失），
-    // 6s 无 room 响应 → 重连重试（最多 2 次），仍失败才提示
+    // 建房/加入超时自愈：DO 冷启动/驱逐/网络抖动时服务器可能不响应 create/join
+    // （WS 已 open 但 DO 尚未就绪或消息丢失），6s 无 room 响应 → 重连重试（最多 2 次）
     let joinTries = 0;
     let joinTimer = null;
     const clearJoinTimer = () => { if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; } };
     const scheduleJoinRetry = () => {
       clearJoinTimer();
       joinTimer = setTimeout(() => {
-        if (joinTries >= 2) { PPD.setStatus('加入超时，请确认房间码后重试'); return; }
+        if (joinTries >= 2) {
+          PPD.setStatus(hostMode ? '建房超时，请重试' : '加入超时，请确认房间码后重试');
+          return;
+        }
         joinTries++;
-        PPD.setStatus('加入超时，自动重连中…');
+        PPD.setStatus(hostMode ? '建房超时，自动重连中…' : '加入超时，自动重连中…');
         net.close();
         net.connect();
       }, 6000);
@@ -34,6 +37,7 @@
       }
       if (hostMode) {
         net.send({ t: 'create', name: PPD.app.names[0] });
+        scheduleJoinRetry(); // 房主也要超时自愈（create 无响应时自动重连）
       } else {
         net.send({ t: 'join', room: PPD.ui.joinInput.value.trim(), name: PPD.app.names[0] });
         scheduleJoinRetry();

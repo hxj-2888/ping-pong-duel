@@ -25,6 +25,8 @@
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
     PPD.app.names[0] = PPD.getPlayerName() || '房主';
+    // 立即反馈：DO 冷启动/网络抖动时连接可能需 1~8s，避免用户以为点了没反应
+    PPD.setStatus('正在连接服务器…');
     PPD.setupNet(true);
   });
   PPD.ui.btnJoin.addEventListener('click', () => {
@@ -35,6 +37,7 @@
       return;
     }
     PPD.app.names[0] = PPD.getPlayerName() || '挑战者';
+    PPD.setStatus('正在连接服务器…');
     PPD.setupNet(false);
   });
   // 昵称持久化：取名生效——输入即保存，下次打开仍是该名字
