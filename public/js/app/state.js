@@ -84,6 +84,7 @@
     smashStatus: document.getElementById('smashStatus'),
     lobStatus: document.getElementById('lobStatus'),
     quality: document.getElementById('quality'),
+    setNoCrowd: document.getElementById('setNoCrowd'),
     frameRate: document.getElementById('frameRate'),
     fpsMeter: document.getElementById('fpsMeter'),
     serveDot: document.getElementById('serveDot'),
@@ -180,6 +181,7 @@
     // 画质：mode='high'（默认高画质）/ 'low'（低画质省电）；low=当前低画质标记；
     // frameRate=渲染帧率上限（30/45/60/无上限，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 60 },
+    noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
   };
 
   // ---------- 工具 ----------
@@ -189,9 +191,14 @@
   function resize() {
     app.resizeW = window.innerWidth;
     app.resizeH = window.innerHeight;
-    // 高分屏清晰度：低画质=1（省填充率）；高画质=设备 DPR（电脑上限 2，触屏手机上限 3——
-    // 手机 DPR 常见 3，提到 3 才与电脑端清晰度一致；手机默认高画质即生效）；渲染坐标仍用 CSS 像素（setTransform 缩放）
-    const dpr = Math.min(window.devicePixelRatio || 1, app.quality && app.quality.low ? 1 : (isTouch ? 3 : 2));
+    // 分辨率档位：渲染物理像素封顶到目标分辨率（超出的屏按比例降 DPR，避免无谓填充率）——
+    // 高画质=电脑 2560×1440 / 手机 800p（渲染宽），低画质=电脑 1080p / 手机 400p。
+    // 渲染坐标仍用 CSS 像素（setTransform 缩放）；dpr<1（如 4K 屏选低画质）→ 1080p 放大显示，属预期省电
+    const rw = Math.max(1, app.resizeW), rh = Math.max(1, app.resizeH);
+    const cap = app.quality && app.quality.low
+      ? (isTouch ? 400 / rw : Math.min(1920 / rw, 1080 / rh))   // 低：手机 400p / 电脑 1080p
+      : (isTouch ? 800 / rw : Math.min(2560 / rw, 1440 / rh));  // 高：手机 800p / 电脑 2560×1440
+    const dpr = Math.min(window.devicePixelRatio || 1, cap);
     app.dpr = dpr;
     canvas.width = Math.max(1, Math.round(app.resizeW * dpr));
     canvas.height = Math.max(1, Math.round(app.resizeH * dpr));
@@ -227,6 +234,17 @@
   } catch (e) { /* ignore */ }
   app.quality.low = app.quality.mode === 'low';
   if (ui.quality) ui.quality.value = app.quality.mode;
+
+  // ---------- 关闭环境观众（默认关闭；localStorage 记忆） ----------
+  const NO_CROWD_KEY = 'ppd_no_crowd';
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(NO_CROWD_KEY) : null;
+    if (v === '0' || v === '1') app.noCrowd = v === '1';
+  } catch (e) { /* ignore */ }
+  if (ui.setNoCrowd) {
+    ui.setNoCrowd.checked = app.noCrowd;
+    ui.setNoCrowd.disabled = app.quality.low; // 低画质观众恒关，勾选框置灰
+  }
 
   // ---------- 帧率上限（30/45/60/无上限，默认 60；localStorage 记忆） ----------
   const FRAME_RATE_KEY = 'ppd_frame_rate';
@@ -267,13 +285,21 @@
     try { localStorage.setItem(AI_NAMES_KEY, JSON.stringify(names)); } catch (e) { /* ignore */ }
   }
 
-  // 手动切换画质（高/低）：写回记忆 + 立即生效（低画质 → DPR=1 + 清观众席缓存）
+  // 手动切换画质（高/低）：写回记忆 + 立即生效（低画质 → 分辨率降档 + 清观众席缓存）
   function setQuality(mode) {
     app.quality.mode = mode === 'low' ? 'low' : 'high';
     app.quality.low = app.quality.mode === 'low';
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(QUALITY_KEY, app.quality.mode); } catch (e) { /* ignore */ }
     if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
+    if (PPD.ui.setNoCrowd) PPD.ui.setNoCrowd.disabled = app.quality.low; // 低画质观众恒关，勾选框置灰
     PPD.resize();
+  }
+
+  // 关闭环境观众（勾选框）：写回记忆 + 立即生效（清观众席缓存，避免旧缓存带观众）
+  function setNoCrowd(v) {
+    app.noCrowd = !!v;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(NO_CROWD_KEY, app.noCrowd ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
   }
 
   // 切换帧率上限（30/45/60/无上限）：渲染门控即时生效（物理仍 120Hz；无上限=每帧 RAF 都渲染）
@@ -348,7 +374,7 @@
     wsUrl, isLocalHost, isTouch,
     isHellUnlocked, unlockHell, syncHellOptions,
     isHellCleared, markHellCleared, syncHellOptions,
-    setQuality, setFrameRate,
+    setQuality, setFrameRate, setNoCrowd,
     getPlayerName, loadAINames, saveAINames,
     triggerCheer, updateMusicIntensity,
   };

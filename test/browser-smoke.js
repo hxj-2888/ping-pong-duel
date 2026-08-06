@@ -90,7 +90,7 @@ const ELEMENT_IDS = [
   'gameTools', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
-  'quality', 'frameRate', // 画质(高/低) + 帧率上限(30/45/60)
+  'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/45/60)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'recordsPanel', // 个人生涯小方框（records.js 渲染摘要，点击展开整页）
   'careerPanel', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', 'btnCareerBack', // 个人生涯单开页（分页）
@@ -256,19 +256,34 @@ async function main() {
     t.elements.get('btnSettingsClose').dispatch('click', {});
     check('设置面板关闭', t.elements.get('settingsPanel').style.display === 'none');
     // 画质：默认高；切低 → 生效标记 + 视图模型 low/虚线临时关闭（用户勾选不变）；帧率默认 60
-    check('画质默认高（DPR 上限 2）', t.app.quality.mode === 'high' && t.app.quality.low === false && t.app.dpr === 2);
+    check('画质默认高（DPR 封顶 2560×1440，窗口 1280×720 → dpr 2）', t.app.quality.mode === 'high' && t.app.quality.low === false && t.app.dpr === 2);
     check('帧率上限默认 60', t.app.quality.frameRate === 60);
     check('右上角帧数元素存在', !!t.elements.get('fpsMeter'));
+    // 关闭环境观众：默认勾选（关闭）+ 视图模型 noCrowd=true；取消勾选 → noCrowd=false
+    check('关闭环境观众默认勾选（app.noCrowd=true）', t.app.noCrowd === true && t.elements.get('setNoCrowd').checked === true);
+    const vmCrowdOn = t.ppd.viewModelFromEngine(t.app.engine, 0);
+    check('默认视图模型 noCrowd=true', vmCrowdOn.noCrowd === true);
+    t.elements.get('setNoCrowd').checked = false;
+    t.elements.get('setNoCrowd').dispatch('change', {});
+    t.runFrames(3);
+    check('取消勾选 → app.noCrowd=false 且视图模型 noCrowd=false', t.app.noCrowd === false &&
+      t.ppd.viewModelFromEngine(t.app.engine, 0).noCrowd === false);
+    t.elements.get('setNoCrowd').checked = true;
+    t.elements.get('setNoCrowd').dispatch('change', {});
+    t.runFrames(3);
+    check('重新勾选 → 恢复 noCrowd=true', t.app.noCrowd === true);
     t.elements.get('quality').value = 'low';
     t.elements.get('quality').dispatch('change', {});
     t.runFrames(3);
-    check('切低画质生效（low 标记 + DPR→1）', t.app.quality.low === true && t.app.dpr === 1);
+    check('切低画质生效（low 标记 + 分辨率降档 DPR→1.5（1080p 封顶））', t.app.quality.low === true && t.app.dpr === 1.5);
+    check('低画质下勾选框置灰', t.elements.get('setNoCrowd').disabled === true);
     const vmLow = t.ppd.viewModelFromEngine(t.app.engine, 0);
     check('低画质视图模型：low=true 且虚线临时关闭', vmLow.low === true && vmLow.showHitRanges === false);
     t.elements.get('quality').value = 'high';
     t.elements.get('quality').dispatch('change', {});
     t.runFrames(3);
     check('切回高画质恢复（low 清除 + DPR 回 2）', t.app.quality.low === false && t.app.quality.mode === 'high' && t.app.dpr === 2);
+    check('高画质下勾选框恢复可点', t.elements.get('setNoCrowd').disabled === false);
     t.elements.get('frameRate').value = '30';
     t.elements.get('frameRate').dispatch('change', {});
     t.runFrames(2);
