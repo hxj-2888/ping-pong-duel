@@ -1,0 +1,42 @@
+乒乓对决 · ECS 公网服务器部署说明
+====================================
+
+用途：把联机服务器部署到你的轻量 ECS（2核/2G/5Mbps 足够），
+      国内玩家直连 ECS，延迟从 Cloudflare 的 ~220ms 降到 ~20-80ms。
+
+一、准备（在你的 Windows 电脑上）
+  1. 双击运行 tools\打包部署ECS.cmd，会在 dist\ecs\ 生成部署包
+     （含 server.js、package.json、public\、部署到ECS.sh、本说明）。
+  2. 把 dist\ecs\ 整个文件夹上传到 ECS：
+       - 推荐：阿里云控制台 → 实例 → 远程连接 → 文件（或 scp/宝塔上传）
+       - scp 方式： scp -r dist\ecs\* root@ECS公网IP:/root/ppd/
+
+二、在 ECS 上执行
+  1. SSH 登录 ECS（root）：
+       ssh root@ECS公网IP
+  2. 进入目录并运行部署脚本（自动装 Node、放行防火墙、注册开机自启服务）：
+       cd /root/ppd
+       bash 部署到ECS.sh
+  3. 到「阿里云控制台 → 本实例 → 安全组」→ 添加入方向规则：
+       协议 TCP，端口 8765，授权对象 0.0.0.0/0（所有人可连）
+
+三、验证
+  - 本机： curl -s http://127.0.0.1:8765/api/info   （返回 ok 与 IP 列表）
+  - 外部： 手机/电脑浏览器打开  http://ECS公网IP:8765
+           → 主菜单「创建联机房间」/「加入房间」（4 位房间码）即可对战
+
+四、客户端怎么连（重要）
+  - 玩家直接打开 http://ECS公网IP:8765 玩：页面和联机都在 ECS 上，
+    零配置，双方输房间码即开打（延迟最低）。
+  - 桌面版/安装包用户：打开设置 ⚙ →「公网联机服务器地址」填
+        ws://ECS公网IP:8765
+    然后主菜单「联机:本地/公网」切到「联机:公网」，建房/加入即可。
+  - 网页版（ping-pong-duel.pages.dev）因浏览器 https 混合内容限制
+    无法直连 ECS 的 ws://，请让玩家直接打开 http://ECS公网IP:8765。
+
+五、常见问题
+  - 外部连不上：99% 是安全组没放行 8765（控制台操作），或系统防火墙。
+  - 想换端口：编辑 /etc/systemd/system/pingpong-duel.service 的
+    Environment=PORT=8765 后 systemctl restart pingpong-duel，并同步放行新端口。
+  - 换域名/HTTPS：把域名解析到 ECS，用 nginx + certbot 反代 8765（可后续加）。
+  - 5Mbps 带宽：每场对局约 0.2Mbps，可支撑 ~20 场同时在线，够用。

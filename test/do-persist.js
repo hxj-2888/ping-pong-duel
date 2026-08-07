@@ -74,7 +74,9 @@ const data2 = JSON.parse(JSON.stringify(coreD.serialize()));
 const coreE = new RoomCore();
 coreE.restore(data2);
 coreE.handleClose(wsG2, wsG2._att || {}); // 恢复后 guests 连接断开（clients 里是 null，靠 att.side）
-check('恢复后断线按 att.side 清席位', coreE.rooms.get(code3) && coreE.rooms.get(code3).slots[1] === false);
+// 当前设计为"重连宽限期"：断线只摘除连接、席位保留（待 sweepStale 到期释放，见 do-alarm）
+check('恢复后断线按 att.side 摘除连接', coreE.rooms.get(code3) && coreE.rooms.get(code3).clients[1] === null);
+check('断线进入宽限期：guest 席位保留', coreE.rooms.get(code3) && coreE.rooms.get(code3).slots[1] === true);
 check('房主席位保留（房间未误删）', coreE.rooms.get(code3) && coreE.rooms.get(code3).slots[0] === true);
 // 房主随后发消息重挂，还能继续
 feed(coreE, wsH2, { t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });

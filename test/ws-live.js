@@ -75,17 +75,21 @@ async function main() {
   const snapB = await B.next('state');
   check('P1 向左移动（x<0）', snapB.s.p[1].x < -0.05);
 
-  // 4. 发球（先回中：台边站位解不出合法发球，与真实游戏一致——发球前须站回可发球位置）
-  for (let i = 0; i < 25; i++) {
+  // 4. 发球（先回中：台边站位解不出合法发球，与真实游戏一致——发球前须站回可发球位置）。
+  // 消息驱动下移动距离随公网延迟波动：用状态快照确认玩家回到台面中路（|x| 足够小）再发球
+  let cur = await A.next('state');
+  for (let i = 0; i < 40 && Math.abs(cur.s.p[0].x) > 0.10; i++) {
     A.send({ t: 'in', i: { l: 1, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
     await new Promise((r) => setTimeout(r, 25));
+    cur = await A.next('state');
   }
   A.send({ t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 1, sm: 0 } });
   await new Promise((r) => setTimeout(r, 30));
   A.send({ t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
   // 消息驱动 tick：无消息引擎不步进，需持续发中性输入推进发球动画
+  // 公网延迟波动下放宽窗口（10Hz 广播 + 消息驱动推进），最多等 ~6s
   let servePh = -1;
-  for (let i = 0; i < 80 && servePh !== 1; i++) {
+  for (let i = 0; i < 120 && servePh !== 1; i++) {
     A.send({ t: 'in', i: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0 } });
     await new Promise((r) => setTimeout(r, 50));
     const s = await A.next('state');
@@ -98,9 +102,13 @@ async function main() {
   const pong = await A.next('pong', 5000);
   check('ping 返回 pong', typeof pong.st === 'number');
 
-  // 6. 断线通知
+  // 6. 断线通知（服务端断线宽限期 15s：宽限到期才释放席位并通知对手 peer_left）
+  // 等待期间 A 持续发心跳（与真实客户端 net.js 5s 心跳一致）——否则 A 静默 15s 会被
+  // "静默存活连接主动关闭"误杀，收不到 peer_left
   B.ws.close();
-  const left = await A.next('peer_left', 8000);
+  const hb = setInterval(() => { A.send({ t: 'ping' }); }, 4000);
+  const left = await A.next('peer_left', 25000);
+  clearInterval(hb);
   check('房主收到 peer_left（side=1）', left.side === 1);
 
   console.log(failures === 0 ? '\n公网协议冒烟全部通过 ✓' : `\n${failures} 项失败 ✗`);

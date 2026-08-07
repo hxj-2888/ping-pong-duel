@@ -239,7 +239,7 @@ const DT = 1 / 120;
     return null;
   };
   const e = TT.createEngine();
-  let smashIn = 0, returned = 0, pending = false, injected = 0, lastInject = -240;
+  let smashIn = 0, returned = 0, pending = false, injected = 0, lastInject = -240, counterFlagged = 0;
   for (let i = 0; i < 120 * 600; i++) {
     // 脚本化玩家(side0)防守
     const p0 = e.players[0], b = e.ball;
@@ -260,7 +260,7 @@ const DT = 1 / 120;
     AIC.control(e, 1, DT, 2);
     const before = e.rallyCount;
     TT.step(e, DT);
-    if (pending && e.rallyCount > before && e.ball.hitBy === 0) { returned++; pending = false; }
+    if (pending && e.rallyCount > before && e.ball.hitBy === 0) { returned++; counterFlagged += e.ball.counterSmash === 1 ? 1 : 0; pending = false; }
     if (pending && e.phase !== 'play') pending = false;
     const p1 = e.players[1];
     if (e.phase === 'play' && !e.ball.inHand && injected < 14 && i - lastInject > 240 &&
@@ -276,6 +276,59 @@ const DT = 1 / 120;
     if (e.phase === 'over') break;
   }
   check(`玩家反击扣杀可解（困难AI扣杀${smashIn}次玩家接住${returned}次）`, smashIn >= 5 && returned >= 1);
+  // 操作奖励：人类推球反击 AI 扣杀的回球标记 counterSmash（视为扣杀、AI 应对概率减半）
+  check(`反击扣杀回球标记 counterSmash（${counterFlagged}/${returned} 次）`, returned >= 1 && counterFlagged >= 1);
+}
+
+// ---------- 8b. 反击低平快球奖励（更高档）：视为扣杀 + 更高球速 + 刁钻落位 ----------
+{
+  const R = TT.RULES;
+  const e = TT.createEngine();
+  const oppX = 0.4; // 对手站在右侧（x>0）
+  e.players[1].x = oppX;
+  // 模拟人类（side0，非 AI）蹲下推球反击一颗低平快球（hitType 3）
+  const p0 = e.players[0];
+  p0.x = 0; p0.padX = 0; p0.z = -1.65; p0.vx = 0; p0.vz = 0; p0.crouch = 1;
+  e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [true, false];
+  e.ball.inHand = false;
+  e.ball.pos = { x: 0, y: 1.05, z: -1.2 };
+  e.ball.vel = { x: 0, y: 0, z: 3.0 };
+  e.ball.spin = { x: 0, y: 0, z: 0 };
+  e.ball.hitType = 3; e.ball.counterSmash = 0; // 来球=低平快球
+  e.ball.hitBy = 1; e.ball.lastBounce = 1;
+  const before = e.rallyCount;
+  let n = 0;
+  while (e.phase === 'play' && e.rallyCount === before && n < 120) {
+    TT.setInput(e, 0, { pu: 1, crouch: 1 });
+    TT.step(e, 1 / 120);
+    n++;
+  }
+  const hit = e.rallyCount > before && e.ball.hitBy === 0;
+  const spd = Math.hypot(e.ball.vel.x, e.ball.vel.y, e.ball.vel.z);
+  check('反击低平快球：回球标记 counterSmash（视为扣杀）', hit && e.ball.counterSmash === 1);
+  check('反击低平快球：回球速度明显高于普通推球（更高球速）', hit && spd > 5.5);
+  check('反击低平快球：回球打向对手反方向边角（刁钻落位）', hit && Math.sign(e.ball.vel.x) === -Math.sign(oppX));
+  // 对照：普通推球回球（来球非扣杀/低平）不应触发奖励
+  const e2 = TT.createEngine();
+  const p2 = e2.players[0];
+  p2.x = 0; p2.padX = 0; p2.z = -1.65; p2.vx = 0; p2.vz = 0;
+  e2.players[1].x = oppX;
+  e2.phase = 'play'; e2.serveStage = 'rally'; e2.mayHit = [true, false];
+  e2.ball.inHand = false;
+  e2.ball.pos = { x: 0, y: 1.05, z: -1.2 };
+  e2.ball.vel = { x: 0, y: 0, z: 3.0 };
+  e2.ball.spin = { x: 0, y: 0, z: 0 };
+  e2.ball.hitType = 1; e2.ball.counterSmash = 0; // 普通来球
+  e2.ball.hitBy = 1; e2.ball.lastBounce = 1;
+  const before2 = e2.rallyCount;
+  let m = 0;
+  while (e2.phase === 'play' && e2.rallyCount === before2 && m < 120) {
+    TT.setInput(e2, 0, { pu: 1 });
+    TT.step(e2, 1 / 120);
+    m++;
+  }
+  const hit2 = e2.rallyCount > before2 && e2.ball.hitBy === 0;
+  check('普通推球回球：不触发反击奖励（counterSmash=0）', hit2 && e2.ball.counterSmash === 0);
 }
 
 // ---------- 6. AI 与玩家条件同步（蹲下/跑步/前后移动/同一碰撞箱） ----------

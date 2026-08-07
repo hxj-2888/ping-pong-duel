@@ -276,13 +276,17 @@
     // 防守式轻挡（defensiveChip，仅推球无解时的扣杀来球兜底）：减力 + 高弧线 + 落点略深
     const chip = !!(opts && opts.defensiveChip) && type === 1;
     const tz = type === 2 ? f * 1.18 : type === 3 ? f * 1.20 : f * (chip ? 0.75 : 0.55);
-    // 落点 x：默认对准对手站位；人机"刁钻方向射球"通过 p.aimBias 打向对方反方向/边角
-    const tx = ctx.clamp(opp.x * 0.85 + (b.pos.x - p.x) * 0.25 + (p.aimBias || 0), -0.72, 0.72);
+    // 反击低平快球奖励（更高档）：更高球速 + 刁钻落位（打向对方站位反方向的边角），
+    // 配合 strokes.js 的 counterSmash（视为扣杀、AI 应对概率减半）
+    const fastCounter = type === 1 && p.counterLowBonus;
+    // 落点 x：默认对准对手站位；人机"刁钻方向射球"通过 p.aimBias 打向对方反方向/边角；
+    // 反击低平快球再叠加 0.55m 边角偏置，落点更贴边、更难够到
+    const tx = ctx.clamp(opp.x * 0.85 + (b.pos.x - p.x) * 0.25 + (p.aimBias || 0) + (fastCounter ? (opp.x >= 0 ? -0.55 : 0.55) : 0), -0.72, 0.72);
     const target = ctx.vec(tx, ctx.RULES.TABLE_HEIGHT + ctx.RULES.BALL_RADIUS, tz);
-    const padSpeed = type === 2 ? (soft ? 8.0 : 10.4) : type === 3 ? 7.5 : (chip ? 2.0 : 2.8); // 扣球更快（减力扣球稍慢）、低平快球快而平的抽击、轻挡更慢更稳
+    const padSpeed = type === 2 ? (soft ? 8.0 : 10.4) : type === 3 ? 7.5 : fastCounter ? 5.2 : (chip ? 2.0 : 2.8); // 扣球更快（减力扣球稍慢）、低平快球快而平的抽击、反击低平快球更快、轻挡更慢更稳
     const e = type === 1 ? 0.20 : type === 3 ? 0.50 : 0.85;
     const outSpeed = (1 + e) * padSpeed + e * ctx.vlen(b.vel);
-    const spin = ctx.vec(type === 1 ? -f * 34 : type === 3 ? f * 50 : (soft ? f * 80 : f * 120), 0, 0); // 扣球强上旋下坠（减力扣球略弱）、低平快球中等上旋
+    let spin = ctx.vec(type === 1 ? (fastCounter ? f * 55 : -f * 34) : type === 3 ? f * 50 : (soft ? f * 80 : f * 120), 0, 0); // 扣球强上旋下坠（减力扣球略弱）、低平快球中等上旋、反击低平快球带上旋快抽
     // 推球：按击球高度留净空（网顶上方约 1.2~5.5cm），弧线抬高、干净过网；
     // 扣球：贴网下压更狠（净空 0.6~8cm）+ 更快 + 强上旋——更容易造成低球/快球；
     // 低平快球：贴网平击（净空 0.8~5cm），过网后略下坠、落地深而低
@@ -305,6 +309,14 @@
     // 高吊解不出合法轨迹（低球救球等球况）时退回普通蹲防弧线，保证命中不落空
     if (!vel && isLob) {
       vel = solveRally(b.pos, target, outSpeed * defSpeed, spin, minClear, maxClear, defensive, false);
+    }
+    // 反击低平快球奖励：更高球速+边角落点解不出合法轨迹时，回退普通推球（保证反击不挥空）
+    if (!vel && fastCounter) {
+      const normalTx = ctx.clamp(opp.x * 0.85 + (b.pos.x - p.x) * 0.25 + (p.aimBias || 0), -0.72, 0.72);
+      const normalOut = (1 + 0.20) * 2.8 + 0.20 * ctx.vlen(b.vel);
+      spin = ctx.vec(-f * 34, 0, 0);
+      vel = solveRally(b.pos, ctx.vec(normalTx, ctx.RULES.TABLE_HEIGHT + ctx.RULES.BALL_RADIUS, tz),
+        normalOut * (defensive ? defSpeed : 1.05), spin, minClear, maxClear, defensive || chip, false);
     }
     // 解不出合法轨迹时的处理：
     //   低平快球 → 高吊推球（degraded 标记"非完整击球"）；

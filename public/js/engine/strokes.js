@@ -51,11 +51,14 @@
   function applyPaddleHit(state, pi) {
     const p = state.players[pi], b = state.ball, st = p.stroke;
     if (st.validVel) {
+      const inCounter = b.hitType === 2 || b.hitType === 3; // 来球是扣杀或低平快球（反击奖励判定用）
       // 采用求解器验证过的精确出球（方向+速度+旋转均一致）
       b.vel = { ...st.validVel };
       b.spin = { ...st.validSpin };
       b.hitBy = pi;
       b.hitType = st.type;
+      // 操作奖励：人类（非 AI）以推球回击扣杀/低平快球成功 → 该回球视为扣杀（AI 应对概率减半，见 ai.js）
+      b.counterSmash = (inCounter && st.type !== 2 && !state.players[pi].isAI) ? 1 : 0;
       b.lastBounce = pi;
       b.netTouched = false;
       state.mayHit = [false, false];
@@ -93,8 +96,11 @@
     const targetSpin = st.type === 1 ? -f * 34 : f * 95;
     b.spin.x = ctx.lerp(b.spin.x, targetSpin, 0.88);
     b.spin.y = 0; b.spin.z = 0;
+    const inCounter = b.hitType === 2 || b.hitType === 3; // 来球是扣杀或低平快球（反击奖励判定用）
     b.hitBy = pi;
     b.hitType = st.type;
+    // 操作奖励：人类（非 AI）以推球回击扣杀/低平快球成功 → 该回球视为扣杀（AI 应对概率减半，见 ai.js）
+    b.counterSmash = (inCounter && st.type !== 2 && !state.players[pi].isAI) ? 1 : 0;
     b.lastBounce = pi;
     b.netTouched = false;
     state.mayHit = [false, false];
@@ -143,6 +149,7 @@
     b.inHand = false;
     b.hitBy = pi;
     b.hitType = -1; // 发球不算扣杀
+    b.counterSmash = 0; // 发球不是反击扣杀回球
     b.lastBounce = -1;
     b.netTouched = false;
     state.phase = 'play';
@@ -179,10 +186,10 @@
                st.windup > 0 && st.t <= st.windup + st.live &&
                // 扣杀(type2)判箱从挥拍开始(t=0)即生效：球已入箱就按入箱瞬间的高度击球——
                // 避免 0.08s 起拍延迟把高空球压到过低位置(仅高于网顶 1.75cm 时解不出高速扣球而被迫降级成推球)；
-               // 反击扣杀(来球 hitType===2)：同样从 t=0 起判箱（命中窗 [0, 0.28]s）——
+               // 反击扣杀/反击低平快球(来球 hitType 2/3)：同样从 t=0 起判箱（免起拍延迟命中窗 [0, 0.28]s）——
                // 快球接触窗极短(10~15m/s 过箱仅 0.04~0.1s)，起拍延迟会让"反应式按压/弹台后按"错过命中窗
-               // (否则必须提前 0.15~0.2s 预判起拍)；普通推球/低平保留起拍延迟(挥拍蓄力动画 + 时机感)
-               (st.type === 2 || state.ball.hitType === 2 || st.t >= st.windup)) {
+               // (否则必须提前 0.15~0.2s 预判起拍)；普通来球保留起拍延迟(挥拍蓄力动画 + 时机感)
+               (st.type === 2 || state.ball.hitType === 2 || state.ball.hitType === 3 || st.t >= st.windup)) {
       const b = state.ball;
       st.box.x = p.x;
       st.box.z = p.z + p.facing * 0.42;
@@ -192,6 +199,9 @@
         Math.abs(b.pos.z - st.box.z) < st.box.hz &&
         b.pos.y > st.box.yBottom && b.pos.y < st.box.yTop;
       if (inBox && state.mayHit[pi]) {
+        // 反击低平快球奖励（更高档）：人类（非 AI）以推球接回低平快球（hitType 3）→
+        // 该回球更高球速 + 刁钻落位（见 shots.js computeShot fastCounter）；每次击球前设置、求解后清除
+        p.counterLowBonus = (state.ball.hitType === 3 && st.type === 1 && !p.isAI) ? 1 : 0;
         // 球拍自动伸向球（仅作击球动画，不再是命中门槛）
         const reach = ctx.vadd(b.pos, ctx.vscale(st.n, 0.04));
         const k = 1 - Math.exp(-40 * dt);
@@ -199,6 +209,7 @@
         st.end = reach;
         st.start = { ...p.paddle.p }; // 锚点跟随，避免插值把球拍拉回原挥拍路线
         const shot = ctx.computeShot(state, pi, st.type);
+        p.counterLowBonus = 0;
         if (shot) {
           // 击球瞬间球拍真实触球：拍面落到球上（略越过球），而不是隔空挥空
           p.paddle.p = reach;

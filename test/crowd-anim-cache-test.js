@@ -25,18 +25,26 @@ function check(name, cond) {
 // getTransform 让 drawPerson 的屏幕外剔除走真实坐标换算路径（修复：动画层不再误剔右/下半屏观众）
 function makeCountingCtx(canvas, scale) {
   const counters = { arc: 0, blit: 0 };
+  // 记录当前变换矩阵（setTransform 写入、getTransform 读出，与真实 canvas 一致）
+  let tx = { a: scale || 1, d: scale || 1, e: 0, f: 0 };
   const ctx = {
     canvas,
     counters,
-    getTransform() { return { a: scale || 1, d: scale || 1, e: 0, f: 0 }; },
-    setTransform() {}, clearRect() {},
+    setTransformArgs: [],   // 记录 setTransform(a,b,c,d,e,f)（断言分屏右半 -vx 平移）
+    drawImageArgs: [],      // 记录 drawImage(源, dstX, dstY, dstW, dstH)（断言 blit 到视口位置）
+    getTransform() { return { a: tx.a, d: tx.d, e: tx.e, f: tx.f }; },
+    setTransform(a, b, c, d, e, f) {
+      tx = { a: a, d: d, e: e || 0, f: f || 0 };
+      ctx.setTransformArgs.push([a, b, c, d, e || 0, f || 0]);
+    },
+    clearRect() {},
     createLinearGradient() { return { addColorStop() {} }; },
     createRadialGradient() { return { addColorStop() {} }; },
     fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
     fill() {}, stroke() {},
     arc() { counters.arc++; },
     ellipse() {},
-    drawImage() { counters.blit++; },
+    drawImage() { counters.blit++; ctx.drawImageArgs.push(Array.prototype.slice.call(arguments)); },
     setLineDash() {},
   };
   return ctx;
@@ -65,6 +73,10 @@ function resetAll() {
   animCtx.counters.arc = 0; animCtx.counters.blit = 0;
   static2Ctx.counters.arc = 0; static2Ctx.counters.blit = 0;
   anim2Ctx.counters.arc = 0; anim2Ctx.counters.blit = 0;
+  staticCtx.setTransformArgs = []; staticCtx.drawImageArgs = [];
+  animCtx.setTransformArgs = []; animCtx.drawImageArgs = [];
+  static2Ctx.setTransformArgs = []; static2Ctx.drawImageArgs = [];
+  anim2Ctx.setTransformArgs = []; anim2Ctx.drawImageArgs = [];
   TTG.clearCrowdCache();
 }
 const sArc = () => staticCtx.counters.arc; // 静态层全量重绘数（≈观众数×次数）
@@ -165,8 +177,28 @@ TTG.drawFloor(staticCtx, cam, VW, VH, 3 / 60, 0, null, false);  // 回到 viewSi
 TTG.drawFloor(static2Ctx, cam, VW, VH, 4 / 60, 1, null, false); // 回到 viewSide 1 → 已缓存，不重建
 check('分屏：viewSide 0 首帧重建（全量观众入静态层）', staticCtx.counters.arc === statLen);
 check('分屏：viewSide 1 首帧各自重建', static2Ctx.counters.arc === statLen);
-check('分屏：回到 viewSide 0 不重建（缓存保持）', staticCtx.counters.arc === statLen);
-check('分屏：回到 viewSide 1 不重建（缓存保持）', static2Ctx.counters.arc === statLen);
+	check('分屏：回到 viewSide 0 不重建（缓存保持）', staticCtx.counters.arc === statLen);
+	check('分屏：回到 viewSide 1 不重建（缓存保持）', static2Ctx.counters.arc === statLen);
+
+	// ---------- 5c. 分屏右半视口坐标回归：side1 相机投影为**绝对屏幕坐标**（cx=half+half/2），
+	// 离屏缓存是视口本地坐标 → 必须平移 -vx 画入、blit 到视口位置，否则右半屏整片空白 ----------
+	resetAll();
+	// 先画 viewSide 0（整屏相机）占用 createElement 1/2，保证 viewSide 1 用 3/4（static2Ctx/anim2Ctx）
+	const fullCam = new TTG.Camera();
+	fullCam.set(TTG.v3(0, 4.8, -5.2), TTG.v3(0, 1.7, 0), VW / 2, VH / 2, VW * 0.9);
+	TTG.drawFloor(staticCtx, fullCam, VW, VH, 1 / 60, 0, null, false);
+	const halfW = Math.floor(VW / 2); // 640
+	const rightCam = new TTG.Camera();
+	rightCam.set(TTG.v3(0, 4.8, -5.2), TTG.v3(0, 1.7, 0), halfW + halfW / 2, VH / 2, halfW * 0.9); // cx=960 → vx=640
+	// 无观众（low）路径：floor 缓存平移 + blit 到位
+	TTG.drawFloor(static2Ctx, rightCam, halfW, VH, 2 / 60, 1, null, true);
+	check('分屏右半：floor 缓存 setTransform 平移 -vx',
+	  static2Ctx.setTransformArgs.length > 0 && static2Ctx.setTransformArgs[static2Ctx.setTransformArgs.length - 1][4] === -halfW * 2);
+	check('分屏右半：floor 缓存 blit 到视口 x', static2Ctx.drawImageArgs.length > 0 && static2Ctx.drawImageArgs[0][1] === halfW);
+	// 观众路径：右半视口观众不被屏外剔除（arc>0）+ blit 到位
+	TTG.drawFloor(static2Ctx, rightCam, halfW, VH, 3 / 60, 1, null, false);
+	check('分屏右半：观众路径重建且不剔除（arc>0）', static2Ctx.counters.arc > 0);
+	check('分屏右半：观众路径 blit 到视口 x', static2Ctx.drawImageArgs.length >= 2 && static2Ctx.drawImageArgs[1][1] === halfW);
 
 // ---------- 6. 低画质：无观众，但地板+围挡走静态层缓存（首帧烘焙、每帧 1 blit） ----------
 resetAll();

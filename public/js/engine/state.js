@@ -39,6 +39,8 @@
       aimBias: 0,          // 回球目标 x 偏移（刁钻方向射球，人机按技巧概率设定；±0.72 内）
       run: 0,              // 跑步（Shift）：速度变快
       swingBack: 0,
+      counterLowBonus: 0,  // 反击低平快球奖励：本次击球是否按"更高球速+刁钻落位"求解（击球前设置、求解后清除）
+      isAI: 0,             // 是否 AI 控制（AI 控制时反击奖励不触发，见 ai.js control / strokes.js）
     };
   }
 
