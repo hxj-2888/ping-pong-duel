@@ -193,12 +193,16 @@
     const clampV = (v, a, b) => (v < a ? a : v > b ? b : v);
     if (mulKey === 'reactMul') return `延迟 ${(L.react / mul).toFixed(2)}s`;
     if (mulKey === 'catchMul') {
-      // 人机地狱默认 ×0.97 接球率（观战保留 1.0），与 loop.js 传给 control 的 hellCatchMul 一致
-      const hellMul = (PPD.app.mode === 'ai' && level === 3) ? 0.97 : 1;
+      // 人机地狱默认接球率 ×1.0（与 loop.js 传的 hellCatchMul:1 一致：永不刻意漏球）
+      const hellMul = (PPD.app.mode === 'ai' && level === 3) ? 1.0 : 1;
       const cp = clampV(L.catchProb * hellMul * mul, 0.20, 1.0);
       const miss = cp >= 1 ? '永不漏球' : `每 ${Math.max(2, Math.round(1 / (1 - cp)))} 球漏 1`;
-      const sd = clampV((L.smashDef || 0) * mul, 0, 1);
-      return `接球率 ${Math.round(cp * 100)}%（${miss}）` + (L.smashDef > 0 ? `· 防扣 ${Math.round(sd * 100)}%` : '');
+      // 防扣显示"实测有效反击率"：裸概率 × 每档实测定标系数（README:45 探针：
+      // 困难 55%→~50%、地狱 95%→~80%，位置门±0.35m + 高度/时序损耗所致）
+      const DEF_EFF = { 2: 0.91, 3: 0.84 };
+      const gate = DEF_EFF[level] || 1;
+      const sd = clampV((L.smashDef || 0) * mul, 0, 1) * gate;
+      return `接球率 ${Math.round(cp * 100)}%（${miss}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
     }
     if (mulKey === 'smashMul') {
       const over = Math.max(0, mul - 1);
@@ -209,9 +213,13 @@
     }
     if (mulKey === 'agilityMul') {
       const over = Math.max(0, mul - 1);
-      const ag = clampV(L.agility * mul, 0, 1);
-      if (L.agility >= 1) return `移动 100%${over > 0 ? '（溢出→站位更准）' : ''}`;
-      return `移动 ${Math.round(ag * 100)}%`;
+      const under = Math.max(0, 1 - mul);
+      // 与 ai.js 同公式：基础 × 倍率（夹取）+ <1 惩罚占空比折扣；按实际值显示
+      // （修复困难/地狱拉低滑杆仍显示"移动 100%"的 bug）
+      const eff = clampV(L.agility * mul * (1 - under * 0.5), 0, 1);
+      let txt = eff >= 1 ? `移动 100%${over > 0 ? '（溢出→站位更准）' : ''}` : `移动 ${Math.round(eff * 100)}%`;
+      if (under > 0) txt += '（减速惩罚）';
+      return txt;
     }
     return '';
   }
