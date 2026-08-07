@@ -1,5 +1,7 @@
 # Cloudflare Pages 自定义响应头：APK 强制以附件下载并给出 ASCII 文件名，
 # 避免下载管理器/微信浏览器把中文文件名搞坏导致"无效安装包"
+/PingPongDuel-v150.apk
+  Content-Disposition: attachment; filename="PingPongDuel.apk"
 /PingPongDuel.apk
   Content-Disposition: attachment; filename="PingPongDuel.apk"
 /乒乓对决.apk
