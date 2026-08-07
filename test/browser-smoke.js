@@ -49,6 +49,11 @@ function makeElement(id) {
       add(c) { classes.add(c); },
       remove(c) { classes.delete(c); },
       contains(c) { return classes.has(c); },
+      toggle(c, force) {
+        const want = force === undefined ? !classes.has(c) : !!force;
+        if (want) classes.add(c); else classes.delete(c);
+        return want;
+      },
     },
     addEventListener(type, fn) { (handlers[type] = handlers[type] || []).push(fn); },
     dispatch(type, ev) { for (const fn of handlers[type] || []) fn(ev); },
@@ -83,10 +88,12 @@ const ELEMENT_IDS = [
   'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot', 'tips',
+  'hrSmashRow', 'hrLobRow', 'smashStatus', 'lobStatus',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch', 'btnSmash',
+  'p2Controls', 'joyBase2', 'joyKnob2', 'btnCrouch2', 'btnSmash2', // 分屏副屏玩家（P2）触控组：摇杆+扣+蹲
   'gameTools', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
@@ -134,11 +141,25 @@ function boot(opts) {
     static get OPEN() { return 1; }
   }
 
+  const proto = opts.protocol || 'http:';
+  const isFileProto = proto === 'file:';
+  const loc = { protocol: proto, host: isFileProto ? '' : '127.0.0.1:8781', search: opts.search || '' };
+  if (isFileProto) loc.hostname = ''; // file:// 无主机（模拟安卓 APK 页面）
+  // localStorage 内存桩（每次 boot 全新；未配置时与浏览器一致取默认值）
+  const store = new Map();
+  const localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => { store.set(k, String(v)); },
+    removeItem: (k) => { store.delete(k); },
+    clear: () => { store.clear(); },
+  };
+
   const sandbox = {
     console, setTimeout, clearTimeout, setInterval, clearInterval,
     performance: perf,
-    location: { protocol: 'http:', host: '127.0.0.1:8781', search: opts.search || '' },
-    document: { getElementById: (id) => elements.get(id) },
+    location: loc,
+    localStorage,
+    document: { getElementById: (id) => elements.get(id), querySelectorAll: () => [] },
     navigator: { userAgent: 'smoke', maxTouchPoints: opts.touch ? 5 : 0 },
     matchMedia: opts.matchMedia ? opts.matchMedia : (opts.touch ? () => ({ matches: true }) : undefined),
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
@@ -169,6 +190,7 @@ function boot(opts) {
     rafQueue,
     sentMessages,
     get fakeWS() { return fakeWS; },
+    get localStorage() { return localStorage; },
     get app() { return sandbox.__PPD.app; },
     get ppd() { return sandbox.__PPD; },
     runFrames(n, stepMs = 16.67) {
@@ -190,6 +212,18 @@ function boot(opts) {
     tapTouch(x, y) {
       const ev = { pointerType: 'touch', button: 0, clientX: x, clientY: y, preventDefault() {} };
       elements.get('game').dispatch('pointerdown', ev);
+    },
+    tapTouchRelease(x, y, pointerId = 22) {
+      const ev = { pointerId, pointerType: 'touch', button: 0, clientX: x, clientY: y, preventDefault() {} };
+      elements.get('game').dispatch('pointerdown', ev);
+      elements.get('game').dispatch('pointerup', ev);
+    },
+    // 上滑扣球（触屏）：按下后在原地抬起上方 dy 像素（抬手判定 上滑=扣球）
+    swipeUp(x, y, dy = 60, pointerId = 21) {
+      const down = { pointerId, pointerType: 'touch', button: 0, clientX: x, clientY: y, preventDefault() {} };
+      const up = { pointerId, pointerType: 'touch', button: 0, clientX: x, clientY: y - dy, preventDefault() {} };
+      elements.get('game').dispatch('pointerdown', down);
+      elements.get('game').dispatch('pointerup', up);
     },
     tapRight(x, y) {
       const ev = { pointerType: 'mouse', button: 2, clientX: x, clientY: y, preventDefault() {} };
@@ -234,7 +268,7 @@ async function main() {
     t.click('btnLocal');
     check('本地模式已启动', t.app.mode === 'local' && !!t.app.engine);
     check('左上角显示接球箱尺寸', t.elements.get('hitBallVal').textContent === `${(TT.RULES.HITBOX_HX * 2).toFixed(1)}×${(TT.RULES.HITBOX_HZ * 2).toFixed(1)}×${(TT.RULES.HITBOX_Y_TOP - TT.RULES.HITBOX_Y_BOTTOM).toFixed(1)}m`);
-    check('左上角显示蹲下最低接球', t.elements.get('hitPaddleVal').textContent === `低至 ${TT.RULES.CROUCH_HITBOX_Y_BOTTOM}m`);
+    check('虚线面板不再显示蹲下最低接球（说明已移入玩法说明）', t.elements.get('hitPaddleVal').textContent === '');
     check('判定范围虚线默认关闭', t.app.showHitRanges === false);
     t.runFrames(3);
     check('默认关闭：左上角判定面板隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
@@ -268,6 +302,9 @@ async function main() {
     t.runFrames(3);
     check('取消勾选 → app.noCrowd=false 且视图模型 noCrowd=false', t.app.noCrowd === false &&
       t.ppd.viewModelFromEngine(t.app.engine, 0).noCrowd === false);
+    // 开启环境观众后本地分屏渲染：两端 viewSide 0/1 均走 drawCrowd(teamFixed=true) 路径，无异常
+    t.runFrames(10);
+    check('开启环境观众：分屏两端渲染无异常', true);
     t.elements.get('setNoCrowd').checked = true;
     t.elements.get('setNoCrowd').dispatch('change', {});
     t.runFrames(3);
@@ -372,10 +409,57 @@ async function main() {
       e.ball.spin = { x: 0, y: 0, z: 0 };
       e.ball.hitBy = 1; e.ball.lastBounce = 1;
       t.runFrames(2);
-      t.elements.get('btnSmash').dispatch('pointerdown', { preventDefault() {} });
+      t.swipeUp(300, 360, 60); // 上滑扣球（替代原「扣」按钮）
       t.runFrames(3);
-      check('扣球按钮：P1 进入扣球挥拍', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 2);
-      t.elements.get('btnSmash').dispatch('pointerup', { preventDefault() {} });
+      check('上滑扣球：P1 进入扣球挥拍', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 2);
+    }
+    // 触屏单击（抬手）= 推球（上滑=扣球、单击=推球的抬手判定）
+    {
+      const e = t.app.engine;
+      TT.resetMatch(e);
+      e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [true, false];
+      e.ball.inHand = false;
+      e.ball.pos = { x: 0, y: 1.20, z: -1.55 };
+      e.ball.vel = { x: 0, y: 0.4, z: 3.0 };
+      e.ball.spin = { x: 0, y: 0, z: 0 };
+      e.ball.hitBy = 1; e.ball.lastBounce = 1;
+      t.runFrames(2);
+      t.tapTouchRelease(300, 360); // 单击抬手 → 推球
+      t.runFrames(3);
+      check('触屏单击抬手：P1 推球挥拍', t.app.engine.players[0].stroke.active && t.app.engine.players[0].stroke.type === 1);
+    }
+    await sleep(100); // 等 fireShot 的 70ms 清除定时器过期，避免污染后续直接写 keyP1 的用例
+
+    // P2（副屏玩家）触控：摇杆 + 蹲 + 扣，功能与 P1 一致（本地分屏右半屏，走 keyP2/engine players[1]）
+    t.app.engine.players[1].x = 0;
+    t.app.engine.players[1].vx = 0;
+    t.app.engine.players[1].padX = 0;
+    t.elements.get('joyBase2').dispatch('pointerdown', { pointerId: 8, pointerType: 'touch', clientX: 210, clientY: 566, preventDefault() {} });
+    t.runFrames(30);
+    check('P2 摇杆右推：P2 向右移动', t.app.engine.players[1].x > 0.2);
+    t.elements.get('joyBase2').dispatch('pointerup', { pointerId: 8, preventDefault() {} });
+    t.runFrames(20);
+    // P2 蹲下按钮（与 P1 蹲下按钮同一套逻辑，写 keyP2.crouch）
+    t.elements.get('btnCrouch2').dispatch('pointerdown', { preventDefault() {} });
+    t.runFrames(2);
+    check('P2 蹲下按钮：P2 蹲下生效', t.app.engine.players[1].crouch === 1);
+    t.elements.get('btnCrouch2').dispatch('pointerup', { preventDefault() {} });
+    t.runFrames(24);
+    check('P2 松开蹲下按钮：恢复站立（转换延迟后）', t.app.engine.players[1].crouch === 0);
+    // P2 扣球按钮（右半屏副屏玩家）：单按=扣球（进入扣球挥拍 type2）
+    {
+      const e = t.app.engine;
+      TT.resetMatch(e);
+      e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [false, true];
+      e.ball.inHand = false;
+      e.ball.pos = { x: 0, y: 1.20, z: 1.55 };
+      e.ball.vel = { x: 0, y: 0.4, z: -3.0 };
+      e.ball.spin = { x: 0, y: 0, z: 0 };
+      e.ball.hitBy = 0; e.ball.lastBounce = 0;
+      t.runFrames(2);
+      t.swipeUp(700, 360, 60); // 右半屏上滑扣球（P2）
+      t.runFrames(3);
+      check('P2 上滑扣球：P2 进入扣球挥拍', t.app.engine.players[1].stroke.active && t.app.engine.players[1].stroke.type === 2);
     }
 
     // Shift 跑步加速 / Ctrl 蹲下减速（电脑端按键）
@@ -743,6 +827,26 @@ async function main() {
         tE.elements.get('touchControls').style.display === 'none');
     }
 
+    // 分屏双人（本地）+ 触屏：P2（副屏玩家）触控组仅本地分屏显示；退出/人机模式隐藏
+    {
+      const tL = await boot({ touch: true, search: '?touch=1' });
+      tL.click('btnLocal');
+      tL.runFrames(2);
+      check('分屏触屏：P2 触控组显示（摇杆+蹲）',
+        tL.elements.get('p2Controls').style.display !== 'none' &&
+        !!tL.elements.get('joyBase2') && !!tL.elements.get('btnCrouch2'));
+      check('分屏触屏：主触控容器带 local-duo 类', tL.elements.get('touchControls').classList.contains('local-duo'));
+      tL.elements.get('btnExit').dispatch('click', {});
+      tL.runFrames(2);
+      check('退出分屏：P2 触控组隐藏', tL.elements.get('p2Controls').style.display === 'none');
+    }
+    {
+      const tA = await boot({ touch: true, search: '?touch=1' });
+      tA.click('btnAI');
+      tA.runFrames(2);
+      check('人机触屏：P2 触控组隐藏（仅分屏显示）', tA.elements.get('p2Controls').style.display === 'none');
+    }
+
     // 右上角工具：暂停 / 继续（人机难度开局锁定，无局内切换按钮）
     check('AI 模式：局内难度按钮已移除（难度锁定）', !t.elements.get('btnDiff'));
     t.elements.get('btnPause').dispatch('click', {});
@@ -788,6 +892,14 @@ async function main() {
     check('AI 观战：双方 AI 自动对打', played);
     t.runFrames(300);
     check('AI 观战渲染 300 帧无异常', true);
+    // AI 观战虚线面板：实时计算球高，但不做可扣杀/可高吊指示（两行隐藏）
+    t.app.showHitRanges = true;
+    t.runFrames(10);
+    check('AI 观战虚线面板：实时球高', t.elements.get('ballHeight').textContent !== '-');
+    check('AI 观战虚线面板：扣杀/高吊行隐藏',
+      t.elements.get('hrSmashRow').style.display === 'none' && t.elements.get('hrLobRow').style.display === 'none');
+    t.app.showHitRanges = false;
+    t.runFrames(2);
     // 暂停 → 面板显示双方难度 → 调整红方难度生效
     t.elements.get('btnPause').dispatch('click', {});
     check('暂停：面板与双方难度显示', t.app.paused === true &&
@@ -885,6 +997,27 @@ async function main() {
     check('解锁后：5 个难度下拉全部可用', opts.every((o) => o.disabled === false));
   }
 
+  // ---------- 2.76 手机端（file:// 安卓版）个人生涯：本地优先存 localStorage，无需后端 ----------
+  {
+    const t = await boot({ protocol: 'file:', touch: true, search: '?touch=1' });
+    const rec = { mode: 'ai', winner: 0, score: [11, 5], difficulty: 2, ts: Date.now(), name: '测试员' };
+    const id = await t.ppd.saveRecord(rec);
+    check('手机端保存：未配置服务器 → 仅本地（返回 null）', id === null);
+    const stored = JSON.parse(t.localStorage.getItem('ppd_career') || '[]');
+    check('手机端保存：战绩已写入 localStorage', Array.isArray(stored) && stored.length === 1 && stored[0].name === '测试员');
+    const list = await t.ppd.fetchRecords(10);
+    check('手机端读取：生涯记录来自本地（最新在前）', list.length === 1 && list[0].winner === 0);
+    check('手机端：个人生涯 UI 不显示网页版「探索中」', t.elements.get('recordsPanel').innerHTML.indexOf('探索中') === -1);
+  }
+  // 网页版限制保持不变：saveRecord 禁用、不写本地、生涯显示探索中
+  {
+    const t = await boot({ search: '?web=1' });
+    const id = await t.ppd.saveRecord({ mode: 'ai', winner: 0, score: [11, 5], difficulty: 2, ts: Date.now(), name: '测试员' });
+    check('网页版：saveRecord 仍禁用（返回 null）', id === null);
+    check('网页版：个人生涯不写本地', t.localStorage.getItem('ppd_career') === null);
+    check('网页版：生涯面板显示「探索中」', t.elements.get('recordsPanel').innerHTML.indexOf('探索中') !== -1);
+  }
+
   // ---------- 2.8 地狱通关 → 人机暂停变「电脑 AI 数值调控」 ----------
   {
     const t = await boot();
@@ -913,7 +1046,16 @@ async function main() {
 
   // ---------- 3. 联机建房（side 0） ----------
   {
-    const t = await boot();
+    let onlinePosted = null;
+    const t = await boot({
+      fetch: (url, init) => {
+        if (init && init.method === 'POST') {
+          onlinePosted = JSON.parse(init.body);
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, id: 'r2' }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, records: [] }) });
+      },
+    });
     t.click('btnHost');
     await sleep(10);
     check('建房请求已发送', t.sentMessages.some((m) => m.t === 'create'));
@@ -944,6 +1086,10 @@ async function main() {
     check('联机结算屏：您赢了',
       t.elements.get('gameOver').style.display !== 'none' &&
       t.elements.get('gameOverTitle').textContent === '您赢了');
+    // 个人生涯包含真人记录：联机对局（真人对手）应保存到生涯
+    check('联机（真人）记录已保存：mode=online 且含比分/胜负',
+      !!onlinePosted && onlinePosted.mode === 'online' &&
+      typeof onlinePosted.winner === 'number' && Array.isArray(onlinePosted.score) && onlinePosted.score.length === 2);
     t.elements.get('btnAgain').dispatch('click', {});
     check('联机再来一局：发送 rematch', t.sentMessages.some((m) => m.t === 'rematch'));
     t.feed({ t: 'rematch' });

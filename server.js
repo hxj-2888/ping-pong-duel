@@ -36,6 +36,21 @@ function localIps() {
   return out;
 }
 
+// 带网卡名的 IPv4 列表（房主面板显示"WLAN / 以太网 / Radmin VPN · http://IP:端口"，
+// 帮助用户从多个地址中挑出与对方同一网络的那个；兼容旧客户端：ips 字段保持不变）
+function localIfaces() {
+  const out = [];
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const ni of ifaces[name] || []) {
+        if (ni.family === 'IPv4' && !ni.internal && ni.address) out.push({ name, address: ni.address });
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return out;
+}
+
 // 诊断统计：每 10s 打印一次（有活动才打印），排查"进房卡死"时确认输入到底有没有到达服务器
 const stats = { in: 0, broadcast: 0, create: 0, join: 0, close: 0 };
 
@@ -44,6 +59,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json; charset=utf-8', // PWA 清单（手机端安装）
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
@@ -82,7 +98,16 @@ function saveRecords(list) {
 
 // ---------- 静态文件 ----------
 const server = http.createServer((req, res) => {
-  let urlPath = decodeURIComponent(req.url.split('?')[0]);
+  // 非法百分号编码（如 /%zz）会让 decodeURIComponent 抛 URIError；
+  // 不捕获会以未捕获异常直接打崩整个服务器进程，这里兜底返回 400
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent(req.url.split('?')[0]);
+  } catch (e) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Bad Request');
+    return;
+  }
 
   // 联机诊断/房主地址信息：版本 + 端口 + IPv4 列表（启动器据此判断服务器新旧，
   // 客户端房主面板据此显示"对方请打开 http://IP:端口"；Radmin VPN 虚拟网卡 IP 也会列出）
@@ -92,7 +117,7 @@ const server = http.createServer((req, res) => {
       'Cache-Control': 'no-cache',
       'Access-Control-Allow-Origin': '*',
     });
-    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: localIps(), hostname: os.hostname() }));
+    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: localIps(), ifaces: localIfaces(), hostname: os.hostname() }));
     return;
   }
 
@@ -261,17 +286,6 @@ function broadcast(room, msg) {
       try { c.ws.write(encodeFrame(0x1, Buffer.from(data))); } catch (e) { /* ignore */ }
     }
   }
-}
-
-function snapshotToClient(room, targetSide) {
-  const snap = TT.snapshot(room.engine);
-  const names = room.clients.map((c) => (c ? c.name : ''));
-  broadcast(room, {
-    t: 'state',
-    s: snap,
-    n: names,
-    my: targetSide,
-  });
 }
 
 function handleMessage(room, client, msg) {

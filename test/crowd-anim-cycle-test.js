@@ -83,5 +83,25 @@ reset();
 TTG.drawFloor(mainCtx, cam, VW, VH, 1.2, 0, null, false);
 check('动画结束静态层恢复 = 基准', onScreen() === base, String(onScreen()));
 
+// 4. 带 density 的场景（真实运行密度；回归：静态层 drawCrowd 曾把 density 传 null，
+//    导致 crowdList 被重建为满员、动画层人数骤减——见 rebuildCrowdCache）
+for (const density of [0.5, 0.25]) {
+  reset();
+  TTG.drawFloor(mainCtx, cam, VW, VH, 0.1, 0, null, false, density);
+  const baseD = onScreen();
+  check(`密度 ${density}：静止人数 > 0`, baseD > 0, String(baseD));
+  let allAnimD = true;
+  for (let i = 0; i < 30; i++) {
+    reset();
+    TTG.drawFloor(mainCtx, cam, VW, VH, 0.1 + i / 30, 0, fan, false, density);
+    const n = onScreen();
+    if (n !== baseD) { allAnimD = false; console.log('  密度', density, '动画帧', i, '人数:', n, '(基准', baseD + ')'); }
+  }
+  check(`密度 ${density}：动画中每帧人数 = 静止基准`, allAnimD, 'base=' + baseD);
+  reset();
+  TTG.drawFloor(mainCtx, cam, VW, VH, 1.2, 0, null, false, density);
+  check(`密度 ${density}：动画结束静态层恢复 = 基准`, onScreen() === baseD, String(onScreen()));
+}
+
 console.log(failures === 0 ? '\n动画全周期人数一致性通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);

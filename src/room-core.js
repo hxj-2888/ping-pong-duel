@@ -9,8 +9,13 @@
 
 import TT from './engine.js';
 
-const TICK_HZ = 60;
-const BROADCAST_HZ = 10; // 快照广播速率：物理仍 60Hz 内部步进，广播节流到 10Hz（省带宽/CPU）
+const TICK_HZ = 60; // 物理模拟固定步长：不要调小！
+// 调低会破坏发球/碰撞判定（引擎 step 内部把 dt clamp 到 0.05：TICK_HZ=10 时每步只推进 0.05s，
+// 引擎时间只剩 0.5x 慢动作，且 0.1s 大步长下台面碰撞/发球合法性校验失准——公网"进房卡死/发不出球"的直接原因）。
+// 节省 CPU 靠的是下面的广播节流，而不是降低物理步长。
+const BROADCAST_HZ = 20; // 快照广播速率：物理仍 60Hz 内部步进，广播节流到 20Hz（省带宽/CPU）。
+// 20Hz 是公网手感的关键：插值窗口 50ms、对手渲染更平滑；CPU 开销远低于输入消息量，实测无压力。
+// 客户端 net.js 的 INTERP_MS 必须与 1000/BROADCAST_HZ 一致（50ms）。
 const BROADCAST_MS = 1000 / BROADCAST_HZ; // 100ms：相邻快照间隔，客户端据此插值平滑
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混 I/L/O/0/1
 
@@ -213,9 +218,9 @@ export class RoomCore {
       room.accTime -= step;
       n++;
     }
-    // 快照广播节流：物理仍 60Hz 步进，但快照最多每 BROADCAST_MS（100ms=10Hz）发一次。
-    // 省 6 倍带宽/序列化 CPU；客户端对相邻快照做插值平滑（见 render.js 的 interp 逻辑）。
-    // 10Hz 地板同时保证空闲期（Alarm 每 100ms 调用本函数）也有稳定数据流供看门狗判定。
+    // 快照广播节流：物理仍 60Hz 步进，但快照最多每 BROADCAST_MS（20Hz=50ms）发一次。
+    // 省 3 倍带宽/序列化 CPU（相对 60Hz）；客户端对相邻快照做插值平滑（见 render.js 的 interp 逻辑）。
+    // 空闲期（Alarm 每 100ms 调用本函数）广播降到 10Hz 地板，仍够看门狗判定与等待面板刷新。
     if (now - room.lastBroadcastAt >= BROADCAST_MS) {
       const snap = TT.snapshot(room.engine);
       const data = JSON.stringify({ t: 'state', s: snap, n: room.names, my: -1 });
