@@ -2,6 +2,10 @@
 # 避免下载管理器/微信浏览器把中文文件名搞坏导致"无效安装包"
 # 文件名带版本号：手机下载管理器保存为 PingPongDuel-v150.apk，不会误装旧文件
 # 下载页/安装包一律禁止缓存（no-cache, no-store），保证手机/浏览器永远拿到最新版
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
 /download*
   Cache-Control: no-cache, no-store, must-revalidate
 /PingPongDuel-v150.apk
