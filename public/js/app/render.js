@@ -301,7 +301,7 @@
       fan: PPD.app.fan,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
-      density: PPD.isTouch ? 0.5 : 1, // 手机端观众密度减半（省 DPR3 填充率）
+      density: PPD.isTouch ? 0.25 : 0.5, // 手机端观众密度减半（省 DPR3 填充率）
       noCrowd: PPD.app.mode === 'online' || !!(PPD.app.noCrowd), // 联机自动关 / 用户勾选关闭环境观众
     };
   }
