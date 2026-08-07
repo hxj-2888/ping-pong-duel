@@ -258,6 +258,9 @@ input:focus { border-color: var(--blue); }
   #hitRangeInfo .hr-title { display: none; } /* 手机端紧凑：隐藏标题行 */
   #phaseBanner { top: 170px; }
   #pointToast { top: 212px; }
+  /* 手机端：暂停面板（AI 观战调难度/调参）内边距收窄，调参区随屏收缩，文字全部留在框内 */
+  .pause-card { padding: 18px 14px; min-width: 0; }
+  .tune-side { min-width: 0; }
 }
 
 /* ---------- 手机端触控按钮 ---------- */
@@ -369,7 +372,7 @@ canvas#game { touch-action: none; }
 .pause-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   padding: 28px 34px; text-align: center; display: flex; flex-direction: column; gap: 12px;
-  min-width: 260px;
+  min-width: 260px; max-width: calc(100vw - 24px); box-sizing: border-box;
 }
 .pause-card h2 { color: #ffd166; letter-spacing: 3px; }
 /* AI 观战：主页红/蓝双难度行（缩进防出框：允许换行 + 选择框限宽，窄窗口也不溢出卡片） */
@@ -384,11 +387,13 @@ canvas#game { touch-action: none; }
 .pause-aivai .ai-label input {
   flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; border-radius: 8px;
 }
+.pause-aivai .ai-label select { max-width: 100%; min-width: 0; box-sizing: border-box; }
 .tune-side { display: flex; flex-direction: column; gap: 6px; min-width: 190px; flex: 1; }
 .tune-grid { display: flex; flex-direction: column; gap: 5px; }
 .tune-row {
   flex-direction: row; align-items: center; justify-content: space-between;
   gap: 8px; font-size: 12px; color: #b9c6dd;
+  flex-wrap: wrap; /* 让等效值提示（flex-basis:100%）真正独占一行 */
 }
 .tune-row input[type="range"] {
   flex: 1; min-width: 90px; padding: 0; accent-color: var(--blue);
@@ -398,7 +403,8 @@ canvas#game { touch-action: none; }
 /* 四属性滑杆：等效值实时提示（独占一行，灰色小字）+ 重置按钮 */
 .tune-eff {
   flex-basis: 100%; text-align: right; font-size: 11px; color: #7c8aa5;
-  white-space: nowrap;
+  white-space: normal;        /* 长文本换行，不横向溢出框 */
+  overflow-wrap: anywhere;    /* 无空格长串（含全角括号）也可断行 */
 }
 .tune-reset {
   align-self: flex-end; background: rgba(255,255,255,0.06); color: #b9c6dd;

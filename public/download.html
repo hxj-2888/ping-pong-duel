@@ -61,7 +61,7 @@
 <body>
   <div class="card">
     <h1>🏓 乒乓对决</h1>
-    <div class="sub">安卓版安装包 · v1.5.0 · 3,514,066 字节（3.35 MB）· 离线可玩</div>
+    <div class="sub">安卓版安装包 · v1.5.0 · 3,518,270 字节（3.36 MB）· 离线可玩</div>
 
     <a class="btn-dl" id="dlBtn" href="PingPongDuel-v150.apk" download="PingPongDuel-v150.apk">📱 点击下载安装包</a>
     <div class="meta" id="dlStatus">下载后点通知栏的「安装」即可</div>
@@ -75,7 +75,7 @@
 
     <h2>安装步骤（只需一次）</h2>
     <ol>
-      <li>点击上方按钮，等下载完成（3.35 MB / 3,514,066 字节）</li>
+      <li>点击上方按钮，等下载完成（3.36 MB / 3,518,270 字节）</li>
       <li>下拉通知栏，点「<b>安装</b>」；若提示「允许安装未知来源应用」→ 点<b>设置 → 允许</b></li>
       <li>若出现 <b>Play 保护</b>提示 → 点「<b>仍要安装</b>」</li>
       <li>华为/小米等手机若开启「<b>纯净模式/安全检测</b>」→ 关闭或点「继续安装」</li>
@@ -136,7 +136,7 @@
 
     // 校验后下载：先取回安装包核对完整性，再触发保存；
     // 若被浏览器拦截/截断（最常见导致"无效安装包"的原因），当场提示而不是给坏文件
-    var EXPECTED = 3514066;
+    var EXPECTED = 3518270;
     var btn = document.getElementById('dlBtn');
     var status = document.getElementById('dlStatus');
     btn.addEventListener('click', function (e) {
@@ -158,7 +158,7 @@
           a.click();
           a.remove();
           setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
-          status.textContent = '下载已开始（3,514,066 字节），完成后点通知栏「安装」';
+          status.textContent = '下载已开始（3,518,270 字节），完成后点通知栏「安装」';
         })
         .catch(function (err) {
           status.textContent = '';
