@@ -359,27 +359,12 @@
     ctx.beginPath();
     ctx.arc(hp.x, hp.y, headR, 0, Math.PI * 2);
     ctx.fill();
-    if (fast) {
-      // 动画层：半分辨率快速绘制，但保留外描边——与静态层观众同一画风（轮廓清晰），
-      // 避免动画期观众变成"无轮廓的模糊剪影"、观感上与静态层人数/清晰度不一致
-      ctx.strokeStyle = CROWD_OUTLINE;
-      ctx.lineWidth = Math.max(0.6, headR * 0.16);
-      ctx.stroke();
-      limb(ctx, cam, p.hips, p.shoulder, CROWD_R, col, CROWD_OUTLINE);
-      limb(ctx, cam, p.hips, p.kneeL, CROWD_R * 0.9, col, CROWD_OUTLINE);
-      limb(ctx, cam, p.hips, p.kneeR, CROWD_R * 0.9, col, CROWD_OUTLINE);
-      limb(ctx, cam, p.kneeL, p.footL, CROWD_R * 0.8, col, CROWD_OUTLINE);
-      limb(ctx, cam, p.kneeR, p.footR, CROWD_R * 0.8, col, CROWD_OUTLINE);
-      limb(ctx, cam, p.shL, p.handL, CROWD_R * 0.75, col, CROWD_OUTLINE);
-      limb(ctx, cam, p.shR, p.handR, CROWD_R * 0.75, col, CROWD_OUTLINE);
-      return;
-    }
     ctx.strokeStyle = CROWD_OUTLINE;
     ctx.lineWidth = Math.max(0.6, headR * 0.16);
     ctx.stroke();
     if (fp.y - hp.y < 10) {
-      // 太远：只画头 + 躯干
-      limb(ctx, cam, p.hips, p.shoulder, CROWD_R * 0.85, col, null);
+      // 太远：只画头 + 躯干（动画/静态同规则——远处小人不因姿态不同而画出不同完整度，观感一致）
+      limb(ctx, cam, p.hips, p.shoulder, CROWD_R * 0.85, col, fast ? CROWD_OUTLINE : null);
       return;
     }
     // 躯干（髋→肩）
