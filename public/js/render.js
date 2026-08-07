@@ -355,14 +355,18 @@
     ctx.arc(hp.x, hp.y, headR, 0, Math.PI * 2);
     ctx.fill();
     if (fast) {
-      // 动画层：全部肢体不描边（省一半路径），保持完整骨架姿态
-      limb(ctx, cam, p.hips, p.shoulder, CROWD_R, col, null);
-      limb(ctx, cam, p.hips, p.kneeL, CROWD_R * 0.9, col, null);
-      limb(ctx, cam, p.hips, p.kneeR, CROWD_R * 0.9, col, null);
-      limb(ctx, cam, p.kneeL, p.footL, CROWD_R * 0.8, col, null);
-      limb(ctx, cam, p.kneeR, p.footR, CROWD_R * 0.8, col, null);
-      limb(ctx, cam, p.shL, p.handL, CROWD_R * 0.75, col, null);
-      limb(ctx, cam, p.shR, p.handR, CROWD_R * 0.75, col, null);
+      // 动画层：半分辨率快速绘制，但保留外描边——与静态层观众同一画风（轮廓清晰），
+      // 避免动画期观众变成"无轮廓的模糊剪影"、观感上与静态层人数/清晰度不一致
+      ctx.strokeStyle = CROWD_OUTLINE;
+      ctx.lineWidth = Math.max(0.6, headR * 0.16);
+      ctx.stroke();
+      limb(ctx, cam, p.hips, p.shoulder, CROWD_R, col, CROWD_OUTLINE);
+      limb(ctx, cam, p.hips, p.kneeL, CROWD_R * 0.9, col, CROWD_OUTLINE);
+      limb(ctx, cam, p.hips, p.kneeR, CROWD_R * 0.9, col, CROWD_OUTLINE);
+      limb(ctx, cam, p.kneeL, p.footL, CROWD_R * 0.8, col, CROWD_OUTLINE);
+      limb(ctx, cam, p.kneeR, p.footR, CROWD_R * 0.8, col, CROWD_OUTLINE);
+      limb(ctx, cam, p.shL, p.handL, CROWD_R * 0.75, col, CROWD_OUTLINE);
+      limb(ctx, cam, p.shR, p.handR, CROWD_R * 0.75, col, CROWD_OUTLINE);
       return;
     }
     ctx.strokeStyle = CROWD_OUTLINE;
@@ -402,17 +406,18 @@
   // 帧间隔内只 blit 缓存，不再逐帧重绘全部观众。
 
   // ---------- 观众席离屏缓存（最大帧开销：~380 观众 × 5,600 次路径 + ~11k 临时对象） ----------
-  // 静态层（地板/看台，全分辨率）与动画层（全部观众，半分辨率+快速绘制）分离，**任一时刻观众只画在一层**：
+  // 静态层（地板/看台，全分辨率）与动画层（全部观众，全分辨率+描边）分离，**任一时刻观众只画在一层**：
   // - 无动画：静态层 = 地板+看台+rest 观众（相机/尺寸/DPR/模式变化才重建，每帧一次 drawImage blit）；
   // - 动画中：静态层 = 地板+看台（不含观众，动画开始重建一次），全部观众由动画层按 30Hz 烘焙绘制。
   //   若动画期静态层仍保留 rest 观众，会与动画层动势身影错位叠出"复制体"（欢呼举手/起身/摇头的位移
   //   让两层同人不同影）——故动画期静态层必须去掉观众，只保留动画层一份。
-  // - 动画层：去描边 + 半分辨率（填充率 1/4），动画结束停止 blit，静态层重建回 rest 观众（无需逐帧重画）。
-  // 此前动画期间每帧/每 30Hz 全量重绘 ~376 观众 + 地板看台，是移动端 DPR3 掉帧主因。
+  // - 动画层：全分辨率 + 外描边（与静态层同一画风，轮廓清晰、人数观感一致），动画结束停止 blit，
+  //   静态层重建回 rest 观众（无需逐帧重画）。动画仅在得分欢呼时短暂触发（~1.5s），开销可控。
   // 无 document.createElement 的环境（测试桩/极端环境）自动回退逐帧直画。
   const CROWD_CAM_BUCKET = 0.06; // 相机移动重建阈值(m)（0.04→0.06：平移重建阈值 0.02→0.03m，频率降约 1/3，视觉不可察）
   const CROWD_ANIM_HZ = 30;      // 欢呼动画刷入动画层的频率（Hz）
-  const CROWD_ANIM_SCALE = 0.5;  // 动画层分辨率倍率（半分辨率：填充率 1/4，小人物放大后无感知）
+  const CROWD_ANIM_SCALE = 1.0;  // 动画层分辨率倍率（全分辨率：与静态层一致，高画质玩家动画小人轮廓清晰、大小相同；
+                                 // 动画仅在得分欢呼时短暂触发 ~1.5s，全分辨率开销可控，且动画期静态层不含观众）
   // 静态/动画离屏缓存：按 viewSide（分屏两侧队色相反）分键——本地双人两视口各自缓存，
   // 避免 A 视口重建后 B 视口 key 不同又踢掉重建，导致每帧全量重画 376 人观众席（帧率抖动）。
   // 每个 entry 懒创建（先静态层后动画层，保持 createElement 顺序，兼容测试桩 canvas 序号）。

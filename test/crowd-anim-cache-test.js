@@ -1,10 +1,10 @@
 /* 观众席双层离屏缓存行为验证（性能回归）
  * 覆盖（render.js drawFloor 缓存路径）：
  *  1. 静止帧零全量重绘：非动画帧只 blit 静态层，不重画 ~376 观众
- *  2. 得分欢呼动画按 30Hz 烘焙进「动画层」（半分辨率 + 快速绘制），60 帧 @60fps 只烘焙 30 次
+ *  2. 得分欢呼动画按 30Hz 烘焙进「动画层」（全分辨率 + 描边，与静态层同一画风），60 帧 @60fps 只烘焙 30 次
  *  3. 动画开始即时烘焙、间隔帧零重绘；动画期静态层重建为「无观众」（防复制体叠影），
  *     动画结束静态层重建回 rest 观众、动画层停 blit
- *  4. 动画层半分辨率（填充率 1/4）
+ *  4. 动画层全分辨率（与静态层一致，高画质清晰）
  *  5. 相机移动超过缓存桶阈值才重建（0.06m → 实际半桶 0.03m）
  *  6. 低画质 / 无缓存环境回退路径行为不变
  * 用法: node test/crowd-anim-cache-test.js
@@ -21,7 +21,7 @@ function check(name, cond) {
 }
 
 // ---------- 计数型 ctx / 假 canvas（静态层与动画层各自独立计数） ----------
-// scale：当前 ctx 的缩放（静态层=1，动画层=CROWD_ANIM_SCALE=0.5）。
+// scale：当前 ctx 的缩放（静态层=1，动画层=CROWD_ANIM_SCALE=1.0 全分辨率——与静态层一致，高画质清晰）。
 // getTransform 让 drawPerson 的屏幕外剔除走真实坐标换算路径（修复：动画层不再误剔右/下半屏观众）
 function makeCountingCtx(canvas, scale) {
   const counters = { arc: 0, blit: 0 };
@@ -45,14 +45,14 @@ const VW = 1280, VH = 720;
 const staticCanvas = { width: VW, height: VH };
 const animCanvas = { width: 0, height: 0 };
 const staticCtx = makeCountingCtx(staticCanvas, 1);
-const animCtx = makeCountingCtx(animCanvas, 0.5);
+const animCtx = makeCountingCtx(animCanvas, 1);
 staticCanvas.getContext = () => staticCtx;
 animCanvas.getContext = () => animCtx;
 // viewSide 1（本地双人另一视口）各自独立的缓存 canvas
 const static2Canvas = { width: VW, height: VH };
 const anim2Canvas = { width: 0, height: 0 };
 const static2Ctx = makeCountingCtx(static2Canvas, 1);
-const anim2Ctx = makeCountingCtx(anim2Canvas, 0.5);
+const anim2Ctx = makeCountingCtx(anim2Canvas, 1);
 static2Canvas.getContext = () => static2Ctx;
 anim2Canvas.getContext = () => anim2Ctx;
 // createElement 顺序：viewSide0 静态层(1)/动画层(2)，viewSide1 静态层(3)/动画层(4)
@@ -138,10 +138,10 @@ step(null);
 check('动画结束后静止帧零重绘', near(aArc(), 2) && sArc() === 2 * statLen);
 check('blit 数=9（1+2+2+2+1+1）', blits() === 9);
 
-// ---------- 4. 动画层半分辨率（填充率 1/4） ----------
+// ---------- 4. 动画层全分辨率（与静态层一致，高画质清晰） ----------
 resetAll();
 frames(1, fan);
-check('动画层半分辨率（640=1280×0.5）', animCanvas.width === Math.round(VW * 0.5) && animCanvas.height === Math.round(VH * 0.5));
+check('动画层全分辨率（1280=1280×1.0）', animCanvas.width === Math.round(VW * 1.0) && animCanvas.height === Math.round(VH * 1.0));
 check('静态层全分辨率（1280）', staticCanvas.width === VW && staticCanvas.height === VH);
 check('动画层覆盖全体可见观众（与静态层同口径，右/下半屏不再被误剔）', animLen === statLen && animLen > 0);
 
