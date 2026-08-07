@@ -161,8 +161,8 @@
   // ---------- 观众席（坐姿火柴人，与球员同一画风：圆头 + 骨线骨架） ----------
   // 场地两端 + 两侧共四个方向的观众席，一次性生成固定站位（确定性伪随机）
   let crowdList = null;
-  let crowdListDensity = 1; // 当前观众布局的密度（0.5=手机减半），变化时重建布局
-  // 观众布局：两端/两侧看台坐姿火柴人。density 密度（默认 1）：0.5 步长加倍、人数减半（手机端省填充率）
+  let crowdListDensity = 1; // 当前观众布局的密度（1=满员，0.5=电脑减半，0.25=手机再减半），变化时重建布局
+  // 观众布局：两端/两侧看台坐姿火柴人。density 密度（默认 1）：0.5/0.25 步长加倍、人数成比例减半（省填充率）
   function crowdLayout(density) {
     const d = density == null ? 1 : density;
     const step = 0.46 / d;
@@ -335,9 +335,14 @@
     const fp = cam.project(p.hips);
     if (!hp || !fp) return;
     // 屏幕外剔除（相机后方 project 返回 null 已跳过；这里再剔屏幕外——手机窄视口大量观众在屏外，
-    // 省静态层/动画层烘焙与直画填充率）
-    const CW = ctx.canvas ? ctx.canvas.width : 0;
-    const CH = ctx.canvas ? ctx.canvas.height : 0;
+    // 省静态层/动画层烘焙与直画填充率）。
+    // 注意：project 返回 CSS 像素坐标，而 canvas.width/height 是设备像素。动画层是半分辨率画布
+    // （scale=dpr×0.5），若直接拿设备像素当边界，dpr=1 时屏幕右半场观众会被误剔、永远不进动画层
+    // （得分时右半场无欢呼无摇头）→ 用当前 transform 的缩放把边界换算回 CSS 像素，静态层/动画层口径一致。
+    const _t = ctx.getTransform ? ctx.getTransform() : null;
+    const _scale = _t && _t.a > 0 ? _t.a : 1;
+    const CW = ctx.canvas ? ctx.canvas.width / _scale : 0;
+    const CH = ctx.canvas ? ctx.canvas.height / _scale : 0;
     if (CW > 0 && CH > 0) {
       const m = 60;
       if (hp.x < -m || hp.x > CW + m || fp.y < -m || fp.y > CH + m) return;
@@ -397,10 +402,12 @@
   // 帧间隔内只 blit 缓存，不再逐帧重绘全部观众。
 
   // ---------- 观众席离屏缓存（最大帧开销：~380 观众 × 5,600 次路径 + ~11k 临时对象） ----------
-  // 静态层（地板/看台/静止观众，全分辨率）与动画层（欢呼/摇头观众，半分辨率+快速绘制）分离：
-  // - 静态层：相机平移超 CROWD_CAM_BUCKET 或尺寸/DPR 变化才重建，每帧一次 drawImage blit；
-  // - 动画层：得分后 ~1.7s 的欢呼/摇头按 30Hz 烘焙（人眼无感知），只画有动作的观众，
-  //   去描边 + 半分辨率（填充率 1/4），动画结束直接停 blit（静止姿态由静态层呈现，无需重建）。
+  // 静态层（地板/看台，全分辨率）与动画层（全部观众，半分辨率+快速绘制）分离，**任一时刻观众只画在一层**：
+  // - 无动画：静态层 = 地板+看台+rest 观众（相机/尺寸/DPR/模式变化才重建，每帧一次 drawImage blit）；
+  // - 动画中：静态层 = 地板+看台（不含观众，动画开始重建一次），全部观众由动画层按 30Hz 烘焙绘制。
+  //   若动画期静态层仍保留 rest 观众，会与动画层动势身影错位叠出"复制体"（欢呼举手/起身/摇头的位移
+  //   让两层同人不同影）——故动画期静态层必须去掉观众，只保留动画层一份。
+  // - 动画层：去描边 + 半分辨率（填充率 1/4），动画结束停止 blit，静态层重建回 rest 观众（无需逐帧重画）。
   // 此前动画期间每帧/每 30Hz 全量重绘 ~376 观众 + 地板看台，是移动端 DPR3 掉帧主因。
   // 无 document.createElement 的环境（测试桩/极端环境）自动回退逐帧直画。
   const CROWD_CAM_BUCKET = 0.06; // 相机移动重建阈值(m)（0.04→0.06：平移重建阈值 0.02→0.03m，频率降约 1/3，视觉不可察）
@@ -421,8 +428,10 @@
     return !!((fan.cheer && (fan.cheer[0] > 0 || fan.cheer[1] > 0)) ||
               (fan.shake && (fan.shake[0] > 0 || fan.shake[1] > 0)));
   }
-  // 静态层重建：地板/看台/静止观众（rest 姿态），全分辨率（写入 entry.static）
-  function rebuildCrowdCache(entry, cam, vw, vh, viewSide, mainCtx) {
+  // 静态层重建：地板/看台 + 静止观众（rest 姿态），全分辨率（写入 entry.static）。
+  // withCrowd=false（动画进行中）：静态层不含观众——动画层同时绘制全部观众，
+  // 避免"静止层 rest 身影 + 动画层动势身影"同屏叠出复制体（欢呼举手/起身浮动的位移会让两层错开）。
+  function rebuildCrowdCache(entry, cam, vw, vh, viewSide, mainCtx, withCrowd) {
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
     entry.static.canvas.width = Math.max(1, Math.round(vw * dpr));
     entry.static.canvas.height = Math.max(1, Math.round(vh * dpr));
@@ -431,9 +440,10 @@
     cc.clearRect(0, 0, vw, vh);
     drawFloorBg(cc, cam, vw, vh);
     drawBenches(cc, cam);
-    drawCrowd(cc, cam, 0, viewSide, null); // 静止 rest 姿态（time=0, 无欢呼）
+    if (withCrowd !== false) drawCrowd(cc, cam, 0, viewSide, null); // 静止 rest 姿态（time=0, 无欢呼）
   }
-  // 动画层重建：只画有欢呼/摇头量的观众，快速绘制（去描边）+ 半分辨率；透明底叠在静态层上（写入 entry.anim）
+  // 动画层重建：画**全部**观众——有欢呼/摇头量的按动作绘制，其余 rest 姿态兜底（动画期静态层不含观众，
+  // 必须由动画层兜齐，否则会出现"消失的观众"或与静态层叠影复制体）。快速绘制（去描边）+ 半分辨率；透明底叠在静态层上
   function rebuildAnimCache(entry, cam, vw, vh, viewSide, mainCtx, time, fan) {
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
     const s = CROWD_ANIM_SCALE;
@@ -446,17 +456,22 @@
       const team = p.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0);
       const c = (fan && fan.cheer) ? fan.cheer[team] : 0;
       const sh = (fan && fan.shake) ? fan.shake[team] : 0;
-      if (c > 0 || sh > 0) drawPerson(ac, cam, p, time, c, sh, FAN_COL[team], true);
+      drawPerson(ac, cam, p, time, c, sh, FAN_COL[team], true);
     }
   }
 
   function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low, density, noCrowd) {
     if (!crowdList || crowdListDensity !== density) { crowdList = crowdLayout(density); crowdListDensity = density; }
     // 离屏缓存可用（有 createElement 且非测试桩）：静态层一次绘制、多帧 blit；
-    // 动画层按 30Hz 烘焙叠加，帧间隔内只 blit（背景/看台/静止观众无需每帧重画）
+    // 动画层按 30Hz 烘焙叠加，帧间隔内只 blit（背景/看台分层绘制，观众任一时刻只在一层，无需每帧重画）
     if (crowdCacheSupported()) {
       const backing = (ctx.canvas && ctx.canvas.width) || 0;
-      const key = `${viewSide}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}`;
+      // crowdMode：观众画在哪一层——off=无观众（低画质/联机）；static=静止层（rest 观众）；
+      // anim=动画层（动画期静态层只留地板+看台，防止与动画层叠影出"复制体"）。
+      // 并入静态层缓存 key：模式切换自动触发重建（动画开始/结束各重建一次静态层）。
+      const anim = crowdAnimActive(fan);
+      const crowdMode = (low || noCrowd) ? 'off' : (anim ? 'anim' : 'static');
+      const key = `${viewSide}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}:${crowdMode}`;
       // 按 viewSide 取/建本视口的静态+动画缓存（本地双人两视口互不踢缓存）
       let entry = crowdCaches[viewSide];
       if (!entry) {
@@ -483,11 +498,10 @@
         ctx.drawImage(st.canvas, 0, 0, vw, vh);
         return;
       }
-      const anim = crowdAnimActive(fan);
-      // 静态层：相机/尺寸/DPR 变化才重建（含静止观众 rest 姿态）
+      // 静态层：相机/尺寸/DPR/模式（含动画期无观众）变化才重建
       if (st.key !== key) {
         st.key = key;
-        rebuildCrowdCache(entry, cam, vw, vh, viewSide, ctx);
+        rebuildCrowdCache(entry, cam, vw, vh, viewSide, ctx, crowdMode === 'static');
       }
       // 动画层：相机 key 变化、动画开始、动画中 30Hz 烘焙（浮点容差 1e-6 稳定节奏）
       if (anim) {
@@ -500,7 +514,7 @@
           rebuildAnimCache(entry, cam, vw, vh, viewSide, ctx, time, fan);
         }
       } else if (an.active) {
-        // 动画结束：停止叠加动画层（静止姿态由静态层呈现，无需重建）
+        // 动画结束：停止叠加动画层；静态层 key 已切回 'static' → 本帧已重建回 rest 观众（单份，无叠影）
         an.active = false;
         an.animT = null;
         an.key = key;

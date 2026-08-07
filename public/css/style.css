@@ -402,3 +402,19 @@ canvas#game { touch-action: none; }
 }
 .manual-content .manual-title { color: #ffd166; margin: 6px 0 0; font-weight: 600; }
 .manual-content p { margin: 2px 0; }
+
+/* 局域网联机地址（房主等待面板 #lanUrls，由 app/net.js 渲染） */
+.lan-urls { margin-top: 8px; text-align: left; max-width: 100%; }
+.lan-title { font-size: 12px; color: rgba(255,255,255,0.65); margin-bottom: 6px; }
+.lan-url { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.lan-url code {
+  flex: 1; min-width: 0; background: rgba(255,255,255,0.08);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 8px; font-size: 13px; word-break: break-all; color: #ffd166;
+}
+.lan-copy {
+  background: rgba(255,255,255,0.12); color: #fff; border: none; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.lan-copy:hover { background: rgba(255,255,255,0.24); }
+.lan-note { font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.6; }

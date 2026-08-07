@@ -197,7 +197,7 @@
       servePath: servePath(engine),
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
-      density: PPD.isTouch ? 0.5 : 1, // 手机端观众密度减半（省 DPR3 填充率）
+      density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
       noCrowd: PPD.app.mode === 'online' || !!(PPD.app.noCrowd), // 联机自动关 / 用户勾选关闭环境观众
     };
   }
@@ -238,6 +238,65 @@
       score: snap.sc,
       server: snap.sv,
       pointReason: snap.pr,
+      fx: PPD.app.fx,
+      fan: PPD.app.fan,
+      low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
+      showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
+      density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
+      noCrowd: PPD.app.mode === 'online' || !!(PPD.app.noCrowd), // 联机自动关 / 用户勾选关闭环境观众
+    };
+  }
+
+  // ---------- 联机双快照插值（服务端 10Hz 广播 → 客户端平滑） ----------
+  // 玩家/球拍/持球位置在相邻快照间线性插值（alpha 由显示时钟驱动，见 renderOnline），
+  // 球保持速度外推（快球低延迟），状态字段（比分/发球方/阶段/挥拍）取最新快照。
+  function viewModelFromSnapInterp(sa, sb, alpha, side, ballExtrap) {
+    const lerp = (a, b) => a + (b - a) * alpha;
+    const lerpV3 = (a, b) => ({ x: lerp(a[0], b[0]), y: lerp(a[1], b[1]), z: lerp(a[2], b[2]) });
+    const players = sb.p.map((p, i) => {
+      const a = sa.p[i] || p;
+      return {
+        side: i,
+        x: lerp(a.x, p.x),
+        z: lerp(a.z, p.z),
+        vx: lerp(a.vx, p.vx),
+        vz: lerp(a.vz, p.vz),
+        lean: lerp(a.lean, p.lean),
+        facing: i === 0 ? 1 : -1,
+        stroke: { active: p.st[0] !== 0, type: p.st[0], t: p.st[1], dur: p.st[2], hit: false },
+        paddle: {
+          p: lerpV3(a.pc, p.pc),
+          n: lerpV3(a.pn, p.pn),
+          v: { x: lerp(a.pv[0], p.pv[0]), y: lerp(a.pv[1], p.pv[1]), z: lerp(a.pv[2], p.pv[2]) },
+        },
+        sb: p.sb,
+        crouch: lerp(a.cq != null ? a.cq : 0, p.cq), // 蹲下（Ctrl）：渲染层画蹲姿
+        run: lerp(a.rn != null ? a.rn : 0, p.rn),    // 跑步（Shift）
+      };
+    });
+    let ball = null, ballInHand = null;
+    if (sb.b) {
+      ball = {
+        pos: { x: sb.b[0] + (ballExtrap ? ballExtrap.x : 0), y: sb.b[1] + (ballExtrap ? ballExtrap.y : 0), z: sb.b[2] + (ballExtrap ? ballExtrap.z : 0) },
+        vel: { x: sb.b[3], y: sb.b[4], z: sb.b[5] },
+        spin: { x: sb.b[6], y: sb.b[7], z: sb.b[8] },
+        vis: true,
+      };
+    } else if (sb.bh) {
+      // 持球（发球）：球跟随球拍，插值位置（sa 无持球时直接用最新）
+      const a = sa && sa.bh ? sa.bh : sb.bh;
+      ballInHand = { x: lerp(a[0], sb.bh[0]), y: lerp(a[1], sb.bh[1]), z: lerp(a[2], sb.bh[2]) };
+    }
+    return {
+      side,
+      players,
+      ball,
+      ballInHand,
+      time: sb.t / 1000,
+      phase: PPD.TT.PHASE_NAME[sb.ph].toLowerCase(),
+      score: sb.sc,
+      server: sb.sv,
+      pointReason: sb.pr,
       fx: PPD.app.fx,
       fan: PPD.app.fan,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
@@ -370,16 +429,31 @@
       PPD.ctx.fillText('等待服务器数据…', w / 2, h / 2);
       return;
     }
-    // 球外推平滑
+    const now = performance.now();
+    // 插值显示时钟（引擎时间 ms）：游戏时间=墙钟 1x，按真实时间推进；
+    // 渲染滞后于最新快照约一个广播间隔（100ms），在相邻快照间插值 → 10Hz 广播依然平滑
+    if (PPD.app._interpLast != null && PPD.app.interpClock != null) {
+      PPD.app.interpClock += (now - PPD.app._interpLast);
+    }
+    PPD.app._interpLast = now;
+    // 球外推平滑（快球低延迟；玩家/球拍等慢速对象走插值）
     let ex = { x: 0, y: 0, z: 0 };
     if (snap.b) {
-      const now = performance.now();
       const lag = Math.min(0.12, Math.max(0, (now - PPD.app.tB) / 1000 - 0.03));
       ex = { x: snap.b[3] * lag, y: snap.b[4] * lag, z: snap.b[5] * lag };
     }
-    const view = viewModelFromSnap(snap, PPD.app.side, ex);
+    // 双快照插值：snapA(上一帧) → snapB(最新)，alpha 由显示时钟驱动
+    let view;
+    const sa = PPD.app.snapA;
+    if (sa && typeof sa.t === 'number' && typeof snap.t === 'number' && snap.t > sa.t) {
+      const clock = PPD.app.interpClock != null ? PPD.app.interpClock : snap.t;
+      const alpha = Math.max(0, Math.min(1, (clock - sa.t) / (snap.t - sa.t)));
+      view = viewModelFromSnapInterp(sa, snap, alpha, PPD.app.side, ex);
+    } else {
+      view = viewModelFromSnap(snap, PPD.app.side, ex);
+    }
     view.servePath = servePathFromSnap(snap); // 联机发球预测轨迹（与人机/本地一致）
-    updateTrail(view); // 联机用快照外推位置，也能看到尾影
+    updateTrail(view); // 联机用插值/外推位置，也能看到尾影
     const myX = snap.p[PPD.app.side].x;
     const cam = makeCam(PPD.app.side, myX, 0, 0, w, h);
     view.cam = cam;
@@ -409,6 +483,7 @@
   PPD.renderSingle = renderSingle;
   PPD.viewModelFromEngine = viewModelFromEngine;
   PPD.viewModelFromSnap = viewModelFromSnap;
+  PPD.viewModelFromSnapInterp = viewModelFromSnapInterp;
   PPD.servePathFromSnap = servePathFromSnap;
   PPD.makeCam = makeCam;
   PPD.unprojectToTable = unprojectToTable;

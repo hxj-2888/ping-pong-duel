@@ -14,6 +14,7 @@ const STORAGE_KEY = 'rooms';
 const RECORDS_KEY = 'records'; // 通关记录（全局单实例，无 TTL 永久保存）
 const DIAG_KEY = 'diag'; // 诊断日志（驱逐恢复排查）
 const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
+const ALARM_MS = 100; // Alarm 安全 tick 间隔：与 10Hz 广播地板一致，空闲期也稳定 10Hz 数据流
 
 // 追加诊断日志（最多 50 条）
 async function diag(ctx, s) {
@@ -47,6 +48,7 @@ export class GameRoom extends DurableObject {
     this.core = new RoomCore();
     this.loaded = false;
     this.loadPromise = null;
+    this._alarmPending = false;
   }
 
   // ---------- HTTP API：通关记录（GET/POST/DELETE /api/records，CORS 兼容桌面公网跨域） ----------
@@ -136,6 +138,25 @@ export class GameRoom extends DurableObject {
     }
   }
 
+  // ---------- Alarm 兜底驱动 ----------
+  // 消息驱动 tick 在客户端停发消息时会停摆（半死连接/后台节流/驱逐），表现为"进房间后卡死"。
+  // Alarm 每 200ms 唤醒一次：推进物理 + 兜底广播（≥2Hz 快照）+ 断线/僵尸席位清扫。
+  // 有房间存活时自我续期；全部房间空后停止（不钉住 DO 计费）。
+  _armAlarm() {
+    if (this._alarmPending) return;
+    this._alarmPending = true;
+    try { this.ctx.storage.setAlarm(Date.now() + ALARM_MS); } catch (e) { this._alarmPending = false; }
+  }
+
+  async alarm() {
+    this._alarmPending = false;
+    await this._load();
+    const res = this.core.tickAll(Date.now());
+    for (const n of res.notes) await diag(this.ctx, n);
+    await this._save(false);
+    if (res.alive > 0) this._armAlarm();
+  }
+
   // ---------- WebSocket 升级入口（Hibernation API）+ HTTP API ----------
   async fetch(request) {
     // 通关记录 HTTP API（不经过房间 _load/_save）
@@ -160,10 +181,14 @@ export class GameRoom extends DurableObject {
   async webSocketMessage(ws, raw) {
     await this._load();
     const att = ws.deserializeAttachment() || {};
-    this.core.handleMessage(ws, raw, att);
+    const notes = this.core.handleMessage(ws, raw, att) || [];
+    // 诊断事件（重挂/接管等，均为低频，直接落盘不影响 60Hz 消息处理）
+    for (const n of notes) await diag(this.ctx, n);
     // 节流落盘：2s 窗口内只写一次（60Hz 输入下避免每消息写 storage——卡顿主因）。
     // 原每消息 diag 日志同样每消息读写 storage，已移除（驱逐问题已修复并验证）
     await this._save(false);
+    // 建房/加入后确保 Alarm 续期：消息停摆时由 Alarm 兜底推进/广播/清扫
+    this._armAlarm();
   }
 
   // ---------- 断线处理（委托 RoomCore） ----------
@@ -171,6 +196,19 @@ export class GameRoom extends DurableObject {
     await this._load();
     const att = ws.deserializeAttachment() || {};
     this.core.handleClose(ws, att);
+    await diag(this.ctx, 'close code=' + code + ' reason=' + (reason || '') + ' side=' + att.side);
     await this._save(true); // 断线强制落盘（席位清空立即持久化，避免恢复后房间还占着）
+    this._armAlarm();
+  }
+
+  // ---------- 连接错误（Hibernation 下 socket 错误不触发 close 时兜底） ----------
+  async webSocketError(ws, error) {
+    await this._load();
+    const att = ws.deserializeAttachment() || {};
+    await diag(this.ctx, 'ws error side=' + att.side);
+    try { ws.close(1011, 'ws error'); } catch (e) { /* ignore */ }
+    this.core.handleClose(ws, att);
+    await this._save(true);
+    this._armAlarm();
   }
 }

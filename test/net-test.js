@@ -63,6 +63,18 @@ async function main() {
   }
 
   try {
+    // /api/info：版本 + 端口 + IPv4 列表（房主面板显示联机地址、启动器版本校验的依据）
+    try {
+      const infoRes = await fetch(`http://127.0.0.1:${PORT}/api/info`);
+      const info = await infoRes.json();
+      check('/api/info 返回 ok', !!(info && info.ok));
+      check('/api/info 版本形如 x.y.z-local', /^\d+\.\d+\.\d+-local$/.test(info.version || ''));
+      check('/api/info 端口正确', info.port === PORT);
+      check('/api/info ips 为数组', Array.isArray(info.ips));
+    } catch (e) {
+      check('/api/info 可访问', false);
+    }
+
     const a = await wsClient();
     const b = await wsClient();
 
@@ -76,6 +88,11 @@ async function main() {
     check('加入方 side=1', joinMsg.side === 1);
     const hostMsg = await a.next((m) => m.t === 'room' && m.side === 1);
     check('房主收到对手加入通知', !!hostMsg);
+
+    // 心跳 pong 带服务器版本（客户端据此识别旧服务器，防止"进房后双方卡死"）
+    a.send({ t: 'ping' });
+    const pong = await a.next((m) => m.t === 'pong');
+    check('pong 带版本 ver', !!pong && /^\d+\.\d+\.\d+-local$/.test(pong.ver || ''));
 
     // 双方发输入
     a.send({ t: 'in', i: { l: 0, r: 1, pu: 0, sm: 0 } });

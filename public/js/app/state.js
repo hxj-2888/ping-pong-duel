@@ -58,6 +58,7 @@
     roomPanel: document.getElementById('roomPanel'),
     roomCode: document.getElementById('roomCode'),
     roomHint: document.getElementById('roomHint'),
+    lanUrls: document.getElementById('lanUrls'),
     btnRoomBack: document.getElementById('btnRoomBack'),
     statusBar: document.getElementById('statusBar'),
     overlay: document.getElementById('overlay'),
@@ -152,7 +153,17 @@
     side: 0,             // 联机时我的方位
     sideSet: false,      // 联机 side 是否已确立（房主=创建响应，加入方=首条非等待 room）
     heartbeatTimer: null,
+    // 联机数据看门狗（1s 检查 state/pong 新鲜度，超时触发自动重连）
+    watchdogTimer: null,
+    lastStateAt: 0,      // 最近一次收到 state 快照的时刻（Date.now()）
+    lastPongAt: 0,       // 最近一次收到 pong 的时刻（Date.now()）
+    reconnecting: false, // 是否正在自动重连（防并发触发）
+    reconnectAttempt: 0, // 已自动重连次数（超过上限回菜单）
+    reconnectStartedAt: 0, // 本轮重连开始时刻（超时判定）
     publicServer: false, // 联机服务器：false=本地（node server.js）/ true=公网（Cloudflare）
+    lanInfo: null,        // GET /api/info 返回的局域网联机信息（房主等待面板显示用）
+    serverVersion: null,  // 本地服务器版本（心跳 pong 带 ver；用于识别旧服务器）
+    serverStaleWarned: false, // 是否已提示过"服务器版本过旧"（只提示一次）
     engine: null,
     net: null,
     roomCode: '',
@@ -161,6 +172,8 @@
     keyP1: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 },
     keyP2: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 },
     snapA: null, snapB: null, tA: 0, tB: 0,
+    interpClock: null,   // 联机插值显示时钟（引擎时间 ms，见 renderOnline）
+    _interpLast: null,   // 插值时钟上次推进时刻（performance.now）
     lastInputSent: 0,
     lastPhase: -1,
     lastEventKeys: new Set(),

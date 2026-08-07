@@ -142,6 +142,12 @@ npm run test:all            # 本地测试集合
 ## 联机说明
 
 - **本地 / 局域网**：`node server.js` 监听 `0.0.0.0:8765`（`PORT` 可改），页面自动走 `ws://localhost:端口`
+  - **局域网联机（不借助公网）**：两台设备在同一网络（同一 Wi-Fi / 手机热点 / Radmin VPN 等虚拟局域网）即可：
+    1. 房主运行服务器并「创建联机房间」，等待面板会直接显示「对方请打开 `http://本机IP:端口`」（多网卡/Radmin 26.x 全列出，可复制）；
+    2. 对方浏览器打开该地址（从房主服务器加载游戏，无需另装），输入 4 位房间码加入；
+    3. 首次联机前房主以管理员运行一次 `tools/局域网放行.cmd` 放行防火墙 TCP 8765（Windows 防火墙默认挡入站）；
+    4. 房主窗口需保持打开（桌面应用关窗会停掉由它启动的服务器）。
+  - 服务器启动会打印全部局域网/VPN 联机地址；`GET /api/info` 返回 `{ version, port, ips }`（启动器据此自动重启旧服务器、房主面板据此显示地址）；控制台每 10s 输出 `[stats]` 诊断（进房卡死时可确认输入是否到达服务器）。
 - **公网**：https://ping-pong-duel.pages.dev 直接联机（无需任何端口转发）
   - 架构：Cloudflare Pages 高级模式（`_worker.js`）+ Durable Object（game-room Worker）
   - 联机端点：`wss://ping-pong-duel.pages.dev/ws`（与页面同域）

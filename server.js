@@ -11,12 +11,33 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 const TT = require('./public/js/engine.js');
 
-const PORT = process.env.PORT || 8765;
+const PORT = Number(process.env.PORT) || 8765;
 const ROOT = path.join(__dirname, 'public');
 const TICK_HZ = 60;
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+// 协议版本：客户端/桌面启动器据此识别"旧服务器"（旧版不解析 k 位掩码输入，
+// 会导致客户端连上但输入全部被丢弃 → 进房后双方卡死）。版本号取 package.json + -local。
+const VERSION = require('./package.json').version + '-local';
+
+// 本机局域网/VPN IPv4 地址列表（房主展示联机地址用；Radmin VPN 等虚拟网卡 26.x 也会列出）
+function localIps() {
+  const out = [];
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const ni of ifaces[name] || []) {
+        if (ni.family === 'IPv4' && !ni.internal && ni.address) out.push(ni.address);
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return out;
+}
+
+// 诊断统计：每 10s 打印一次（有活动才打印），排查"进房卡死"时确认输入到底有没有到达服务器
+const stats = { in: 0, broadcast: 0, create: 0, join: 0, close: 0 };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -62,6 +83,18 @@ function saveRecords(list) {
 // ---------- 静态文件 ----------
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
+
+  // 联机诊断/房主地址信息：版本 + 端口 + IPv4 列表（启动器据此判断服务器新旧，
+  // 客户端房主面板据此显示"对方请打开 http://IP:端口"；Radmin VPN 虚拟网卡 IP 也会列出）
+  if (urlPath === '/api/info') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: localIps(), hostname: os.hostname() }));
+    return;
+  }
 
   // 通关记录 API（GET/POST/DELETE /api/records，CORS 兼容桌面公网跨域）
   if (urlPath === '/api/records') {
@@ -244,6 +277,7 @@ function snapshotToClient(room, targetSide) {
 function handleMessage(room, client, msg) {
   switch (msg.t) {
     case 'in': {
+      stats.in++;
       // 输入位掩码 k（客户端压缩：8 键 → 1 数，位 0=l 1=r 2=pu 3=sm 4=f 5=b 6=crouch 7=run）；
       // 兼容旧客户端发 i 对象（未升级端仍可玩）
       let l = 0, r = 0, f = 0, b = 0, pu = 0, sm = 0, c = 0, rn = 0;
@@ -283,7 +317,7 @@ function handleMessage(room, client, msg) {
       break;
     }
     case 'ping': {
-      if (client.ws) client.ws.write(encodeFrame(0x1, Buffer.from(JSON.stringify({ t: 'pong', st: Date.now() }))));
+      if (client.ws) client.ws.write(encodeFrame(0x1, Buffer.from(JSON.stringify({ t: 'pong', st: Date.now(), ver: VERSION }))));
       break;
     }
     default:
@@ -334,6 +368,7 @@ server.on('upgrade', (req, socket) => {
 
 function handleClientMessage(client, msg) {
   if (msg.t === 'create') {
+    stats.create++;
     const code = newRoomCode();
     const room = {
       code,
@@ -348,6 +383,7 @@ function handleClientMessage(client, msg) {
     return;
   }
   if (msg.t === 'join') {
+    stats.join++;
     const code = String(msg.room || '').toUpperCase().trim();
     const room = rooms.get(code);
     if (!room) {
@@ -377,6 +413,7 @@ function send(client, msg) {
 
 function leaveRoom(client) {
   if (!client.room) return;
+  stats.close++;
   const room = client.room;
   const idx = room.clients.indexOf(client);
   if (idx >= 0) room.clients[idx] = null;
@@ -402,6 +439,7 @@ setInterval(() => {
     const snap = TT.snapshot(room.engine);
     const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1 });
     if (data !== room.lastSnap) {
+      stats.broadcast++;
       room.lastSnap = data;
       for (const c of room.clients) {
         if (c && c.ws && c.ws.writable) {
@@ -412,7 +450,24 @@ setInterval(() => {
   }
 }, 1000 / TICK_HZ);
 
+// 诊断统计：每 10s 打印一次（有活动或房间存在才打印，避免空转噪音）。
+// 排查"进房卡死"：房间在但 in=0 → 输入没到服务器（旧服务器/连接问题）；
+// 房间在、in 有值但 broadcast=0 → 引擎没推进（引擎异常）。
+setInterval(() => {
+  const total = stats.in + stats.broadcast + stats.create + stats.join + stats.close;
+  if (total === 0 && rooms.size === 0) return;
+  console.log(`[stats] rooms=${rooms.size} in=${stats.in} broadcast=${stats.broadcast} create=${stats.create} join=${stats.join} close=${stats.close}`);
+  stats.in = stats.broadcast = stats.create = stats.join = stats.close = 0;
+}, 10000);
+
 server.listen(PORT, () => {
-  console.log(`乒乓球联机服务器已启动: http://localhost:${PORT}`);
+  console.log(`乒乓对决联机服务器 v${VERSION} 已启动: http://localhost:${PORT}`);
   console.log(`联机地址: ws://localhost:${PORT}  (局域网内可用本机 IP)`);
+  const ips = localIps();
+  if (ips.length) {
+    console.log('局域网/VPN 联机地址（让对方浏览器打开并输入房间码）:');
+    for (const ip of ips) console.log(`  http://${ip}:${PORT}`);
+  } else {
+    console.log('未检测到局域网 IPv4 地址（请检查网络连接 / 是否已开启 Radmin VPN 等虚拟网卡）');
+  }
 });

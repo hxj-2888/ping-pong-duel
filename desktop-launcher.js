@@ -17,6 +17,10 @@ const os = require('os');
 const PORT = Number(process.env.PORT || 8765);
 const ROOT = __dirname;
 const TEST = !!process.env.PP_APP_TEST;
+// 与 server.js 的 VERSION 同源（package.json 版本 + -local）：
+// 旧服务器（如缺 k 位掩码输入解析、缺 /api/info）不满足版本 → 启动器自动杀进程重启，
+// 杜绝"复用了旧服务器 → 客户端输入被静默丢弃 → 进房后双方卡死"。
+const EXPECTED_VERSION = require(path.join(ROOT, 'package.json')).version + '-local';
 
 function log(msg) {
   try {
@@ -65,13 +69,20 @@ function isOurGame(port) {
   });
 }
 
-// 端口上的服务器是否已是"当前版本"：当前版 server.js 才有 /api/records 路由
-// （旧版本返回 404）——避免复用旧进程导致通关记录保存静默失败
+// 端口上的服务器是否已是"当前版本"：当前版 server.js 才有 /api/info（返回 version 字段）。
+// 旧版本（无 /api/info，或版本不等于本应用版本——如缺 k 位掩码解析的过渡版）→ 需要重启，
+// 避免复用旧进程导致联机输入失效/通关记录不兼容。
 function isCurrentGame(port) {
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: '/api/records', timeout: 600 }, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
+    const req = http.get({ host: '127.0.0.1', port, path: '/api/info', timeout: 600 }, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try {
+          const info = JSON.parse(body);
+          resolve(!!(info && info.ok && info.version === EXPECTED_VERSION));
+        } catch (e) { resolve(false); }
+      });
     });
     req.on('error', () => resolve(false));
     req.on('timeout', () => { req.destroy(); resolve(false); });
@@ -136,7 +147,7 @@ async function main() {
         alreadyRunning = true;
         log('端口 ' + PORT + ' 已有本游戏服务器（当前版本），直接复用');
       } else {
-        // 旧版本服务器（无通关记录 API）：杀掉重启，保证记录功能可用
+        // 版本过旧（旧服务器缺 k 位掩码输入解析等修复）：杀掉重启，保证联机输入/记录功能可用
         log('端口 ' + PORT + ' 是本游戏但版本过旧，重启服务器以启用最新功能');
         killPort(PORT);
         try { await waitPortFree(PORT, 20); } catch (e) { log('旧服务器未及时退出: ' + e.message); }

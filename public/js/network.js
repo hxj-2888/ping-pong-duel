@@ -32,51 +32,54 @@
 
     connect() {
       this.closedByUser = false;
+      let ws;
       try {
-        this.ws = new WebSocket(this.url);
+        ws = new WebSocket(this.url);
       } catch (e) {
         this.emit('error', { e: '无法连接服务器' });
         return;
       }
-      this.ws.onopen = () => {
-        this.connected = true;
-        this._retries = 0; // 连接成功：重置重试计数
-        this.emit('open');
+      this.ws = ws;
+      const self = this;
+      // 回调按 ws 身份过滤：看门狗快速重连（close→connect）时，
+      // 旧连接的迟到 open/close/error 事件不得污染新连接的状态（connected 标志等）
+      ws.onopen = () => {
+        if (self.ws !== ws) return;
+        self._openedOnce = true;
+        self.connected = true;
+        self._retries = 0;
+        self.emit('open');
       };
-      this.ws.onmessage = (ev) => {
+      ws.onmessage = (ev) => {
+        if (self.ws !== ws) return;
         let msg;
         try { msg = JSON.parse(ev.data); } catch (e) { return; }
-        this.emit(msg.t, msg);
+        self.emit(msg.t, msg);
       };
-      this.ws.onclose = () => {
-        this.connected = false;
-        if (!this.closedByUser) {
+      ws.onclose = () => {
+        if (self.ws !== ws) return;
+        self.connected = false;
+        if (!self.closedByUser) {
           // 未成功打开过（握手失败/超时）且还有重试次数 → 自动重连
-          if (this._retries < this.maxRetries && !this._openedOnce) {
-            this._retries++;
-            const delay = this.retryDelay * Math.pow(1.5, this._retries - 1);
-            this.emit('error', { e: `连接失败，${Math.round(delay / 1000)}s 后自动重试（${this._retries}/${this.maxRetries}）` });
-            this._retryTimer = setTimeout(() => {
-              this._retryTimer = null;
-              if (!this.closedByUser) this.connect(); // 重试期间用户可能已手动关闭（返回菜单）
+          if (self._retries < self.maxRetries && !self._openedOnce) {
+            self._retries++;
+            const delay = self.retryDelay * Math.pow(1.5, self._retries - 1);
+            self.emit('error', { e: `连接失败，${Math.round(delay / 1000)}s 后自动重试（${self._retries}/${self.maxRetries}）` });
+            self._retryTimer = setTimeout(() => {
+              self._retryTimer = null;
+              if (!self.closedByUser) self.connect(); // 重试期间用户可能已手动关闭（返回菜单）
             }, delay);
             return;
           }
-          this.emit('close');
+          self.emit('close');
         }
       };
-      this.ws.onerror = () => {
-        if (this._openedOnce) this.emit('error', { e: '连接出错' });
+      ws.onerror = () => {
+        if (self.ws !== ws) return;
+        if (self._openedOnce) self.emit('error', { e: '连接出错' });
       };
-      this._openedOnce = false;
       // open 后标记已成功打开过（此后 close 不再触发握手重试，走正常断线处理）
-      const origOpen = this.ws.onopen;
-      this.ws.onopen = () => {
-        this._openedOnce = true;
-        this.connected = true;
-        this._retries = 0;
-        origOpen && origOpen();
-      };
+      self._openedOnce = false;
     }
 
     send(obj) {

@@ -28,7 +28,12 @@ const core = new RoomCore();
 const wsA = new MockWS(); // 房主
 const wsB = new MockWS(); // 加入者
 
+// 假时钟：每 feed 推进 16ms（60Hz 输入帧间隔），让累计器按真实节奏步进（测试确定性）
+let fakeNow = Date.now();
+RoomCore._clock = () => fakeNow;
+
 function feed(ws, msg) {
+  fakeNow += 16; // 60Hz 输入帧间隔
   ws.serializeAttachment(ws._att || {});
   const raw = new TextEncoder().encode(JSON.stringify(msg));
   core.handleMessage(ws, raw, ws._att || {});
@@ -87,10 +92,31 @@ check('非结束 rematch 比分不变', snapAfter && snapAfter.s.sc[0] === 0 && 
 feed(wsA, { t: 'ping' });
 check('ping 返回 pong', msgs(wsA).some((m) => m.t === 'pong' && typeof m.st === 'number'));
 
-// ---------- 7. 断线通知 ----------
+// ---------- 7. 断线：进入重连宽限期（不立即通知对手） ----------
 wsB.readyState = 3;
 core.handleClose(wsB, wsB._att);
-check('房主收到 peer_left（side=1）', msgs(wsA).some((m) => m.t === 'peer_left' && m.side === 1));
+check('断线进入宽限期：席位保留、未立即通知对手',
+  core.rooms.get(code) && core.rooms.get(code).slots[1] === true &&
+  !msgs(wsA).some((m) => m.t === 'peer_left'));
+core.rooms.get(code).lastSeen[1] = fakeNow - 16000; // 宽限期（15s）到期
+core.sweepStale(fakeNow);
+check('宽限到期后房主收到 peer_left（side=1）', msgs(wsA).some((m) => m.t === 'peer_left' && m.side === 1));
+
+// ---------- 8. Alarm 兜底广播 + 双方断线清理 ----------
+// 消息停摆时（无输入/无心跳），Alarm tickAll 应兜底推进并广播，避免画面静默冻结
+const zAlarmA = msgs(wsA).length;
+core.rooms.get(code).lastBroadcastAt = fakeNow - 600; // 模拟 >500ms 无广播
+const resAlarm = core.tickAll(fakeNow);
+check('Alarm tickAll 兜底广播（零输入也下发快照）', msgs(wsA).slice(zAlarmA).some((m) => m.t === 'state'));
+check('tickAll 返回 alive=1（Alarm 续期）', resAlarm && resAlarm.alive === 1);
+// 双方都断线 → 进入宽限期，宽限到期清扫后房间删除
+wsA.readyState = 3;
+core.handleClose(wsA, wsA._att);
+const rmAfter = core.rooms.get(code);
+rmAfter.lastSeen[0] = fakeNow - 16000;
+rmAfter.lastSeen[1] = fakeNow - 16000;
+core.sweepStale(fakeNow);
+check('双方断线且宽限到期后房间已删除', !core.rooms.has(code));
 
 console.log(failures === 0 ? '\nDO 房间逻辑本地冒烟全部通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);
