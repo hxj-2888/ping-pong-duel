@@ -15,6 +15,9 @@ rem   and preserves the original STORED resources.arsc).
 rem Path note (2026-08-07): aapt2 cannot open source paths with non-ASCII
 rem   characters (e.g. a Chinese folder name) -> build in an ASCII temp dir
 rem   %TEMP%\ppd_apk_build, then copy the APK back.
+rem Sign note (2026-08-08): persistent keystore at android\release.keystore
+rem   so every build shares the same signature -> users can install over old
+rem   versions without uninstalling first.
 rem ============================================================
 setlocal
 set "SDK=C:\Users\ASUS\AppData\Local\Android\Sdk"
@@ -46,7 +49,7 @@ echo [2/7] link manifest + resources (no -A assets: added by 7-Zip in [5/7])...
 "%BT%\aapt2.exe" link -o "%OUT%\unsigned.apk" -I "%PLAT%" ^
   --manifest "%ROOT%AndroidManifest.xml" -R "%OUT%\res.zip" --auto-add-overlay ^
   --java "%OUT%\gen" --min-sdk-version 24 --target-sdk-version 34 ^
-  --version-code 2 --version-name 1.5.0 || goto :err
+  --version-code 3 --version-name 1.5.1 || goto :err
 
 echo [3/7] compile java...
 javac -encoding UTF-8 -source 1.8 -target 1.8 -classpath "%PLAT%" -d "%OUT%\classes" ^
@@ -68,11 +71,13 @@ echo [6/7] zipalign...
 "%BT%\zipalign.exe" -f 4 "%OUT%\unsigned.apk" "%OUT%\aligned.apk" || goto :err
 
 echo [7/7] sign...
-if not exist "%OUT%\release.keystore" (
-  keytool -genkeypair -keystore "%OUT%\release.keystore" -alias ppd -keyalg RSA -keysize 2048 ^
+rem Persistent keystore (android\release.keystore): same signature every build,
+rem so users can install over old versions without uninstalling.
+if not exist "%~dp0release.keystore" (
+  keytool -genkeypair -keystore "%~dp0release.keystore" -alias ppd -keyalg RSA -keysize 2048 ^
     -validity 10000 -storepass ppd123456 -keypass ppd123456 -dname "CN=PPD, OU=PPD, O=PPD, L=CN, S=CN, C=CN" -noprompt
 )
-call "%BT%\apksigner.bat" sign --ks "%OUT%\release.keystore" --ks-pass pass:ppd123456 ^
+call "%BT%\apksigner.bat" sign --ks "%~dp0release.keystore" --ks-pass pass:ppd123456 ^
   --key-pass pass:ppd123456 --v1-signing-enabled false --out "%OUT%\PingPongDuel.apk" "%OUT%\aligned.apk" || goto :err
 
 rem copy the APK back to the source folder
