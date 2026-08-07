@@ -157,11 +157,15 @@
     // 溢出统一转为"回球落点更刁钻"（见击球分支的 aimBias 放大）
     const trickyProbEff = (L.trickyProb || 0) + (L.smashProb <= 0 ? smashOver * 0.4 : 0);
     const agilityMul = t.agilityMul == null ? 1 : t.agilityMul;
-    const agiOver = Math.max(0, agilityMul - 1); // 0~0.5
+    const agiOver = Math.max(0, agilityMul - 1); // 0~0.5，调高>×1 才有
+    const agiUnder = Math.max(0, 1 - agilityMul); // 0~0.5，调低<×1 的惩罚
     const agility = clamp(L.agility * agilityMul, 0, 1);
     const errScale = 1 - agiOver * 0.6; // 溢出→站位误差缩小（困难/地狱调高敏捷=站位更准）
+    // 敏捷<1 惩罚：占空比额外折扣（mul=0.5 时再打 75 折）+ 前后(z)移动也纳入门控 + 追球死区放大
+    const moveDuty = clamp(agility * (1 - agiUnder * 0.5), 0, 1);
+    const moveDead = 0.045 * (1 + agiUnder * 1.5);
     // 接扣杀：**位置门 × 概率掷骰**——扣杀来球时 |落点-站位| ≤ 可接半径(0.35) 且高度/时序成立
-    // 才算"够得着"，再按 smashDef 概率掷骰（困难0.70/地狱0.85）决定接不接：
+    // 才算"够得着"，再按 smashDef 概率掷骰（困难0.55/地狱0.95）决定接不接：
     // 定标目标有效反击率 困难~50% / 地狱~80%（打偏/骗位即漏，骰子只作用于够得着的球）
     const smashDef = clamp((L.smashDef || 0) * (t.catchMul == null ? 1 : t.catchMul), 0, 1);
     const smashReach = 0.35;
@@ -246,8 +250,11 @@
         else targetZ = clamp(b.pos.z - f * 0.42, -T.RULES.Z_BACK, T.RULES.Z_BACK);
       }
       const dzF = (targetZ - p.z) * f; // 沿朝向的位移（正=向前）
-      if (dzF > 0.10) fwd = 1;
-      else if (dzF < -0.10) back = 1;
+      // 前后(z)移动门控：敏捷<1 惩罚时纳入占空比（否则前后无条件移动，惩罚形同虚设）；
+      // 基准/溢出难度保持原样（不受门控，前后响应不变）
+      const zDutyOn = agiUnder <= 0 || (s.moveT % 0.12) < 0.12 * moveDuty;
+      if (zDutyOn && dzF > 0.10) fwd = 1;
+      else if (zDutyOn && dzF < -0.10) back = 1;
       // 半场驱逐（安全机制）：人机卡在网前禁区或远离本方基础位、且球不在本方时，
       // 自动向本方半场方向驱逐回位（防止卡死在中场/网前）；恢复正常后清零
       const baseZ2 = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
@@ -274,8 +281,9 @@
       const dx = targetX - p.x;
       const dz = targetZ - p.z;
       s.moveT += dt;
-      const wantMove = Math.abs(dx) > 0.045 || Math.abs(dz) > 0.10;
-      if ((s.moveT % 0.12) < 0.12 * agility && wantMove) {
+      // 惩罚时死区放大（更懒散，小偏差不再微调）；占空比用折扣后的 moveDuty
+      const wantMove = Math.abs(dx) > moveDead || Math.abs(dz) > 0.10;
+      if ((s.moveT % 0.12) < 0.12 * moveDuty && wantMove) {
         if (dx > 0) r = 1;
         else l = 1;
       }
