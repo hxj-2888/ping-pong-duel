@@ -339,13 +339,18 @@
     // 注意：project 返回 CSS 像素坐标，而 canvas.width/height 是设备像素。动画层是半分辨率画布
     // （scale=dpr×0.5），若直接拿设备像素当边界，dpr=1 时屏幕右半场观众会被误剔、永远不进动画层
     // （得分时右半场无欢呼无摇头）→ 用当前 transform 的缩放把边界换算回 CSS 像素，静态层/动画层口径一致。
+    // 可见性基准用**座位坐标**（姿态无关）：动画层观众 cheer/shake 时 head/hips 会位移（起身/举手/摇头），
+    // 若按姿态坐标剔除，动画期边界观众可能与静态层（rest 姿态）可见性不同 → 静态/动画人数不一致。
+    // 座位 s 是固定站位（crowdLayout 生成后不变），两层用同一基准，人数严格一致。
     const _t = ctx.getTransform ? ctx.getTransform() : null;
     const _scale = _t && _t.a > 0 ? _t.a : 1;
     const CW = ctx.canvas ? ctx.canvas.width / _scale : 0;
     const CH = ctx.canvas ? ctx.canvas.height / _scale : 0;
     if (CW > 0 && CH > 0) {
+      const sp = cam.project(v3(s.x, s.y, s.z)); // 座位基准点（姿态无关）
+      if (!sp) return;
       const m = 60;
-      if (hp.x < -m || hp.x > CW + m || fp.y < -m || fp.y > CH + m) return;
+      if (sp.x < -m || sp.x > CW + m || sp.y < -m || sp.y > CH + m) return;
     }
     const sc = Math.min(hp.s, fp.s);
     // 头（圆头，与球员一致）

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test/net-test.js",
-    "test:all": "node test/net-test.js && node test/engine-stress.js && node test/physics-boundary-test.js && node test/ai-test.js && node test/browser-smoke.js && node test/crowd-anim-cache-test.js && node test/smash-counter-test.js && node test/net-retry-test.js && node test/input-mask-test.js && node test/do-alarm.js && node test/do-smoke.js",
+    "test:all": "node test/net-test.js && node test/engine-stress.js && node test/physics-boundary-test.js && node test/ai-test.js && node test/browser-smoke.js && node test/crowd-anim-cache-test.js && node test/crowd-count-consistency-test.js && node test/smash-counter-test.js && node test/net-retry-test.js && node test/input-mask-test.js && node test/do-alarm.js && node test/do-smoke.js",
     "test:do": "node test/do-smoke.js && node test/do-alarm.js",
     "test:persist": "node test/do-persist.js",
     "test:ws": "node test/ws-live.js",

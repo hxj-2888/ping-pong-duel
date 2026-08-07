@@ -76,12 +76,13 @@ const cam = new TTG.Camera();
 cam.set(TTG.v3(0, 4.8, -5.2), TTG.v3(0, 1.7, 0), VW / 2, VH / 2, VW * 0.9);
 const crowdLen = TTG.crowdLayout().length; // ~376（布局总数）
 // 与 drawPerson 屏幕外剔除一致的"可见观众数"：静态层全分辨率 / 动画层半分辨率
+// 剔除基准用**座位坐标**（姿态无关，与 drawPerson 一致）——动画层 cheer/shake 时
+// head/hips 位移，若按姿态坐标统计会与静态层人数不一致
 function visibleCount(cw, ch) {
   return TTG.crowdLayout().filter((s) => {
-    const p = TTG.seatedPose(s, 0, 0, 0);
-    const hp = cam.project(p.head), fp = cam.project(p.hips);
-    if (!hp || !fp) return false;
-    return !(hp.x < -60 || hp.x > cw + 60 || fp.y < -60 || fp.y > ch + 60);
+    const sp = cam.project(TTG.v3(s.x, s.y, s.z));
+    if (!sp) return false;
+    return !(sp.x < -60 || sp.x > cw + 60 || sp.y < -60 || sp.y > ch + 60);
   }).length;
 }
 const statLen = visibleCount(VW, VH);
