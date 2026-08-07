@@ -437,8 +437,10 @@
     drawBenches(cc, cam);
     if (withCrowd !== false) drawCrowd(cc, cam, 0, viewSide, null); // 静止 rest 姿态（time=0, 无欢呼）
   }
-  // 动画层重建：画**全部**观众——有欢呼/摇头量的按动作绘制，其余 rest 姿态兜底（动画期静态层不含观众，
-  // 必须由动画层兜齐，否则会出现"消失的观众"或与静态层叠影复制体）。快速绘制（去描边）+ 半分辨率；透明底叠在静态层上
+  // 动画层重建：画**全部**观众——有欢呼/摇头量的按动作绘制，其余 rest 姿态兜底。
+  // 透明底叠在静态层上。动画期静态层**不含观众**（防叠影复制体：动作姿态位移会让两层同人不同影），
+  // 全部观众由动画层绘制。动画层必须在 fan 非零时烘焙（30Hz），否则观众消失——这是关键约束。
+  // 全分辨率 + 描边与静态层同画风。
   function rebuildAnimCache(entry, cam, vw, vh, viewSide, mainCtx, time, fan) {
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
     const s = CROWD_ANIM_SCALE;
@@ -493,7 +495,8 @@
         ctx.drawImage(st.canvas, 0, 0, vw, vh);
         return;
       }
-      // 静态层：相机/尺寸/DPR/模式（含动画期无观众）变化才重建
+      // 静态层：相机/尺寸/DPR/模式变化才重建。动画期静态层**不含观众**（防叠影复制体），
+      // 全部观众由动画层绘制——动画层必须在 fan 非零时烘焙，否则观众消失（"一欢呼人少一半"）
       if (st.key !== key) {
         st.key = key;
         rebuildCrowdCache(entry, cam, vw, vh, viewSide, ctx, crowdMode === 'static');

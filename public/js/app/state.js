@@ -364,6 +364,9 @@
   function triggerCheer(winner) {
     app.fan.cheer[winner] = 1;
     app.fan.shake[1 - winner] = 1;
+    // 强制下一帧渲染：确保 fan 非零后动画层立即烘焙（30Hz 烘焙的 animDue 依赖渲染帧，
+    // 若本帧渲染已过/被跳过，下一帧必须补上，否则动画期观众消失——"一欢呼人少一半"）
+    app.resizeDirty = true;
   }
 
   // 按比分更新背景音乐紧张强度：
