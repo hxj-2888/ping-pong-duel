@@ -261,18 +261,19 @@ input:focus { border-color: var(--blue); }
     background: #0d1220; padding: 14px 0 10px;
   }
   .menu-scroll { flex: 1 1 auto; overflow-y: auto; width: 100%; margin: 0; padding-top: 150px; }
-  /* 手机端（v1.6.1）：简易操作说明移至页面最顶部（比分栏/观众行之上），不被虚线面板遮挡 */
-  #hintBar { white-space: normal; width: 92%; text-align: center; font-size: 12px; top: calc(env(safe-area-inset-top) + 4px); }
-  /* 虚线面板压缩尺寸（padding/font/gap 收紧），保持在比分栏下方 */
+  /* 手机端（v1.6.2）：简易操作说明放在比分栏正下方（不在页面最上方） */
+  #hintBar { white-space: normal; width: 92%; text-align: center; font-size: 12px; top: 116px; }
+  /* 虚线面板：压缩尺寸、放在简易操作说明下方；宽度贴合内容（fit-content）居中，不遮挡两侧观众席 */
   #hitRangeInfo {
-    top: 122px;
+    top: 152px;
     left: 50%;
     transform: translateX(-50%);
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
     gap: 2px 10px;
-    max-width: calc(100vw - 8px);
+    width: fit-content;
+    max-width: calc(100vw - 16px);
     padding: 3px 8px;
     border-radius: 8px;
     font-size: 11px;
