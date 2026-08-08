@@ -87,15 +87,16 @@ const ELEMENT_IDS = [
   'joinInput', 'btnSettings', 'btnSettingsGame', 'settingsPanel', 'btnSettingsClose',
   'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomCode', 'roomHint', 'statusBar',
   // 联机框（主页「联机对战」入口，等同新开页面）：模式切换/建房/加入/等待/教程
-  'btnNetEntry', 'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus',
+  'btnNetEntry', 'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus', 'netOperate',
   'lanTargetRow', 'lanTargetInput', 'lanUrls', 'lanFirewallNote',
-  // 说明书（独立全屏页面）：电脑=设置按钮下方，手机=触控底栏
-  'manualPanel', 'btnManualMenu', 'btnManualTouch', 'btnManualBack',
+  // 说明书（独立全屏页面）：电脑=设置按钮下方，手机=触控底栏；滑钮滚动
+  'manualPanel', 'btnManualMenu', 'btnManualTouch', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot',
   'hrSmashRow', 'hrLobRow', 'smashStatus', 'lobStatus',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
-  'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
+  'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneAServe',
+  'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility', 'tuneBServe',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch', 'btnSmash',
   'gameTools', 'btnPause', 'btnExit', 'fpsMeter',

@@ -68,7 +68,7 @@
       <div id="statusBar" class="status"></div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v152.apk" download="PingPongDuel-v152.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v161.apk" download="PingPongDuel-v161.apk" style="display:none">📱 下载安卓版（直接安装）</a>
         <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
       <div id="recordsPanel" class="records-mini">个人生涯 · 加载中…</div>
@@ -83,13 +83,14 @@
         <h2>联机对战</h2>
         <button id="btnNetBack" class="btn">← 返回主菜单</button>
       </div>
+      <!-- 操作区（建房进入等待态后整体隐藏：房主无需再输房间号，需求 11） -->
+      <div id="netOperate">
       <!-- 模式切换：本地/公网 + 公网 ⚠ 说明（点击展开，再点收回） -->
       <div class="net-mode-row">
         <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
         <button id="btnNetWarn" class="btn small net-warn" style="display:none" title="说明">⚠</button>
       </div>
       <div id="netWarnNote" class="net-warn-note" style="display:none">⚠ 玩家量过大将导致服务器负载卡顿</div>
-      <!-- 操作区 -->
       <div class="row">
         <button id="btnHost" class="btn primary">创建联机房间</button>
         <button id="btnJoin" class="btn">加入房间</button>
@@ -100,6 +101,7 @@
       <!-- 本地联机：对方设备地址（本地模式下显示，可填 IP 或 IP:端口，支持 IP+房间码加入） -->
       <div class="row lan-target-row" id="lanTargetRow" style="display:none">
         <input id="lanTargetInput" placeholder="对方设备地址（如 192.168.1.5:8765，可留空）" spellcheck="false" autocapitalize="off" autocomplete="off">
+      </div>
       </div>
       <!-- 房主等待区（原独立等待面板合并进来）：本地联机网址显示在房间码上方 -->
       <div id="netWait" style="display:none">
@@ -114,18 +116,6 @@
         </div>
         <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
       </div>
-      <!-- 精简联机教程（完整内容在说明书，杜绝重复） -->
-      <details class="manual-details">
-        <summary>📶 联机教程</summary>
-        <div class="manual-content">
-          <p class="manual-title">本地联机（两台设备同一网络，无需公网）</p>
-          <p>房主点「创建联机房间」，面板显示 4 位房间码和本机地址列表（有多个网卡就列多行，选与对方同一网络的那个）；对方连同一 Wi-Fi，打开 <b>http://房主IP:8765</b> 输入房间码加入。首次联机请<b>手动</b>放行防火墙 TCP 8765（游戏不会自动修改防火墙）。</p>
-          <p class="manual-title">公网联机（任何网络）</p>
-          <p>点「联机:本地」切换为「联机:公网」，再建房/加入即可；通过 Cloudflare 服务器，公网任何地方的朋友都能加入。</p>
-          <p class="manual-title">网页版说明</p>
-          <p>网页版默认公网联机；本地联机请用桌面版 / 安装包，或让朋友直接打开房主分享的 <b>http://IP:8765</b> 加入。</p>
-        </div>
-      </details>
       <div id="netStatus" class="status"></div>
     </div>
   </div>
@@ -189,6 +179,7 @@
               <label class="tune-row">接球 <input id="tuneACatch" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
               <label class="tune-row">攻击 <input id="tuneASmash" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
               <label class="tune-row">敏捷 <input id="tuneAAgility" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
+              <label class="tune-row">发球距离 <input id="tuneAServe" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
             </div>
             <button id="tuneResetA" class="tune-reset" type="button">重置 ×1</button>
           </div>
@@ -209,6 +200,7 @@
               <label class="tune-row">接球 <input id="tuneBCatch" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
               <label class="tune-row">攻击 <input id="tuneBSmash" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
               <label class="tune-row">敏捷 <input id="tuneBAgility" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
+              <label class="tune-row">发球距离 <input id="tuneBServe" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
             </div>
             <button id="tuneResetB" class="tune-reset" type="button">重置 ×1</button>
           </div>
@@ -222,6 +214,7 @@
               <label class="tune-row">接球 <input id="tuneOppCatch" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
               <label class="tune-row">攻击 <input id="tuneOppSmash" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
               <label class="tune-row">敏捷 <input id="tuneOppAgility" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
+              <label class="tune-row">发球距离 <input id="tuneOppServe" type="range" min="50" max="150" step="5" value="100"><b>×1.00</b><span class="tune-eff"></span></label>
             </div>
             <button id="tuneResetOpp" class="tune-reset" type="button">重置 ×1</button>
           </div>
@@ -310,7 +303,7 @@
         <h2>📖 说明书</h2>
         <button id="btnManualBack" class="btn">← 返回</button>
       </div>
-      <div class="manual-scroll">
+      <div class="manual-scroll" id="manualScroll">
         <details class="manual-capsule" data-platform="pc" open>
           <summary>电脑操作</summary>
           <div class="manual-capsule-body">
@@ -322,7 +315,7 @@
             <p>反击扣杀奖励：成功反击电脑扣杀时，该回球视为扣杀、电脑应对概率减半（地狱 0.95→0.475、困难 0.55→0.275）；扣杀/低平快球来球均有免起拍延迟命中窗，可反应式按键</p>
             <p>低平快球反击奖励（更高档）：蹲下+推球接回低平快球时，该回球更高球速 + 打向边角，且同样视为扣杀、电脑应对概率减半</p>
             <p>移动范围：可在己方半场内自由前后左右移动（台面两侧可一直走到球网附近），不能站上球桌；移动中也能击球</p>
-            <p>电脑 AI 数值调控：击败地狱难度后，人机对战的暂停面板变为 4 项 AI 参数滑杆（反应/非刻意漏球率/攻击性/敏捷，即时生效）</p>
+            <p>电脑 AI 数值调控：击败地狱难度后，人机对战的暂停面板变为 5 项 AI 参数滑杆（反应/非刻意漏球率/攻击性/敏捷/发球距离，即时生效）</p>
           </div>
         </details>
         <details class="manual-capsule" data-platform="mobile" open>
@@ -335,7 +328,7 @@
             <p>低平快球反击奖励（更高档）：接回低平快球（蹲下）后回球更快更刁钻，电脑更难接</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>接球判定与击球手感</summary>
           <div class="manual-capsule-body">
             <p>碰撞箱（进箱即命中）：以球员为中心、向网前偏移 0.42m 的长方体（1.2m 宽 × 0.8m 深 × 0.7m 高，可接球高 0.70~1.40m）；球进入箱体后点击推球/扣球即命中，球拍自动伸向球完成击球动画</p>
@@ -349,7 +342,7 @@
             <p>低平快球反击奖励（更高档）：成功接回低平快球（蹲下+推球）时，该回球更高球速 + 刁钻边角落位，且同样视为扣杀、电脑应对概率减半——比反击扣杀的回报更高</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>判分与规则</summary>
           <div class="manual-capsule-body">
             <p>11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
@@ -357,7 +350,7 @@
             <p>发球位置：发球方站在台面中路附近（台边站位解不出合法发球），瞄准对方半台</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>AI 对手特性（人机对战）</summary>
           <div class="manual-capsule-body">
             <p>四档难度：简单（反应慢、站位偏、只推球不扣杀，非刻意漏球率约 45%）/ 中等（反应适中、高球常扣杀，非刻意漏球率约 5%）/ 困难（反应快、追位准、高球必扣杀，非刻意漏球率约 2.5%）/ 地狱（反应/站位/扣杀全面拉满，0% 刻意漏球，可反击扣杀）</p>
@@ -367,7 +360,7 @@
             <p>观战（AI vs AI）与人机对战一致：地狱 0% 刻意漏球；观战暂停面板可调双方难度与 4 项 AI 参数</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>判定范围虚线</summary>
           <div class="manual-capsule-body">
             <p>设置（右上角 ⚙）中「判定范围虚线」开关，默认关闭；开启后显示判定范围虚线（进箱变绿高亮并「嘀」提示音）。手机端仅保留 接球箱 + 配套虚线 + 球高标识，不显示扣杀/高吊虚线指示</p>
@@ -375,7 +368,7 @@
             <p>AI 观战只显示实时球高/进箱，不做可扣杀/可高吊指示（与玩家操作无关）</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>个人生涯</summary>
           <div class="manual-capsule-body">
             <p>每局结束自动记录胜负（人机 / 本地双人 / 联机都会计入，含真人记录），后端留最近 60 条——本地版写入 records.json，公网联机写入 Cloudflare</p>
@@ -383,7 +376,7 @@
             <p>手机端：战绩保存在手机本地，无需联网；卸载 App 或清除应用数据会清空全部战绩，换手机/重装前请留意</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>联机对战</summary>
           <div class="manual-capsule-body">
             <p>入口：主页「联机对战」→ 联机框（等同新开页面），内含 本地/公网 切换、建房/加入、房间码、对方设备地址与房主等待面板。</p>
@@ -398,14 +391,14 @@
             <p>浏览器菜单 →「添加到主屏幕 / 安装应用」，即可像 App 一样从桌面图标进入（下载完即可装）</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>国际赛事标准</summary>
           <div class="manual-capsule-body">
             <p>球台 2.74×1.525m（高 0.76m）· 网高 0.1525m · 球 40mm / 2.7g · 拍面 15×15cm</p>
             <p>规则：11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both">
+        <details class="manual-capsule" data-platform="both" open>
           <summary>模式与提示</summary>
           <div class="manual-capsule-body">
             <p>模式：人机对战（简单/中等/困难/地狱）· AI 观战 · 本地双人（电脑）· 联机（4 位房间码）</p>
@@ -413,6 +406,10 @@
             <p>移动中也能击球；蹲下能接贴地球但会降低移动速度；扣球需球够高，否则撞网判负</p>
           </div>
         </details>
+      </div>
+      <!-- 说明书滑钮（手机端，v1.6.1）：纵向滑轨 + 可拖拽滑钮 ↔ 内容滚动双向同步 -->
+      <div class="manual-scrollbar" id="manualScrollbar" style="display:none">
+        <div class="manual-scroll-thumb" id="manualScrollThumb"></div>
       </div>
     </div>
   </div>

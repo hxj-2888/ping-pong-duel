@@ -93,23 +93,24 @@
 
   // 从发球点采样 1.6s 物理轨迹；第一次落对方半台处截断，落点标记更准确。
   // dt=0.04（40 点）：视觉平滑足够，比原 0.025/64 点重算省 ~37%（瞄准移动时每帧重算成本）
+  // v1.6.1：轨迹未合法落到对方半台台面（出界/未过网）→ 返回 null，整条虚线屏蔽、不显示落点标记
   function sampleServePath(H, plan, server) {
     const c = { pos: { x: H.x, y: H.y, z: H.z }, vel: { ...plan.vel }, spin: { ...plan.spin } };
     const pts = [];
     const dur = 1.6, dt = 0.04;
-    let t = 0, done = false;
+    let t = 0, done = false, landed = false;
     const oppSide = 1 - server; // 对方半台 z 符号：0 号在 z<0，1 号在 z>0
     pts.push({ x: c.pos.x, y: c.pos.y, z: c.pos.z });
     while (t < dur && !done) {
       const h = Math.min(dt, dur - t);
       PPD.TT.physicsStep(c, h, (ev) => {
-        if (ev.type === 'floor') done = true;              // 出界/落地，无需再画
-        else if (ev.type === 'bounce' && ((c.pos.z > 0) === (oppSide === 1))) done = true; // 落到对方半台 → 轨迹终点
+        if (ev.type === 'floor') done = true; // 落出球台/出界：未合法落台
+        else if (ev.type === 'bounce' && ((c.pos.z > 0) === (oppSide === 1))) { done = true; landed = true; } // 对方半台落台
       });
       pts.push({ x: c.pos.x, y: c.pos.y, z: c.pos.z });
       t += h;
     }
-    return pts;
+    return landed ? pts : null;
   }
 
   // 发球待发/挥拍期间：用引擎已生成好的发球方案（p.servePlan）从发球点采样 1.6s 物理轨迹；

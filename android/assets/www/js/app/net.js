@@ -90,8 +90,9 @@
     const clearJoinTimer = () => { if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; } };
     const scheduleJoinRetry = () => {
       clearJoinTimer();
+      // v1.6.1：首次 8s（DO 冷启动/驱逐恢复宽限），后续 6s；共 3 次重试——避免部署后冷启动误报"连接服务器失效"
       joinTimer = setTimeout(() => {
-        if (joinTries >= 2) {
+        if (joinTries >= 3) {
           PPD.setStatus(hostMode ? '建房超时，请重试' : '加入超时，请确认房间码后重试');
           return;
         }
@@ -99,7 +100,7 @@
         PPD.setStatus(hostMode ? '建房超时，自动重连中…' : '加入超时，自动重连中…');
         net.close();
         net.connect();
-      }, 6000);
+      }, joinTries === 0 ? 8000 : 6000);
     };
     net.on('open', () => {
       PPD.setStatus('已连接服务器');
@@ -148,6 +149,7 @@
         PPD.show(PPD.ui.gameScreen, false);
         PPD.show(PPD.ui.netPanel, true);
         PPD.show(PPD.ui.netWait, true);
+        PPD.show(PPD.ui.netOperate, false); // v1.6.1：房主建房后隐藏操作区（无需再输房间号）
         PPD.ui.roomHint.textContent = '等待对手加入…';
         PPD.setStatus(`房间已创建：${m.code}`);
         renderLANUrls(); // 本地模式：显示"对方请打开 http://IP:端口"（含 Radmin VPN 虚拟网卡 IP）
