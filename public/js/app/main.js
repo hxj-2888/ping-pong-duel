@@ -297,12 +297,11 @@
   }
   PPD.openManual = openManual;
   PPD.closeManual = closeManual;
-  // 电脑端：设置在设置按钮正下方、同尺寸（需求 18）；手机端入口在触控底栏（需求 13/17）
+  // 说明书按钮：设置在设置按钮正下方、同尺寸（电脑端 + 手机端主页统一；v1.6.2 手机端入口移入主页设置下方）
   if (PPD.ui.btnManualMenu) {
-    if (!PPD.isTouch) PPD.show(PPD.ui.btnManualMenu, true);
+    PPD.show(PPD.ui.btnManualMenu, true);
     PPD.ui.btnManualMenu.addEventListener('click', openManual);
   }
-  if (PPD.ui.btnManualTouch) PPD.ui.btnManualTouch.addEventListener('click', openManual);
   if (PPD.ui.btnManualBack) {
     PPD.ui.btnManualBack.addEventListener('click', () => { PPD.GameAudio.ui(); closeManual(); });
   }
