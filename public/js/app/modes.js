@@ -69,7 +69,6 @@
       PPD.app.lastEventKeys.clear();
       PPD.app.lastPhase = -1;
     }
-    PPD.GameAudio.cheer(); // 再来一局：对局开场鼓掌声（v1.6 需求 22）
   }
 
   function quitGame() {
@@ -123,7 +122,6 @@
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML = '摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';
     }
-    PPD.GameAudio.cheer(); // 联机对局开始：鼓掌声（v1.6 需求 22）
     PPD.showTouch(true);
   }
 
@@ -145,7 +143,6 @@
     PPD.ui.hintBar.innerHTML =
       'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ,=推球 · .=扣球';
     PPD.GameAudio.ensure();
-    PPD.GameAudio.cheer(); // 对局开场鼓掌声（v1.6 需求 22：修复开场掌声消失）
     PPD.showTouch(true);
   }
 
@@ -183,7 +180,6 @@
         '摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';
     }
     PPD.GameAudio.ensure();
-    PPD.GameAudio.cheer(); // 对局开场鼓掌声（v1.6 需求 22）
     PPD.showTouch(true);
   }
 
@@ -214,7 +210,6 @@
     PPD.ui.hintBar.innerHTML =
       `红方 ${LA.name} vs 蓝方 ${LB.name} · 暂停中可调难度`;
     PPD.GameAudio.ensure();
-    PPD.GameAudio.cheer(); // 对局开场鼓掌声（v1.6 需求 22）
     PPD.showTouch(false);
   }
 

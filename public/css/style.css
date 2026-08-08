@@ -133,6 +133,8 @@ input:focus { border-color: var(--blue); }
 .net-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .net-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
 .net-mode-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+/* v1.6.2：操作区子项（联机:公网 / 创建·加入 / 房间码输入框）保持约 2mm(8px) 空隙，不粘连 */
+#netOperate { display: flex; flex-direction: column; gap: 8px; }
 /* 公网 ⚠ 感叹号（需求 19）：点击展开说明 */
 .net-warn { color: #ffd166; border-color: rgba(255, 209, 102, 0.45); font-weight: 700; }
 .net-warn-note {
@@ -386,7 +388,7 @@ canvas#game { touch-action: none; }
 }
 .manual-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-  width: min(680px, 94vw); max-height: 92vh;
+  width: min(680px, 94vw); max-height: 96vh; /* v1.6.2：适度扩容 */
   display: flex; flex-direction: column; gap: 12px;
   padding: 22px 26px; position: relative; /* 滑钮定位基准 */
 }
@@ -394,6 +396,7 @@ canvas#game { touch-action: none; }
 .manual-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
 .manual-scroll {
   overflow-y: auto; overflow-x: hidden;
+  flex: 1 1 auto; min-height: 0; /* v1.6.2：flex 子项正确收缩滚动，容纳全部内容（扩容） */
   display: flex; flex-direction: column; gap: 4px;
   padding-right: 4px;
 }

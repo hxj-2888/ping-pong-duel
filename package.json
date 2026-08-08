@@ -1,6 +1,6 @@
 {
   "name": "ping-pong-duel",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "双人联机乒乓球游戏 · ITTF 标准尺寸 · 火柴人物理骨架 · 观众席欢呼 · 发球瞄准/跑步/蹲下 · 零依赖",
   "main": "server.js",
   "scripts": {
