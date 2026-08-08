@@ -205,7 +205,7 @@
         const gate = DEF_EFF[level] || 1;
         sd = (L.smashDef || 0) <= 0 ? 0 : clampV(1 - (1 - (L.smashDef || 0)) / mul, 0, 1) * gate;
       }
-      return `非刻意漏球率 ${Math.round(miss * 100)}%（${missTxt}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
+      return `刻意漏球率 ${Math.round(miss * 100)}%（${missTxt}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
     }
     if (mulKey === 'smashMul') {
       const over = Math.max(0, mul - 1);
