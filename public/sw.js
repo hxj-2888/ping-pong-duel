@@ -7,7 +7,7 @@
  * ============================================================ */
 'use strict';
 
-const CACHE = 'ppd-v3'; // v1.6：缓存名递增，强制各端（桌面/网页/APK）刷新旧 Service Worker 预缓存
+const CACHE = 'ppd-v4'; // v1.6.2：缓存名递增，强制各端（桌面/网页/APK）刷新旧 Service Worker 预缓存（应用壳）
 
 // 首次安装：预缓存应用外壳（核心文件；失败不阻塞安装）
 self.addEventListener('install', (e) => {
