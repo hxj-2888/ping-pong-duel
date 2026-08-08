@@ -132,9 +132,9 @@
   }
 
   // AI 发球目标（v1.6.1 重构）：方向混合——朝对手站位 / 远离对手镜像 / 中路边线，按难度加权；
-  // 发球距离（深度）随 serveDistMul 滑杆调节（×0.5 短球贴网 ~ ×1.5 深球压底线），落点夹取合法区间。
+  // 发球距离由 AI 内部随机（短球贴网 ~ 深球压底线），落点夹取合法区间。
   // 通过 solveServeTo 求解后写入 servePlan/serveAimSet，startServeStroke 复用（预览即实发）。
-  function aiServeAim(engine, side, s, serveDistMul) {
+  function aiServeAim(engine, side, s) {
     const p = engine.players[side], opp = engine.players[1 - side], f = p.facing;
     const TW = T.RULES.TABLE_WIDTH / 2, TL = T.RULES.TABLE_LENGTH / 2;
     const mx = TW - 0.10, mz = TL - 0.14;
@@ -145,8 +145,8 @@
     else if (r < 0.8) tx = -opp.x * 0.55;
     else tx = (rnd(s) < 0.5 ? -1 : 1) * (0.25 + rnd(s) * 0.35);
     tx = Math.max(-mx, Math.min(mx, tx));
-    // 距离：基准深度（0.30~0.75，距网距离）× 滑杆倍率，夹取合法区间
-    const depth = Math.max(0.10, Math.min(0.75, (0.30 + rnd(s) * 0.45) * serveDistMul));
+    // 距离：AI 内部随机深度（0.30~0.75，距网距离），夹取合法区间
+    const depth = Math.max(0.10, Math.min(0.75, 0.30 + rnd(s) * 0.45));
     const tz = f > 0 ? Math.min(mz, depth) : Math.max(-mz, -depth);
     const plan = T.solveServeTo(engine, side, tx, tz, false);
     if (plan) {
@@ -200,8 +200,6 @@
     // 敏捷>1（滑杆值 >×1）移动速度加成：最大 +25%（×1.5 封顶）——
     // 写入玩家 speedMul（引擎 step 逐帧应用），与惩罚占空比并存
     const speedBonus = Math.min(0.25, Math.max(0, agilityMul - 1) * 0.5);
-    // v1.6.1：AI 发球距离倍率（滑杆 0.5~1.5，默认 ×1；仅影响 AI 发球落点深度）
-    const serveDistMul = t.serveDistMul == null ? 1 : Math.max(0.5, Math.min(1.5, t.serveDistMul));
     // 敏捷<1 惩罚：占空比额外折扣（mul=0.5 时再打 75 折）+ 前后(z)移动也纳入门控 + 追球死区放大
     const moveDuty = clamp(agility * (1 - agiUnder * 0.5), 0, 1);
     const moveDead = 0.045 * (1 + agiUnder * 1.5);
@@ -241,8 +239,8 @@
         const baseZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
         const settled = Math.abs(p.z - baseZ) < 0.05 && Math.abs(p.vz) < 0.05;
         if (settled && s.serveCd <= 0) {
-          // v1.6.1：AI 发球重构——主动设定发球目标（朝对手/远离对手/中路边线 + 距离随滑杆调节）
-          aiServeAim(engine, side, s, serveDistMul);
+          // v1.6.1：AI 发球重构——主动设定发球目标（朝对手/远离对手/中路边线，距离 AI 内部随机）
+          aiServeAim(engine, side, s);
           pu = 1;
           s.serveCd = 0.40;
         }

@@ -191,8 +191,8 @@
     aiLevelA: 1,         // AI 观战：红方 AI 难度
     aiLevelB: 1,         // AI 观战：蓝方 AI 难度
     // AI 观战：在难度基准上的参数微调倍率（暂停面板滑杆，默认 ×1 = 基准）
-    aiTuneA: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1, serveDistMul: 1 },
-    aiTuneB: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1, serveDistMul: 1 },
+    aiTuneA: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
+    aiTuneB: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
     side: 0,             // 联机时我的方位
     sideSet: false,      // 联机 side 是否已确立（房主=创建响应，加入方=首条非等待 room）
     heartbeatTimer: null,
