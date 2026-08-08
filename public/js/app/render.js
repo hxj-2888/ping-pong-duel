@@ -270,8 +270,9 @@
           v: { x: lerp(a.pv[0], p.pv[0]), y: lerp(a.pv[1], p.pv[1]), z: lerp(a.pv[2], p.pv[2]) },
         },
         sb: p.sb,
-        crouch: lerp(a.cq != null ? a.cq : 0, p.cq), // 蹲下（Ctrl）：渲染层画蹲姿
-        run: lerp(a.rn != null ? a.rn : 0, p.rn),    // 跑步（Shift）
+        // 蹲下/跑步钳制 0~1：alpha 负外推（时钟略落后于上一快照）时防止状态值越界
+        crouch: Math.max(0, Math.min(1, lerp(a.cq != null ? a.cq : 0, p.cq))),
+        run: Math.max(0, Math.min(1, lerp(a.rn != null ? a.rn : 0, p.rn))),
       };
     });
     let ball = null, ballInHand = null;
@@ -515,7 +516,10 @@
     const sa = PPD.app.snapA;
     if (sa && typeof sa.t === 'number' && typeof snap.t === 'number' && snap.t > sa.t) {
       const clock = PPD.app.interpClock != null ? PPD.app.interpClock : snap.t;
-      const alpha = Math.max(0, Math.min(1, (clock - sa.t) / (snap.t - sa.t)));
+      // alpha 不再钳制下限 0：时钟略落后于上一快照时对玩家位置线性外推（lerp alpha<0），
+      // 避免"回到上一快照位置"的画面回退/人物回溯（旧版固定 50ms 滞后在 60Hz 广播下 alpha 恒被钳 0）；
+      // 上限 1.2 防时钟跑太前跳变。球维持速度外推（快球低延迟）
+      const alpha = Math.max(-0.5, Math.min(1.2, (clock - sa.t) / (snap.t - sa.t)));
       view = viewModelFromSnapInterp(sa, snap, alpha, PPD.app.side, ex);
     } else {
       view = viewModelFromSnap(snap, PPD.app.side, ex);

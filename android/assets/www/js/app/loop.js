@@ -20,8 +20,8 @@
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
-    // 渲染帧率门控：按所选上限（30/45/60/无上限，默认 60）控制渲染频率；物理仍 120Hz 步进（时钟不前进时放行，兼容测试；无上限=每帧 RAF 都渲染）
-    const frameRate = PPD.app.quality && PPD.app.quality.frameRate ? PPD.app.quality.frameRate : 60;
+    // 渲染帧率门控：按所选上限（30/60/无上限，默认无上限自动匹配设备刷新率）控制渲染频率；物理仍 120Hz 步进（时钟不前进时放行，兼容测试；无上限=每帧 RAF 都渲染）
+    const frameRate = PPD.app.quality && PPD.app.quality.frameRate ? PPD.app.quality.frameRate : 'unlimited';
     const renderDt = now - lastRender;
     const shouldRender = renderDt <= 0 || frameRate === 'unlimited' || renderDt >= 1000 / frameRate;
     // 帧间隔滚动均值（估测帧数依据；renderDt<=0 的测试环境不计入）
@@ -32,7 +32,7 @@
       for (let i = 0; i < FRAME_HIST; i++) sum += frameHist[i];
       const avg = sum / FRAME_HIST;
       PPD.app.quality.frameMs = avg;
-      // 右上角估测帧数（60/45/30 档封顶 60；无上限档显示真实帧率；约 5 次/秒刷新，避免 DOM 抖动）
+      // 右上角估测帧数（30/60 档封顶 60；无上限档显示真实帧率；约 5 次/秒刷新，避免 DOM 抖动）
       if (now - lastFpsUpdate > 200) {
         lastFpsUpdate = now;
         const fps = frameRate === 'unlimited' ? Math.round(1000 / avg) : Math.min(60, Math.round(1000 / avg));
@@ -141,6 +141,8 @@
         PPD.renderSingle();
       }
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
+      // 设置暂停（需求 10）：暂停期间冻结输入发送（服务端继续推进，恢复时快照自动锚定）
+      if (!PPD.app.paused) {
       // 输入发送（50ms 节流 + 按键变化立即补发）：
       // - Cloudflare DO 官方建议"批量 50-100ms、少而大的消息"，大量小消息会压垮单个 DO；
       //   60Hz×2 客户端 = 120 条/秒会拖垮 DO（实测公网部署端广播塌到 ~1Hz）并快速吃满
@@ -162,6 +164,7 @@
           PPD.app.net.send({ t: 'in', k: myKeys });
         }
       }
+      } // 设置暂停：输入发送块结束（恢复后由快照自动锚定）
       if (renderNow || PPD.app.resizeDirty) {
         PPD.app.resizeDirty = false;
         lastRender = now;

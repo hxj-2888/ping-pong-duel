@@ -79,7 +79,8 @@
     const b = state.ball;
     const side = b.pos.z > 0 ? 1 : 0;
     if (b.lastBounce === side) {
-      ctx.endPoint(state, 1 - side, 'double'); // 同一半台连弹两次
+      // 球未过网（触网弹回本方半台）后同半台连弹两次：统一判「未过网」而非「两次弹跳」
+      ctx.endPoint(state, 1 - side, b.netBlocked ? 'no-cross' : 'double');
       return;
     }
     // 发球阶段：擦网球（netTouched）落到对方半台 → LET 重发（无论是否先落本方，
@@ -110,7 +111,10 @@
   function onBallFloor(state) {
     const b = state.ball;
     const striker = b.hitBy;
-    if (striker >= 0 && b.lastBounce === 1 - striker) {
+    if (striker >= 0 && b.netBlocked) {
+      // 击球未过网（触网弹回本方后落地）：判「未过网」，不再误显示 未能回球/出界
+      ctx.endPoint(state, 1 - striker, 'no-cross');
+    } else if (striker >= 0 && b.lastBounce === 1 - striker) {
       ctx.endPoint(state, striker, 'opp-miss');   // 对方已接球但未回
     } else if (striker >= 0) {
       ctx.endPoint(state, 1 - striker, 'out');    // 击球出界/不过网

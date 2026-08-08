@@ -117,15 +117,37 @@ input:focus { border-color: var(--blue); }
 .career-page-label { color: #b9c6dd; font-size: 13px; }
 .career-pager .btn { min-width: 84px; }
 
-.room-panel { background: radial-gradient(900px 500px at 50% 30%, #16233c 0%, #0d1220 65%); z-index: 20; }
-.room-panel h2 { letter-spacing: 3px; color: #cfe0ff; }
+/* 联机框（主页「联机对战」入口打开的全屏面板，等同新开页面；原 room-panel 已并入） */
+.net-panel {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
+  overflow-y: auto;
+}
+.net-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  width: min(520px, 94vw); max-height: 92vh;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 24px 28px; overflow-y: auto;
+}
+.net-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.net-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
+.net-mode-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+/* 公网 ⚠ 感叹号（需求 19）：点击展开说明 */
+.net-warn { color: #ffd166; border-color: rgba(255, 209, 102, 0.45); font-weight: 700; }
+.net-warn-note {
+  text-align: center; font-size: 12px; color: #ffd166;
+  background: rgba(255, 209, 102, 0.1); border: 1px solid rgba(255, 209, 102, 0.3);
+  border-radius: 8px; padding: 6px 10px;
+}
+/* 房主等待区（联机框内）：本地联机网址列表显示在房间码上方 */
+.net-card .room-code { font-size: 44px; padding: 8px 20px; margin-top: 6px; }
+.net-card .small { color: #7f90ad; text-align: center; line-height: 1.8; }
 .room-code {
   font-size: 58px; font-weight: 800; letter-spacing: 16px; color: #ffd166;
   background: rgba(0,0,0,0.35); border: 1px dashed rgba(255,209,102,0.5);
   border-radius: 14px; padding: 10px 28px; text-align: center;
 }
-.room-panel p { color: #b9c6dd; }
-.room-panel .small { color: #7f90ad; text-align: center; line-height: 1.8; }
 
 #hud {
   position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
@@ -151,14 +173,16 @@ input:focus { border-color: var(--blue); }
   font-weight: 800; letter-spacing: 4px; z-index: 6; opacity: 0; transition: opacity 0.25s;
   pointer-events: none; text-shadow: 0 2px 12px rgba(0,0,0,0.8); text-align: center;
 }
-#phaseBanner { top: 92px; font-size: 26px; color: #cfe0ff; }
-#pointToast { top: 140px; font-size: 22px; color: #ffd166; }
+#phaseBanner { top: 112px; font-size: 26px; color: #cfe0ff; }
+#pointToast { top: 160px; font-size: 22px; color: #ffd166; }
 
+/* 比赛页比分栏下方：简易操作说明（需求 15；主页通用说明已移除，完整内容在说明书） */
 #hintBar {
-  position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
-  font-size: 13px; color: #9fb1cf; z-index: 5; pointer-events: none;
-  background: rgba(10,15,26,0.6); padding: 7px 16px; border-radius: 20px;
+  position: fixed; top: 76px; left: 50%; transform: translateX(-50%);
+  font-size: 12px; color: #9fb1cf; z-index: 5; pointer-events: none;
+  background: rgba(10,15,26,0.55); padding: 4px 14px; border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.08); white-space: nowrap;
+  max-width: 94vw;
 }
 #hintBar b { color: #ffd166; }
 #netInfo {
@@ -235,9 +259,10 @@ input:focus { border-color: var(--blue); }
     background: #0d1220; padding: 14px 0 10px;
   }
   .menu-scroll { flex: 1 1 auto; overflow-y: auto; width: 100%; margin: 0; padding-top: 150px; }
-  #hintBar { white-space: normal; width: 92%; text-align: center; }
+  /* 手机端：比分栏在 top:64；简易操作说明在其下方（避开比分栏与虚线面板） */
+  #hintBar { white-space: normal; width: 92%; text-align: center; font-size: 12px; top: 158px; }
   /* 触控按钮上方留出提示栏位置，避免重叠 */
-  #hintBar { bottom: calc(104px + env(safe-area-inset-bottom)); font-size: 12px; }
+  #hintBar { bottom: auto; }
   .player-box { min-width: 92px; }
   /* 右上角工具独占顶行：HUD 下移、左侧模式信息隐藏 */
   #hud { top: 64px; }
@@ -256,8 +281,8 @@ input:focus { border-color: var(--blue); }
     border-radius: 10px;
   }
   #hitRangeInfo .hr-title { display: none; } /* 手机端紧凑：隐藏标题行 */
-  #phaseBanner { top: 170px; }
-  #pointToast { top: 212px; }
+  #phaseBanner { top: 206px; }
+  #pointToast { top: 248px; }
   /* 手机端：暂停面板（AI 观战调难度/调参）内边距收窄，调参区随屏收缩，文字全部留在框内 */
   .pause-card { padding: 18px 14px; min-width: 0; }
   .tune-side { min-width: 0; }
@@ -278,9 +303,8 @@ input:focus { border-color: var(--blue); }
   display: flex; flex-direction: column; gap: 10px; align-items: flex-end;
   pointer-events: auto;
 }
-/* 单玩家（人机/联机）：蹲下按钮固定在屏幕右下角（右侧）；
-   分屏双人（.local-duo）时按钮回到组内紧挨摇杆，右半屏让给 P2 组 */
-#touchControls:not(.local-duo) .tc-btns {
+/* 手机端（人机/联机）：功能按钮（说明书/蹲下）固定在屏幕右下角（右侧） */
+#touchControls .tc-btns {
   position: fixed; right: 18px; bottom: calc(14px + env(safe-area-inset-bottom));
 }
 .joy-area {
@@ -316,14 +340,8 @@ canvas#game { touch-action: none; }
   .touch-controls .tc-group { gap: 8px; }
   .touch-controls { padding: 0 12px calc(10px + env(safe-area-inset-bottom)); }
 }
-/* 分屏双人（本地）：窄屏下缩小摇杆/按钮，保证两组控件各自落在左右半屏不互相遮挡 */
-@media (max-width: 800px) {
-  #touchControls.local-duo .joy-area { width: 112px; height: 112px; }
-  #touchControls.local-duo .joy-base { width: 96px; height: 96px; }
-  #touchControls.local-duo .joy-knob { width: 42px; height: 42px; margin: -21px 0 0 -21px; }
-  #touchControls.local-duo .tbtn { width: 56px; height: 56px; font-size: 16px; }
-  #touchControls.local-duo .tc-group { gap: 8px; }
-}
+/* 手机端说明书入口按钮（需求 13/17）：与功能方块同尺寸，点击打开说明书页 */
+.manual-btn { font-size: 22px; }
 
 /* ---------- 右上角工具按钮 + 暂停面板 ---------- */
 .game-tools {
@@ -352,6 +370,35 @@ canvas#game { touch-action: none; }
   border-radius: 10px; cursor: pointer; transition: 0.15s;
 }
 .settings-btn:hover { background: rgba(255,255,255,0.16); }
+/* 电脑端说明书按钮：设置在设置按钮正下方、尺寸与设置按钮完全同等（需求 18） */
+.manual-menu-btn {
+  position: fixed; top: 62px; right: 14px; z-index: 8;
+  width: 40px; height: 40px; font-size: 17px; line-height: 1;
+  background: rgba(10, 15, 26, 0.72); border: 1px solid var(--line); color: #eef2f8;
+  border-radius: 10px; cursor: pointer; transition: 0.15s;
+}
+.manual-menu-btn:hover { background: rgba(255,255,255,0.16); }
+/* 说明书（独立全屏页面，等同新开页面；自身可滚动，防缩放） */
+.manual-panel {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
+  overflow-y: auto; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+}
+.manual-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  width: min(680px, 94vw); max-height: 92vh;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 22px 26px;
+}
+.manual-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: none; }
+.manual-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
+.manual-scroll {
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: 4px;
+  padding-right: 4px;
+}
+.manual-panel .manual-capsule-body { font-size: 12.5px; }
 /* 设置弹层（主页与比赛页共用，右上角 ⚙ 打开） */
 .settings-panel {
   position: fixed; inset: 0; z-index: 50;
@@ -371,38 +418,39 @@ canvas#game { touch-action: none; }
 }
 .pause-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-  padding: 28px 34px; text-align: center; display: flex; flex-direction: column; gap: 12px;
+  padding: 20px 22px; text-align: center; display: flex; flex-direction: column; gap: 10px;
   min-width: 260px; max-width: calc(100vw - 24px); box-sizing: border-box;
+  max-height: calc(100vh - 24px); overflow-y: auto; /* 压缩排版后内容直接放得下；极端小屏自动滚动兜底 */
 }
-.pause-card h2 { color: #ffd166; letter-spacing: 3px; }
+.pause-card h2 { color: #ffd166; letter-spacing: 3px; margin: 0 0 2px; }
 /* AI 观战：主页红/蓝双难度行（缩进防出框：允许换行 + 选择框限宽，窄窗口也不溢出卡片） */
 .aivai-row { justify-content: center; gap: 14px; flex-wrap: wrap; padding: 0 10px; }
 .aivai-row .ai-label select { max-width: 100%; min-width: 0; box-sizing: border-box; }
 /* AI 观战：暂停面板内双方难度调整 */
 .pause-aivai {
-  display: flex; flex-direction: row; gap: 14px; flex-wrap: wrap;
+  display: flex; flex-direction: row; gap: 10px; flex-wrap: wrap;
   background: rgba(255,255,255,0.05); border: 1px solid var(--line);
-  border-radius: 12px; padding: 12px 14px; margin-bottom: 4px;
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 4px;
 }
 .pause-aivai .ai-label input {
   flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; border-radius: 8px;
 }
 .pause-aivai .ai-label select { max-width: 100%; min-width: 0; box-sizing: border-box; }
-.tune-side { display: flex; flex-direction: column; gap: 6px; min-width: 190px; flex: 1; }
-.tune-grid { display: flex; flex-direction: column; gap: 5px; }
+.tune-side { display: flex; flex-direction: column; gap: 4px; min-width: 170px; flex: 1; }
+.tune-grid { display: flex; flex-direction: column; gap: 3px; }
 .tune-row {
   flex-direction: row; align-items: center; justify-content: space-between;
-  gap: 8px; font-size: 12px; color: #b9c6dd;
+  gap: 6px; font-size: 11.5px; color: #b9c6dd;
   flex-wrap: wrap; /* 让等效值提示（flex-basis:100%）真正独占一行 */
 }
 .tune-row input[type="range"] {
-  flex: 1; min-width: 90px; padding: 0; accent-color: var(--blue);
+  flex: 1; min-width: 72px; padding: 0; accent-color: var(--blue);
   background: transparent; border: none;
 }
 .tune-row b { color: #ffd166; min-width: 40px; text-align: right; }
 /* 四属性滑杆：等效值实时提示（独占一行，灰色小字）+ 重置按钮 */
 .tune-eff {
-  flex-basis: 100%; text-align: right; font-size: 11px; color: #7c8aa5;
+  flex-basis: 100%; text-align: right; font-size: 10.5px; color: #7c8aa5;
   white-space: normal;        /* 长文本换行，不横向溢出框 */
   overflow-wrap: anywhere;    /* 无空格长串（含全角括号）也可断行 */
 }

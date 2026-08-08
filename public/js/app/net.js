@@ -76,6 +76,7 @@
     PPD.app.reconnectStartedAt = 0;
     PPD.app.lastStateAt = 0;
     PPD.app.lastPongAt = 0;
+    PPD.app.roomCode = ''; // 全新会话：清残留房间码，确保 hostMode 始终新建房间（修复本地建房失败）
     PPD.app.interpClock = null;
     PPD.app._interpLast = null;
     PPD.app.pred = null; // 本地玩家预测状态随新会话重建
@@ -140,12 +141,13 @@
       }
       if (m.wait) {
         // 房主：创建响应即确立自己的 side=0；之后加入方广播（side=1）不应覆盖。
-        // 也可能是重连到空房/对手离开后只剩一人：回到等待面板（隐藏对局画面避免叠层）
+        // 也可能是重连到空房/对手离开后只剩一人：回到联机框等待区（隐藏对局画面避免叠层）
         PPD.app.side = m.side;
         PPD.app.sideSet = true;
         PPD.show(PPD.ui.menu, false);
         PPD.show(PPD.ui.gameScreen, false);
-        PPD.show(PPD.ui.roomPanel, true);
+        PPD.show(PPD.ui.netPanel, true);
+        PPD.show(PPD.ui.netWait, true);
         PPD.ui.roomHint.textContent = '等待对手加入…';
         PPD.setStatus(`房间已创建：${m.code}`);
         renderLANUrls(); // 本地模式：显示"对方请打开 http://IP:端口"（含 Radmin VPN 虚拟网卡 IP）
@@ -156,10 +158,10 @@
           PPD.app.sideSet = true;
           if (m.side === 1) PPD.app.names[1] = m.name;
         }
-        PPD.show(PPD.ui.roomPanel, false);
+        PPD.show(PPD.ui.netWait, false);
         PPD.app.lastStateAt = Date.now(); // 开局数据流基线：4s 内必有首帧快照
         if (PPD.app.mode !== 'online' || PPD.ui.gameScreen.style.display === 'none') {
-          PPD.startOnlineGame(PPD.app.side);
+          PPD.startOnlineGame(PPD.app.side); // 内部会隐藏主菜单与联机框
         } else {
           // 已在对局中（重连/重挂补发的 room）：只隐藏遮罩，不重置快照避免闪屏
           PPD.show(PPD.ui.overlay, false);
@@ -214,15 +216,19 @@
           PPD.app.pred.t = performance.now();
         }
       }
-      // 插值显示时钟（引擎时间 ms）：服务端 20Hz 广播（间隔 50ms），客户端滞后一个
-      // 间隔对相邻快照插值平滑（见 renderOnline/viewModelFromSnapInterp）。
-      // 开局/断流/追赶时跳对齐；正常时由渲染循环按真实时间 1x 推进。
+      // 插值显示时钟（引擎时间 ms）：广播间隔按**实测快照间距自适应**（本地 60Hz≈17ms、
+      // 公网 20Hz≈50ms、抖动时取滑动均值），客户端滞后一个实测间隔对相邻快照插值平滑
+      // （见 renderOnline/viewModelFromSnapInterp）。开局/断流/追赶时跳对齐；正常时由渲染循环按真实时间 1x 推进。
+      // 修复：旧版固定 50ms 假设在 60Hz 本地广播下时钟恒落后两个间隔，alpha 被钳到 0 造成"画面回退/人物回溯"。
       {
-        const INTERP_MS = 50; // 与服务端广播间隔一致（20Hz）
         const t = typeof PPD.app.snapB.t === 'number' ? PPD.app.snapB.t : 0;
-        if (PPD.app.snapA && typeof PPD.app.snapA.t === 'number' && typeof PPD.app.snapB.t === 'number') {
-          if (PPD.app.interpClock == null || PPD.app.snapB.t - PPD.app.interpClock > INTERP_MS * 1.5) {
-            PPD.app.interpClock = PPD.app.snapB.t - INTERP_MS; // 断流/开局：跳到最新之后一个间隔
+        if (PPD.app.snapA && typeof PPD.app.snapA.t === 'number' && typeof PPD.app.snapB.t === 'number' && PPD.app.snapB.t > PPD.app.snapA.t) {
+          // 实测快照间距（滑动均值，限幅 16~120ms，避免单帧抖动/重连大跳污染）
+          const gap = Math.min(120, Math.max(16, PPD.app.snapB.t - PPD.app.snapA.t));
+          PPD.app.interpGap = PPD.app.interpGap == null ? gap : PPD.app.interpGap * 0.7 + gap * 0.3;
+          const target = PPD.app.snapB.t - PPD.app.interpGap;
+          if (PPD.app.interpClock == null || PPD.app.interpClock > PPD.app.snapB.t || target - PPD.app.interpClock > PPD.app.interpGap * 2) {
+            PPD.app.interpClock = target; // 开局/断流/追赶：跳到最新之后一个实测间隔
           }
         } else {
           PPD.app.interpClock = t;
@@ -256,7 +262,9 @@
               PPD.GameAudio.score();
               PPD.GameAudio.cheer();   // 得分 → 掌声音效
               PPD.triggerCheer(e.s);   // 得分方观众欢呼、对方摇头
-              PPD.showPoint(`${e.s === PPD.app.side ? '你' : '对手'} 得分`);
+              // 失分原因（含未过网）：与本地/人机同一映射，按快照 pointReason 显示
+              const reason = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网' }[(m.s && m.s.pr) || ''] || '';
+              PPD.showPoint(`${e.s === PPD.app.side ? '你' : '对手'} 得分${reason ? ' · ' + reason : ''}`);
             }
             break;
           case 'over':

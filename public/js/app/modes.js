@@ -6,8 +6,13 @@
   'use strict';
 
   function setStatus(text) {
-    PPD.ui.statusBar.textContent = text;
-    PPD.ui.statusBar.style.opacity = 1;
+    // 联机框打开时状态提示显示在联机框内（netStatus），否则显示主菜单状态栏
+    const el = (PPD.ui.netPanel && PPD.ui.netPanel.style.display !== 'none' && PPD.ui.netStatus)
+      ? PPD.ui.netStatus
+      : PPD.ui.statusBar;
+    if (!el) return;
+    el.textContent = text;
+    el.style.opacity = 1;
   }
 
   function showOverlay(title, text, btnText, fn) {
@@ -64,6 +69,7 @@
       PPD.app.lastEventKeys.clear();
       PPD.app.lastPhase = -1;
     }
+    PPD.GameAudio.cheer(); // 再来一局：对局开场鼓掌声（v1.6 需求 22）
   }
 
   function quitGame() {
@@ -73,6 +79,10 @@
   function backToMenu() {
     hideGameOverNow();
     PPD.app.paused = false;
+    PPD.app.settingsPause = false; // 设置即暂停：退出对局时复位
+    PPD.app.manualPause = false;   // 说明书即暂停：退出对局时复位
+    PPD.show(PPD.ui.settingsPanel, false);
+    PPD.show(PPD.ui.manualPanel, false);
     PPD.show(PPD.ui.pausePanel, false);
     PPD.GameAudio.setIntensity(0); // 回到主菜单：背景音乐恢复常规节奏
     if (PPD.app.net) PPD.app.net.close();
@@ -81,9 +91,15 @@
     PPD.app.snapA = PPD.app.snapB = null;
     PPD.app.lastPhase = -1;
     PPD.app.sideSet = false; // 下次联机会话重新确立 side
+    // 清残留联机状态：房间码/重连计数，避免下次建房误走"重连旧房间"路径（本地建房失败修复）
+    PPD.app.roomCode = '';
+    PPD.app.reconnecting = false;
+    PPD.app.reconnectAttempt = 0;
+    PPD.app.reconnectStartedAt = 0;
     PPD.show(PPD.ui.gameScreen, false);
     PPD.show(PPD.ui.menu, true);
-    PPD.show(PPD.ui.roomPanel, false);
+    PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.netWait, false);
     PPD.showTouch(false);
     if (PPD.refreshRecords) PPD.refreshRecords(); // 个人生涯：返回主页时刷新
   }
@@ -99,12 +115,15 @@
     PPD.show(PPD.ui.gameScreen, true);
     PPD.show(PPD.ui.overlay, false);
     PPD.show(PPD.ui.pausePanel, false);
+    PPD.show(PPD.ui.netPanel, false); // 联机框等同新开页面：进入对局即关闭
+    PPD.show(PPD.ui.netWait, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
       'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML = '摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';
     }
+    PPD.GameAudio.cheer(); // 联机对局开始：鼓掌声（v1.6 需求 22）
     PPD.showTouch(true);
   }
 
@@ -119,15 +138,14 @@
     PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.gameScreen, true);
     PPD.show(PPD.ui.overlay, false);
-    PPD.show(PPD.ui.roomPanel, false);
+    PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
       'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ,=推球 · .=扣球';
-    if (PPD.isTouch) {
-      PPD.ui.hintBar.innerHTML = 'P1：摇杆=移动·上滑=扣球·蹲=蹲下（左半屏）｜ P2：摇杆=移动·上滑=扣球·蹲=蹲下（右半屏）· 发球=点两下';
-    }
     PPD.GameAudio.ensure();
+    PPD.GameAudio.cheer(); // 对局开场鼓掌声（v1.6 需求 22：修复开场掌声消失）
     PPD.showTouch(true);
   }
 
@@ -153,7 +171,8 @@
     PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.gameScreen, true);
     PPD.show(PPD.ui.overlay, false);
-    PPD.show(PPD.ui.roomPanel, false);
+    PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
@@ -164,6 +183,7 @@
         '摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';
     }
     PPD.GameAudio.ensure();
+    PPD.GameAudio.cheer(); // 对局开场鼓掌声（v1.6 需求 22）
     PPD.showTouch(true);
   }
 
@@ -186,13 +206,15 @@
     PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.gameScreen, true);
     PPD.show(PPD.ui.overlay, false);
-    PPD.show(PPD.ui.roomPanel, false);
+    PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     const LA = PPD.AIC.LEVELS[PPD.app.aiLevelA], LB = PPD.AIC.LEVELS[PPD.app.aiLevelB];
     PPD.ui.hintBar.innerHTML =
       `红方 ${LA.name} vs 蓝方 ${LB.name} · 暂停中可调难度`;
     PPD.GameAudio.ensure();
+    PPD.GameAudio.cheer(); // 对局开场鼓掌声（v1.6 需求 22）
     PPD.showTouch(false);
   }
 
