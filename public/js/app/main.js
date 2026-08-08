@@ -33,6 +33,7 @@
   function closeNetPanel() {
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.netOperate, true); // 恢复操作区（下次建房/加入可再操作）
     PPD.show(PPD.ui.menu, true); // 联机框等同新开页面：关闭后恢复主菜单
     if (PPD.app.net) PPD.app.net.close(); // 未入对局就离开联机框：断开连接
     PPD.app.roomCode = '';
@@ -277,10 +278,17 @@
       PPD.show(PPD.ui.pausePanel, false);
       PPD.updateGameTools();
     }
+    // v1.6.1：真正页面切换——从主菜单打开时隐藏主菜单（不叠加游戏界面）；手机端显示滑钮并同步尺寸
+    PPD.app._manualFromMenu = !!(PPD.ui.menu && PPD.ui.menu.style.display !== 'none');
+    if (PPD.app._manualFromMenu) PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.manualPanel, true);
+    if (PPD.ui.manualScrollbar) PPD.show(PPD.ui.manualScrollbar, PPD.isTouch);
+    if (PPD.updateManualScrollbar) requestAnimationFrame(PPD.updateManualScrollbar);
   }
   function closeManual() {
     PPD.show(PPD.ui.manualPanel, false);
+    if (PPD.ui.manualScrollbar) PPD.show(PPD.ui.manualScrollbar, false);
+    if (PPD.app._manualFromMenu) { PPD.app._manualFromMenu = false; PPD.show(PPD.ui.menu, true); }
     if (PPD.app.manualPause) {
       PPD.app.manualPause = false;
       PPD.app.paused = false;
@@ -299,6 +307,52 @@
   if (PPD.ui.btnManualBack) {
     PPD.ui.btnManualBack.addEventListener('click', () => { PPD.GameAudio.ui(); closeManual(); });
   }
+
+  // 说明书滑钮（v1.6.1，手机端显示）：纵向滑轨 + 可拖拽滑钮 ↔ 内容滚动双向同步
+  function updateManualScrollbar() {
+    const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualScroll;
+    if (!bar || !thumb || !sc) return;
+    const max = Math.max(1, sc.scrollHeight - sc.clientHeight);
+    const ratio = sc.clientHeight / Math.max(1, sc.scrollHeight);
+    thumb.style.height = Math.max(24, Math.round(bar.clientHeight * ratio)) + 'px';
+    thumb.style.top = (sc.scrollTop / max) * Math.max(0, bar.clientHeight - thumb.offsetHeight) + 'px';
+  }
+  function wireManualScrollbar() {
+    const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualScroll;
+    if (!bar || !thumb || !sc) return;
+    const setFromY = (y) => {
+      const max = Math.max(1, sc.scrollHeight - sc.clientHeight);
+      sc.scrollTop = (y / bar.clientHeight) * max;
+      updateManualScrollbar();
+    };
+    bar.addEventListener('pointerdown', (e) => {
+      if (e.target === thumb) return; // 滑钮拖动单独处理
+      e.preventDefault();
+      setFromY(e.clientY - bar.getBoundingClientRect().top);
+      const move = (ev) => setFromY(ev.clientY - bar.getBoundingClientRect().top);
+      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+    thumb.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startY = e.clientY;
+      const startTop = sc.scrollTop;
+      const move = (ev) => {
+        const max = Math.max(1, sc.scrollHeight - sc.clientHeight);
+        sc.scrollTop = startTop + ((ev.clientY - startY) / bar.clientHeight) * max;
+        updateManualScrollbar();
+      };
+      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+    sc.addEventListener('scroll', updateManualScrollbar);
+    window.addEventListener('resize', updateManualScrollbar);
+  }
+  PPD.updateManualScrollbar = updateManualScrollbar;
+  wireManualScrollbar();
 
   // 主页滚动已改用浏览器原生滚动条（自定义右端滑动条已移除，见修改记录四十五）
 

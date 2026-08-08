@@ -200,9 +200,11 @@
   }
 
   function startMusic() {
+    // v1.6.1 修复多层重叠杂音：**单一音源互斥**——任意时刻只保留一个音乐音源。
     // 优先 WebAudio 解码缓冲：AudioBufferSourceNode.loop=true → 零间隙无缝循环
     if (bgmBuf && ctx) {
       if (bgmSource) return;
+      if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } } // 停掉元素兜底，防双音叠加
       const src = ctx.createBufferSource();
       src.buffer = bgmBuf;
       src.loop = true; // 无缝循环（结束时零间隙回到开头）
@@ -212,7 +214,7 @@
       return;
     }
     if (bgmEl) {
-      if (!bgmEl.paused) return;
+      if (!bgmEl.paused || bgmSource) return; // 缓冲源已激活时不再启动元素
       try {
         const p = bgmEl.play();
         if (p && p.catch) p.catch(() => { /* 自动播放策略拦截：等首次交互后由 autoplayMusic 重试 */ });
@@ -340,8 +342,12 @@
         try { ctx.resume(); } catch (e) { /* ignore */ }
       }
       if (!musicOn) return;
-      if (bgmBuf && !bgmSource) startMusic();                        // WebAudio：resume 后补启
-      else if (bgmEl && bgmEl.paused) { try { bgmEl.play(); } catch (e) { /* ignore */ } }
+      if (bgmBuf) {
+        // v1.6.1：缓冲路径存在时只恢复 ctx / 补启缓冲源，**绝不**额外启动 <audio> 元素（否则双音源叠加杂音）
+        if (!bgmSource) startMusic();
+      } else if (bgmEl && bgmEl.paused) {
+        try { bgmEl.play(); } catch (e) { /* ignore */ }
+      }
     };
     const tryResume = () => {
       resume();

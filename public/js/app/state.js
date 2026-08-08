@@ -60,6 +60,7 @@
     netWarnNote: document.getElementById('netWarnNote'),
     netWait: document.getElementById('netWait'),
     netStatus: document.getElementById('netStatus'),
+    netOperate: document.getElementById('netOperate'), // 建房等待态整体隐藏（无需再输房间号）
     // 设置（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效
     btnSettings: document.getElementById('btnSettings'),
     btnSettingsGame: document.getElementById('btnSettingsGame'),
@@ -138,6 +139,9 @@
     btnManualMenu: document.getElementById('btnManualMenu'),
     btnManualTouch: document.getElementById('btnManualTouch'),
     btnManualBack: document.getElementById('btnManualBack'),
+    manualScroll: document.getElementById('manualScroll'),           // 说明书内容滚动区
+    manualScrollbar: document.getElementById('manualScrollbar'),     // 说明书滑钮滑轨（手机端）
+    manualScrollThumb: document.getElementById('manualScrollThumb'), // 说明书滑钮
   };
 
   // 联机服务器选择：
@@ -181,14 +185,14 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '1.6',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '1.6.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiLevelA: 1,         // AI 观战：红方 AI 难度
     aiLevelB: 1,         // AI 观战：蓝方 AI 难度
     // AI 观战：在难度基准上的参数微调倍率（暂停面板滑杆，默认 ×1 = 基准）
-    aiTuneA: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
-    aiTuneB: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
+    aiTuneA: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1, serveDistMul: 1 },
+    aiTuneB: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1, serveDistMul: 1 },
     side: 0,             // 联机时我的方位
     sideSet: false,      // 联机 side 是否已确立（房主=创建响应，加入方=首条非等待 room）
     heartbeatTimer: null,

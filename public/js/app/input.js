@@ -155,10 +155,13 @@
   const TUNE_SPEC = {
     tuneAReact: ['aiTuneA', 'reactMul'], tuneACatch: ['aiTuneA', 'catchMul'],
     tuneASmash: ['aiTuneA', 'smashMul'], tuneAAgility: ['aiTuneA', 'agilityMul'],
+    tuneAServe: ['aiTuneA', 'serveDistMul'], // v1.6.1：AI 发球距离
     tuneBReact: ['aiTuneB', 'reactMul'], tuneBCatch: ['aiTuneB', 'catchMul'],
     tuneBSmash: ['aiTuneB', 'smashMul'], tuneBAgility: ['aiTuneB', 'agilityMul'],
+    tuneBServe: ['aiTuneB', 'serveDistMul'],
     tuneOppReact: ['aiTuneB', 'reactMul'], tuneOppCatch: ['aiTuneB', 'catchMul'],
     tuneOppSmash: ['aiTuneB', 'smashMul'], tuneOppAgility: ['aiTuneB', 'agilityMul'],
+    tuneOppServe: ['aiTuneB', 'serveDistMul'],
   };
   // 重置按钮 → 要重置的 aiTune 对象（观战蓝方与 人机对手同写 aiTuneB）
   const TUNE_RESET = {
@@ -181,7 +184,11 @@
     const L = PPD.AIC && PPD.AIC.LEVELS[level] ? PPD.AIC.LEVELS[level] : null;
     if (!L) return '';
     const clampV = (v, a, b) => (v < a ? a : v > b ? b : v);
-    if (mulKey === 'reactMul') return `延迟 ${(L.react / mul).toFixed(2)}s`;
+    if (mulKey === 'reactMul') {
+      // v1.6.1：地狱反应线性（与 ai.js 一致）——0.5→0.02s、1.5→0s 均匀递减；其余难度 基准/倍率
+      const d = level === 3 ? Math.max(0, Math.min(0.02, 0.02 * (1.5 - mul))) : L.react / mul;
+      return `延迟 ${d.toFixed(2)}s`;
+    }
     if (mulKey === 'catchMul') {
       // 人机地狱默认接球率 ×1.0（与 loop.js 传的 hellCatchMul:1 一致：永不刻意漏球）
       const hellMul = (PPD.app.mode === 'ai' && level === 3) ? 1.0 : 1;
@@ -193,7 +200,8 @@
       // 困难 55%→~50%、地狱 95%→~80%，位置门±0.35m + 高度/时序损耗所致）
       const DEF_EFF = { 2: 0.91, 3: 0.84 };
       const gate = DEF_EFF[level] || 1;
-      const sd = clampV((L.smashDef || 0) * mul, 0, 1) * gate;
+      // v1.6.1：防扣（接扣球加成）与 ai.js 同漏球率线性模型，0.5~1.5 全程有效
+      const sd = (L.smashDef || 0) <= 0 ? 0 : clampV(1 - (1 - (L.smashDef || 0)) / mul, 0, 1) * gate;
       return `非刻意漏球率 ${Math.round(miss * 100)}%（${missTxt}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
     }
     if (mulKey === 'smashMul') {
@@ -202,6 +210,10 @@
       if (L.smashProb === 0) return over > 0 ? '扣杀率 0%（溢出→回球更刁钻）' : '扣杀率 0%';
       if (sp >= 1) return `扣杀率 100%${over > 0 ? '（溢出→更刁钻）' : ''}`;
       return `扣杀率 ${Math.round(sp * 100)}%`;
+    }
+    if (mulKey === 'serveDistMul') {
+      // v1.6.1：AI 发球距离（0.5 短球贴网 ~ 1.5 深球压底线）
+      return `发球距离 ×${mul.toFixed(2)}（${mul < 1 ? '短球贴网' : mul > 1 ? '深球压底线' : '标准'}）`;
     }
     if (mulKey === 'agilityMul') {
       const over = Math.max(0, mul - 1);
@@ -262,7 +274,7 @@
     if (!btn) continue;
     btn.addEventListener('click', () => {
       const set = PPD.app[key];
-      set.reactMul = 1; set.catchMul = 1; set.smashMul = 1; set.agilityMul = 1;
+      set.reactMul = 1; set.catchMul = 1; set.smashMul = 1; set.agilityMul = 1; set.serveDistMul = 1;
       syncTuneSliders();
     });
   }

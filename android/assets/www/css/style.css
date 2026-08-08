@@ -259,15 +259,9 @@ input:focus { border-color: var(--blue); }
     background: #0d1220; padding: 14px 0 10px;
   }
   .menu-scroll { flex: 1 1 auto; overflow-y: auto; width: 100%; margin: 0; padding-top: 150px; }
-  /* 手机端：比分栏在 top:64；简易操作说明在其下方（避开比分栏与虚线面板） */
-  #hintBar { white-space: normal; width: 92%; text-align: center; font-size: 12px; top: 158px; }
-  /* 触控按钮上方留出提示栏位置，避免重叠 */
-  #hintBar { bottom: auto; }
-  .player-box { min-width: 92px; }
-  /* 右上角工具独占顶行：HUD 下移、左侧模式信息隐藏 */
-  #hud { top: 64px; }
-  #netInfo { display: none; }
-  /* 手机端：虚线指示并入比分栏下方的黑色条（居中横排紧凑），不遮观众席/场景 */
+  /* 手机端（v1.6.1）：简易操作说明移至页面最顶部（比分栏/观众行之上），不被虚线面板遮挡 */
+  #hintBar { white-space: normal; width: 92%; text-align: center; font-size: 12px; top: calc(env(safe-area-inset-top) + 4px); }
+  /* 虚线面板压缩尺寸（padding/font/gap 收紧），保持在比分栏下方 */
   #hitRangeInfo {
     top: 122px;
     left: 50%;
@@ -275,11 +269,16 @@ input:focus { border-color: var(--blue); }
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 4px 14px;
-    max-width: calc(100vw - 12px);
-    padding: 5px 10px;
-    border-radius: 10px;
+    gap: 2px 10px;
+    max-width: calc(100vw - 8px);
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 11px;
   }
+  .player-box { min-width: 92px; }
+  /* 右上角工具独占顶行：HUD 下移、左侧模式信息隐藏 */
+  #hud { top: 64px; }
+  #netInfo { display: none; }
   #hitRangeInfo .hr-title { display: none; } /* 手机端紧凑：隐藏标题行 */
   #phaseBanner { top: 206px; }
   #pointToast { top: 248px; }
@@ -389,7 +388,7 @@ canvas#game { touch-action: none; }
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   width: min(680px, 94vw); max-height: 92vh;
   display: flex; flex-direction: column; gap: 12px;
-  padding: 22px 26px;
+  padding: 22px 26px; position: relative; /* 滑钮定位基准 */
 }
 .manual-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: none; }
 .manual-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
@@ -399,6 +398,16 @@ canvas#game { touch-action: none; }
   padding-right: 4px;
 }
 .manual-panel .manual-capsule-body { font-size: 12.5px; }
+/* 说明书滑钮（v1.6.1，手机端显示）：纵向滑轨 + 可拖拽滑钮 ↔ 内容滚动双向同步 */
+.manual-scrollbar {
+  position: absolute; top: 62px; right: 5px; bottom: 18px; width: 10px;
+  background: rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer;
+  touch-action: none; z-index: 2;
+}
+.manual-scroll-thumb {
+  position: absolute; left: 1px; right: 1px; top: 0; height: 36px;
+  background: rgba(255,255,255,0.35); border-radius: 4px;
+}
 /* 设置弹层（主页与比赛页共用，右上角 ⚙ 打开） */
 .settings-panel {
   position: fixed; inset: 0; z-index: 50;

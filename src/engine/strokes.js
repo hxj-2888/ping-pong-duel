@@ -14,9 +14,17 @@
     if (p.serveAimBlocked) { p.hitCd = 0.25; return; }
     // 瞄准模式：直接使用鼠标/手指瞄准时求解好的方案（预览即实发）；
     // 未瞄准（AI 自动发球/键盘发球）时按原逻辑搜索默认轨迹。
-    const plan = (p.serveAimSet && p.servePlan)
+    let plan = (p.serveAimSet && p.servePlan)
       ? p.servePlan
       : ctx.solveServe(state, pi, type === 2);
+    // v1.6.1：修复"发球无法落到对方球台"——瞄准后移动站位会使旧 plan 失效（按新发球点发射轨迹出界）。
+    // 用当前发球点复验（serveLanding），失效则回退默认求解，保证实发与预览轨迹一致。
+    if (plan && p.serveAimSet) {
+      const H = ctx.serveBallPos(p);
+      if (!ctx.serveLanding(H, plan.vel, plan.spin, pi)) {
+        plan = ctx.solveServe(state, pi, type === 2);
+      }
+    }
     if (!plan) { p.hitCd = 0.3; return; }
     p.servePlan = plan;
     const dir = ctx.vnorm(plan.vel);
