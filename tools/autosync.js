@@ -39,11 +39,12 @@ const TOOL_FILES = ['tools/局域网放行.cmd'];
 const ANDROID_FILES = ['android/AndroidManifest.xml', 'android/build.cmd', 'android/PingPongDuel.apk'];
 const PUB_EXCLUDE = new Set(['records.json', 'app.log']);
 
-function walk(dir, out, rel) {
+function walk(dir, out, rel, skipApk) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (rel === '' && PUB_EXCLUDE.has(e.name)) continue;
+    if (skipApk && e.isFile() && e.name.endsWith('.apk')) continue; // APK 资产不内嵌 APK
     const r = rel ? rel + '/' + e.name : e.name;
-    if (e.isDirectory()) walk(path.join(dir, e.name), out, r);
+    if (e.isDirectory()) walk(path.join(dir, e.name), out, r, skipApk);
     else out.push(r);
   }
 }
@@ -54,8 +55,12 @@ let snap = new Map(); // 源文件 -> {m,s}
 function buildSnap() {
   const m = new Map();
   const pub = [];
-  walk(path.join(ROOT, 'public'), pub, '');
+  walk(path.join(ROOT, 'public'), pub, '', true); // 源清单不含 apk（apk 不进入 APK 资产与部分副本）
   for (const f of pub) m.set('public/' + f, statOf(path.join(ROOT, 'public', f)));
+  // apk 单独列入（仅同步给含 public 的桌面/安装包目标，不含 android 资产）
+  for (const f of fs.readdirSync(path.join(ROOT, 'public')).filter((n) => n.endsWith('.apk'))) {
+    m.set('public/' + f, statOf(path.join(ROOT, 'public', f)));
+  }
   for (const f of ROOT_FILES) if (fs.existsSync(path.join(ROOT, f))) m.set(f, statOf(path.join(ROOT, f)));
   for (const d of EXTRA_DIRS) {
     const files = [];
@@ -91,6 +96,7 @@ function syncOnce() {
       if (t.ecs && !(f.startsWith('public/') || f === 'package.json')) continue;   // ECS 仅 public+package
       if (f.startsWith('android/') && !t.android) continue;                          // android 专属仅含 android 的目标
       if (!t.root && !f.startsWith('public/')) continue;                             // 非 root 目标仅 public
+      if (t.stripPub && f.endsWith('.apk')) continue;                                // APK 资产不内嵌 APK
       // 目标路径映射：stripPub 目标（APK 资产）剥掉 public/ 前缀
       const dstF = (t.stripPub && f.startsWith('public/')) ? f.slice('public/'.length) : f;
       try { copyFile(src, path.join(abs, dstF)); n++; } catch (e) { /* 目标只读/锁定：跳过 */ }
