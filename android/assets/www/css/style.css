@@ -379,33 +379,33 @@ canvas#game { touch-action: none; }
   border-radius: 10px; cursor: pointer; transition: 0.15s;
 }
 .manual-menu-btn:hover { background: rgba(255,255,255,0.16); }
-/* 说明书（独立全屏页面，等同新开页面；自身可滚动，防缩放） */
+/* 说明书（独立全屏页面，等同新开页面；整页滚动 + 右侧滑钮，防缩放） */
 .manual-panel {
   position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; overflow-y: auto; /* 整页滚动：卡片随内容增高，超高时由面板滚动 + 右侧滑钮 */
   background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
-  overflow-y: auto; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
 .manual-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-  width: min(680px, 94vw); max-height: 96vh; /* v1.6.2：适度扩容 */
+  width: min(680px, 94vw);
+  margin: auto; /* 居中且超高时两端可完整滚动（align-items:center 会裁掉顶部，故用 auto margin） */
   display: flex; flex-direction: column; gap: 12px;
-  padding: 22px 26px; position: relative; /* 滑钮定位基准 */
+  padding: 22px 26px; position: relative;
 }
 .manual-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: none; }
 .manual-header h2 { color: #ffd166; letter-spacing: 3px; margin: 0; font-size: 20px; }
 .manual-scroll {
-  overflow-y: auto; overflow-x: hidden;
-  flex: 1 1 auto; min-height: 0; /* v1.6.2：flex 子项正确收缩滚动，容纳全部内容（扩容） */
   display: flex; flex-direction: column; gap: 4px;
-  padding-right: 4px;
+  padding-right: 12px; /* 给右侧滑钮留空间 */
 }
 .manual-panel .manual-capsule-body { font-size: 12.5px; }
-/* 说明书滑钮（v1.6.1，手机端显示）：纵向滑轨 + 可拖拽滑钮 ↔ 内容滚动双向同步 */
+/* 说明书滑钮（v1.6.2，双端通用）：固定视口右侧，内容溢出时自动弹出，滚动整页 */
 .manual-scrollbar {
-  position: absolute; top: 62px; right: 5px; bottom: 18px; width: 10px;
+  position: fixed; top: 50%; right: 6px; transform: translateY(-50%);
+  width: 10px; height: 40vh; max-height: 340px;
   background: rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer;
-  touch-action: none; z-index: 2;
+  touch-action: none; z-index: 62;
 }
 .manual-scroll-thumb {
   position: absolute; left: 1px; right: 1px; top: 0; height: 36px;

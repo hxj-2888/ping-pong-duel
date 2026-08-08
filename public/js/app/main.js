@@ -307,9 +307,9 @@
     PPD.ui.btnManualBack.addEventListener('click', () => { PPD.GameAudio.ui(); closeManual(); });
   }
 
-  // 说明书滑钮（v1.6.2，双端通用）：内容溢出时显示纵向滑轨 + 可拖拽滑钮，拖动↔滚动双向同步
+  // 说明书滑钮（v1.6.2，双端通用）：内容溢出整页时自动弹出，拖动↔整页滚动双向同步
   function updateManualScrollbar() {
-    const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualScroll;
+    const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualPanel;
     if (!bar || !thumb || !sc) return;
     const overflow = sc.scrollHeight > sc.clientHeight + 2;
     PPD.show(bar, overflow); // 内容溢出才显示滑钮（不再仅限手机端）
@@ -320,7 +320,7 @@
     thumb.style.top = (sc.scrollTop / max) * Math.max(0, bar.clientHeight - thumb.offsetHeight) + 'px';
   }
   function wireManualScrollbar() {
-    const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualScroll;
+    const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualPanel;
     if (!bar || !thumb || !sc) return;
     const setFromY = (y) => {
       const max = Math.max(1, sc.scrollHeight - sc.clientHeight);
@@ -351,8 +351,8 @@
       window.addEventListener('pointerup', up);
     });
     sc.addEventListener('scroll', updateManualScrollbar);
-    // v1.6.2：胶囊展开/收起时（toggle 事件冒泡）实时刷新滑钮——内容溢出自动弹出、收起自动隐藏
-    sc.addEventListener('toggle', updateManualScrollbar);
+    // 胶囊展开/收起（toggle 事件不冒泡 → 用捕获阶段）→ 实时刷新滑钮：溢出自动弹出、收起自动隐藏
+    sc.addEventListener('toggle', updateManualScrollbar, true);
     window.addEventListener('resize', updateManualScrollbar);
   }
   PPD.updateManualScrollbar = updateManualScrollbar;
