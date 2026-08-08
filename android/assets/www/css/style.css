@@ -121,7 +121,7 @@ input:focus { border-color: var(--blue); }
 .net-panel {
   position: fixed; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
+  background: #0d1220; /* v1.6.2：纯色实底（等待态隐藏主菜单后不透视球场） */
   overflow-y: auto;
 }
 .net-card {
@@ -383,7 +383,7 @@ canvas#game { touch-action: none; }
 .manual-panel {
   position: fixed; inset: 0; z-index: 60;
   display: flex; overflow-y: auto; /* 整页滚动：卡片随内容增高，超高时由面板滚动 + 右侧滑钮 */
-  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
+  background: #0d1220; /* v1.6.2：纯色实底（净空），避免透出球场画面 */
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
 .manual-card {
