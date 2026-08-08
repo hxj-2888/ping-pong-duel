@@ -126,18 +126,15 @@
     joyKnob: document.getElementById('joyKnob'),
     btnCrouch: document.getElementById('btnCrouch'),
     btnSmash: document.getElementById('btnSmash'),
-    // 手机端说明书入口（需求 13/17：利用删除分屏后的空白位，与功能方块同尺寸）
-    btnManualTouch: document.getElementById('btnManualTouch'),
     btnPause: document.getElementById('btnPause'),
     btnExit: document.getElementById('btnExit'),
     pausePanel: document.getElementById('pausePanel'),
     pauseAITune: document.getElementById('pauseAITune'), // 人机：地狱通关后的电脑 AI 数值调控
     btnResume: document.getElementById('btnResume'),
     btnPauseExit: document.getElementById('btnPauseExit'),
-    // 说明书（独立全屏页面，等同新开页面；电脑入口=设置按钮下方，手机入口=触控底栏）
+    // 说明书（独立全屏页面，等同新开页面；电脑/手机统一入口=主页设置按钮下方）
     manualPanel: document.getElementById('manualPanel'),
     btnManualMenu: document.getElementById('btnManualMenu'),
-    btnManualTouch: document.getElementById('btnManualTouch'),
     btnManualBack: document.getElementById('btnManualBack'),
     manualScroll: document.getElementById('manualScroll'),           // 说明书内容滚动区
     manualScrollbar: document.getElementById('manualScrollbar'),     // 说明书滑钮滑轨（手机端）

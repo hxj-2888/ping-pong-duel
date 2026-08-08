@@ -89,8 +89,8 @@ const ELEMENT_IDS = [
   // 联机框（主页「联机对战」入口，等同新开页面）：模式切换/建房/加入/等待/教程
   'btnNetEntry', 'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus', 'netOperate',
   'lanTargetRow', 'lanTargetInput', 'lanUrls', 'lanFirewallNote',
-  // 说明书（独立全屏页面）：电脑=设置按钮下方，手机=触控底栏；滑钮滚动
-  'manualPanel', 'btnManualMenu', 'btnManualTouch', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
+  // 说明书（独立全屏页面）：电脑/手机统一在主页设置按钮下方；滑钮滚动
+  'manualPanel', 'btnManualMenu', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot',
   'hrSmashRow', 'hrLobRow', 'smashStatus', 'lobStatus',
