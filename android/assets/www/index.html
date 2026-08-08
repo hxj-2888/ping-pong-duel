@@ -304,7 +304,7 @@
         <button id="btnManualBack" class="btn">← 返回</button>
       </div>
       <div class="manual-scroll" id="manualScroll">
-        <details class="manual-capsule" data-platform="pc" open>
+        <details class="manual-capsule" data-platform="pc">
           <summary>电脑操作</summary>
           <div class="manual-capsule-body">
             <p>移动：A/D 或 ←/→ 左右移动，W/S 或 ↑/↓ 前后移动（方向键四向移动）；Shift 跑步加速，Ctrl 蹲下（接球箱下探到贴地 0.02m，任何低球可接起）</p>
@@ -318,7 +318,7 @@
             <p>电脑 AI 数值调控：击败地狱难度后，人机对战的暂停面板变为 5 项 AI 参数滑杆（反应/非刻意漏球率/攻击性/敏捷/发球距离，即时生效）</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="mobile" open>
+        <details class="manual-capsule" data-platform="mobile">
           <summary>手机操作</summary>
           <div class="manual-capsule-body">
             <p>摇杆移动（可斜向）· 单击推球 · 上滑扣球（快速向上滑动）·「蹲」蹲下（接球箱贴地 0.02m，可接任何低球）</p>
@@ -328,7 +328,7 @@
             <p>低平快球反击奖励（更高档）：接回低平快球（蹲下）后回球更快更刁钻，电脑更难接</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>接球判定与击球手感</summary>
           <div class="manual-capsule-body">
             <p>碰撞箱（进箱即命中）：以球员为中心、向网前偏移 0.42m 的长方体（1.2m 宽 × 0.8m 深 × 0.7m 高，可接球高 0.70~1.40m）；球进入箱体后点击推球/扣球即命中，球拍自动伸向球完成击球动画</p>
@@ -342,7 +342,7 @@
             <p>低平快球反击奖励（更高档）：成功接回低平快球（蹲下+推球）时，该回球更高球速 + 刁钻边角落位，且同样视为扣杀、电脑应对概率减半——比反击扣杀的回报更高</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>判分与规则</summary>
           <div class="manual-capsule-body">
             <p>11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
@@ -350,7 +350,7 @@
             <p>发球位置：发球方站在台面中路附近（台边站位解不出合法发球），瞄准对方半台</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>AI 对手特性（人机对战）</summary>
           <div class="manual-capsule-body">
             <p>四档难度：简单（反应慢、站位偏、只推球不扣杀，非刻意漏球率约 45%）/ 中等（反应适中、高球常扣杀，非刻意漏球率约 5%）/ 困难（反应快、追位准、高球必扣杀，非刻意漏球率约 2.5%）/ 地狱（反应/站位/扣杀全面拉满，0% 刻意漏球，可反击扣杀）</p>
@@ -360,7 +360,7 @@
             <p>观战（AI vs AI）与人机对战一致：地狱 0% 刻意漏球；观战暂停面板可调双方难度与 4 项 AI 参数</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>判定范围虚线</summary>
           <div class="manual-capsule-body">
             <p>设置（右上角 ⚙）中「判定范围虚线」开关，默认关闭；开启后显示判定范围虚线（进箱变绿高亮并「嘀」提示音）。手机端仅保留 接球箱 + 配套虚线 + 球高标识，不显示扣杀/高吊虚线指示</p>
@@ -368,7 +368,7 @@
             <p>AI 观战只显示实时球高/进箱，不做可扣杀/可高吊指示（与玩家操作无关）</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>个人生涯</summary>
           <div class="manual-capsule-body">
             <p>每局结束自动记录胜负（人机 / 本地双人 / 联机都会计入，含真人记录），后端留最近 60 条——本地版写入 records.json，公网联机写入 Cloudflare</p>
@@ -376,7 +376,7 @@
             <p>手机端：战绩保存在手机本地，无需联网；卸载 App 或清除应用数据会清空全部战绩，换手机/重装前请留意</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>联机对战</summary>
           <div class="manual-capsule-body">
             <p>入口：主页「联机对战」→ 联机框（等同新开页面），内含 本地/公网 切换、建房/加入、房间码、对方设备地址与房主等待面板。</p>
@@ -391,14 +391,14 @@
             <p>浏览器菜单 →「添加到主屏幕 / 安装应用」，即可像 App 一样从桌面图标进入（下载完即可装）</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>国际赛事标准</summary>
           <div class="manual-capsule-body">
             <p>球台 2.74×1.525m（高 0.76m）· 网高 0.1525m · 球 40mm / 2.7g · 拍面 15×15cm</p>
             <p>规则：11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
           </div>
         </details>
-        <details class="manual-capsule" data-platform="both" open>
+        <details class="manual-capsule" data-platform="both">
           <summary>模式与提示</summary>
           <div class="manual-capsule-body">
             <p>模式：人机对战（简单/中等/困难/地狱）· AI 观战 · 本地双人（电脑）· 联机（4 位房间码）</p>
