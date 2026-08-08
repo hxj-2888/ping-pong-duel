@@ -351,6 +351,8 @@
       window.addEventListener('pointerup', up);
     });
     sc.addEventListener('scroll', updateManualScrollbar);
+    // v1.6.2：胶囊展开/收起时（toggle 事件冒泡）实时刷新滑钮——内容溢出自动弹出、收起自动隐藏
+    sc.addEventListener('toggle', updateManualScrollbar);
     window.addEventListener('resize', updateManualScrollbar);
   }
   PPD.updateManualScrollbar = updateManualScrollbar;
