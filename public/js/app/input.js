@@ -195,10 +195,16 @@
       const missTxt = base >= 1 ? '永不漏球' : `每 ${Math.max(2, Math.round(1 / miss))} 球漏 1`;
       // 防扣显示"实测有效反击率"：裸概率 × 每档实测定标系数（README:45 探针：
       // 困难 55%→~50%、地狱 95%→~80%，位置门±0.35m + 高度/时序损耗所致）
-      const DEF_EFF = { 2: 0.91, 3: 0.84 };
-      const gate = DEF_EFF[level] || 1;
-      // v1.6.1：防扣（接扣球加成）与 ai.js 同漏球率线性模型，0.5~1.5 全程有效
-      const sd = (L.smashDef || 0) <= 0 ? 0 : clampV(1 - (1 - (L.smashDef || 0)) / mul, 0, 1) * gate;
+      // 防扣（接扣球加成）等效值：地狱 = 40%~90% 均匀线性（与 ai.js 一致，所见即所得）；
+      // 其余难度 = 漏球率线性模型 × 实测系数（困难 0.91）
+      let sd;
+      if (level === 3) {
+        sd = 0.40 + 0.50 * Math.max(0, Math.min(1, mul - 0.5));
+      } else {
+        const DEF_EFF = { 2: 0.91 };
+        const gate = DEF_EFF[level] || 1;
+        sd = (L.smashDef || 0) <= 0 ? 0 : clampV(1 - (1 - (L.smashDef || 0)) / mul, 0, 1) * gate;
+      }
       return `非刻意漏球率 ${Math.round(miss * 100)}%（${missTxt}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
     }
     if (mulKey === 'smashMul') {
