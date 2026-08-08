@@ -41,6 +41,7 @@
       swingBack: 0,
       counterLowBonus: 0,  // 反击低平快球奖励：本次击球是否按"更高球速+刁钻落位"求解（击球前设置、求解后清除）
       isAI: 0,             // 是否 AI 控制（AI 控制时反击奖励不触发，见 ai.js control / strokes.js）
+      speedMul: 1,         // 移动速度倍率（敏捷>1 时 AI 加成，最大 1.25；玩家恒为 1）
     };
   }
 
@@ -61,7 +62,7 @@
       ball: {
         vis: true, inHand: true,
         pos: ctx.vec(0, 0.8, 0), vel: ctx.vec(0, 0, 0), spin: ctx.vec(0, 0, 0),
-        hitBy: -1, hitType: -1, lastBounce: -1, netTouched: false,
+        hitBy: -1, hitType: -1, lastBounce: -1, netTouched: false, netBlocked: false,
       },
       players: [createPlayer(0), createPlayer(1)],
       inputs: [
@@ -108,7 +109,7 @@
     b.inHand = true; b.vis = true;
     b.pos = serveBallPos(p);
     b.vel = ctx.vec(0, 0, 0); b.spin = ctx.vec(0, 0, 0);
-    b.hitBy = -1; b.hitType = -1; b.lastBounce = -1; b.netTouched = false;
+    b.hitBy = -1; b.hitType = -1; b.lastBounce = -1; b.netTouched = false; b.netBlocked = false;
     // 新一轮发球：清空上一轮的瞄准方案，等待玩家重新瞄准
     p.servePlan = null;
     p.serveAimSet = false;

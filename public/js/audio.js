@@ -12,7 +12,9 @@
   // 音效开关（设置面板，localStorage 持久化）：muted=true 时游戏音效静音
   let muted = false;
   try { muted = typeof localStorage !== 'undefined' && localStorage.getItem('ppd_sound_on') === '0'; } catch (e) { /* ignore */ }
-  let revIR = null; // 观众欢呼：小厅混响脉冲响应（双声道）
+  // 应用端（桌面 app / APK WebView）音乐音效缓存保底：解码结果按 url 缓存（幂等），
+  // 重复 ensure/播放不再重复 fetch 解码；file://（WebView）下 fetch 被拦时自动走 <audio> 元素直载兜底。
+  const decodeCache = new Map(); // url -> Promise<AudioBuffer|null>
   let applauseBuf = null;       // 真实掌声 WAV（audio/applause.wav）解码结果
   let applauseLoading = false;
   let applauseEl = null;        // <audio> 元素兜底（WebView/file:// 下 fetch 被拦截时用）
@@ -25,13 +27,19 @@
       if (el) { el.src = 'audio/applause.wav'; applauseEl = el; }
     }
     if (applauseBuf || applauseLoading || !ctx || typeof fetch !== 'function') return;
+    // 缓存命中：直接复用已解码缓冲（不再重复 fetch 解码）
+    if (decodeCache.has('applause')) {
+      decodeCache.get('applause').then((buf) => { if (buf && !applauseBuf) applauseBuf = buf; }).catch(() => { /* ignore */ });
+      return;
+    }
     applauseLoading = true;
-    fetch('audio/applause.wav')
+    const p = fetch('audio/applause.wav')
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
       .then((ab) => ctx.decodeAudioData(ab))
-      .then((buf) => { applauseBuf = buf; })
-      .catch(() => { /* 加载/解码失败：继续用合成掌声 */ })
+      .then((buf) => { applauseBuf = buf; return buf; })
+      .catch(() => { /* 加载/解码失败：静默（无合成兜底，见 v1.6） */ return null; })
       .finally(() => { applauseLoading = false; });
+    decodeCache.set('applause', p);
   }
 
   function applauseLoaded() { return !!applauseBuf; }
@@ -79,8 +87,21 @@
     }
     // WebAudio 解码（需要 ctx；成功后 loop=true 零间隙循环，解码完成自动无缝切换）
     if (ctx && !bgmBuf && !bgmLoading && typeof fetch === 'function') {
+      // 缓存命中：直接复用已解码缓冲（应用端重复 ensure 不再重复 fetch 解码）
+      if (decodeCache.has('bgm')) {
+        decodeCache.get('bgm').then((buf) => {
+          if (buf && !bgmBuf) {
+            bgmBuf = buf;
+            trimBgmBuffer();
+            computeBgmInfo();
+            if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
+            startMusic();
+          }
+        }).catch(() => { /* ignore */ });
+        return;
+      }
       bgmLoading = true;
-      fetch('audio/music.mp4')
+      const p = fetch('audio/music.mp4')
         .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
         .then((ab) => ctx.decodeAudioData(ab))
         .then((buf) => {
@@ -90,9 +111,11 @@
           // 解码完成：停掉元素兜底再启零间隙循环，避免双音
           if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
           startMusic();
+          return buf;
         })
-        .catch(() => { /* 解码失败：保留 <audio> 兜底 */ })
+        .catch(() => { /* 解码失败：保留 <audio> 兜底 */ return null; })
         .finally(() => { bgmLoading = false; });
+      decodeCache.set('bgm', p);
     }
   }
 
@@ -275,7 +298,7 @@
   }
 
   // 得分掌声：优先播放真实录音 WAV（audio/applause.wav，3.2s 立体声）；
-  // 其次 <audio> 元素兜底（file:// 等 fetch 不可用环境）；都没有时用合成掌声（applauseSynth）
+  // 其次 <audio> 元素兜底（file:// 等 fetch 不可用环境）；v1.6 已拔除合成掌声，WAV 不可用时静默
   function applause() {
     if (!ctx || muted) return;
     if (applauseBuf) {
@@ -300,125 +323,7 @@
       } catch (e) { /* ignore */ }
       return;
     }
-    loadApplause(); // 顺带触发加载，下次得分即用真实录音
-    applauseSynth();
-  }
-
-  // 合成掌声（兜底）：双层鼓掌 + 人群波浪 + 领掌 + 压缩器（响亮感）
-  function applauseSynth() {
-    if (!ctx || muted || !noiseBuf) return;
-    const t0 = ctx.currentTime;
-
-    // ---- 小厅混响：指数衰减双声道脉冲响应（早期反射 + 混响尾） ----
-    if (!revIR) {
-      const len = Math.floor(ctx.sampleRate * 0.7);
-      revIR = ctx.createBuffer(2, len, ctx.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const d = revIR.getChannelData(ch);
-        let last = 0;
-        for (let i = 0; i < len; i++) {
-          const t = i / ctx.sampleRate;
-          const early = t < 0.05 ? 0.5 + 0.5 * Math.sin((t / 0.05) * Math.PI) : Math.exp(-(t - 0.05) * 9);
-          const n = Math.random() * 2 - 1;
-          last = (last + n) * 0.5;
-          d[i] = last * early * 0.55;
-        }
-      }
-    }
-
-    // ---- 混合总线：音量 1.0 + 压缩器（响亮感：密集掌声压成一道结实"声墙"） ----
-    const convolver = ctx.createConvolver();
-    convolver.buffer = revIR;
-    const bus = ctx.createGain();
-    bus.gain.setValueAtTime(0.75, t0);
-    bus.gain.setValueAtTime(0.75, t0 + 1.25);
-    bus.gain.linearRampToValueAtTime(0.0001, t0 + 1.5);
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -18;
-    comp.knee.value = 22;
-    comp.ratio.value = 12;
-    comp.attack.value = 0.003;
-    comp.release.value = 0.22;
-    const dry = ctx.createGain(); dry.gain.value = 0.72;
-    const wet = ctx.createGain(); wet.gain.value = 0.45;
-    bus.connect(comp);
-    comp.connect(dry); dry.connect(master);
-    comp.connect(wet); wet.connect(convolver); convolver.connect(master);
-
-    // ---- 空气感底噪：极轻的低频人群噪底，随 0.4Hz 缓慢起伏 ----
-    const rumble = ctx.createBufferSource();
-    rumble.buffer = noiseBuf;
-    rumble.loop = true;
-    const rf = ctx.createBiquadFilter();
-    rf.type = 'lowpass';
-    rf.frequency.value = 420;
-    const rg = ctx.createGain();
-    rg.gain.value = 0.045;
-    const rlfo = ctx.createOscillator();
-    rlfo.frequency.value = 0.4;
-    const rlg = ctx.createGain();
-    rlg.gain.value = 0.025;
-    rlfo.connect(rlg); rlg.connect(rg.gain);
-    rumble.connect(rf); rf.connect(rg); rg.connect(bus);
-    rumble.start(t0); rumble.stop(t0 + 1.6);
-    rlfo.start(t0); rlfo.stop(t0 + 1.6);
-
-    // ---- 一声鼓掌（双层）：掌心低频"砰" + 高频拍击"啪" ----
-    const clap = (when, pan, vol) => {
-      // 身体层：掌心共鸣（约 200Hz 短正弦，结实有力）
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      const fb = 170 + Math.random() * 70;
-      o.frequency.setValueAtTime(fb * 1.15, when);
-      o.frequency.exponentialRampToValueAtTime(fb * 0.7, when + 0.07);
-      const og = ctx.createGain();
-      og.gain.setValueAtTime(0.0001, when);
-      og.gain.exponentialRampToValueAtTime(vol * 0.65, when + 0.004);
-      og.gain.exponentialRampToValueAtTime(0.0001, when + 0.11 + Math.random() * 0.04);
-      const op = ctx.createStereoPanner();
-      op.pan.value = pan;
-      o.connect(og); og.connect(op); op.connect(bus);
-      o.start(when); o.stop(when + 0.17);
-      // 拍击层：带通噪声极短瞬态（清脆"啪"）
-      const s = ctx.createBufferSource();
-      s.buffer = noiseBuf;
-      const sf = ctx.createBiquadFilter();
-      sf.type = 'bandpass';
-      sf.frequency.value = 2600 + Math.random() * 1600;
-      sf.Q.value = 1.4;
-      const sg = ctx.createGain();
-      sg.gain.setValueAtTime(0.0001, when);
-      sg.gain.exponentialRampToValueAtTime(vol, when + 0.002);
-      sg.gain.exponentialRampToValueAtTime(0.0001, when + 0.03 + Math.random() * 0.02);
-      const sp = ctx.createStereoPanner();
-      sp.pan.value = pan;
-      s.connect(sf); sf.connect(sg); sg.connect(sp); sp.connect(bus);
-      s.start(when); s.stop(when + 0.06);
-    };
-
-    // ---- 掌声调度：包络(起势→高潮→渐弱) × 波浪(人群齐拍)，密度更高更密 ----
-    const env = (t) => {
-      if (t < 0.25) return 0.3 + 0.7 * (t / 0.25);   // 起势
-      if (t < 0.8) return 1;                          // 高潮
-      if (t < 1.5) return 1 - (t - 0.8) / 0.7;        // 渐弱
-      return 0;
-    };
-    const wave = (t) => 0.72 + 0.28 * Math.sin((t * 2 * Math.PI) / 1.15); // ~0.9Hz 齐拍波浪
-    let t = 0;
-    while (t < 1.5) {
-      const rate = (40 + 130 * env(t)) * wave(t); // 每秒掌声数（更密集，响亮有气势）
-      t += -Math.log(1 - Math.random()) / rate;
-      if (t >= 1.5) break;
-      const lead = Math.random() < 0.08; // 8% 领掌：更响、更居中
-      const vol = lead
-        ? 0.46
-        : (0.17 + 0.15 * Math.random()) * (0.4 + 0.6 * env(t)) * (0.8 + 0.2 * wave(t));
-      clap(t0 + t, lead ? (Math.random() * 2 - 1) * 0.3 : (Math.random() * 2 - 1) * 0.92, vol);
-    }
-    // 尾声：零星掌声（自然收尾）
-    for (let i = 0; i < 4; i++) {
-      clap(t0 + 1.34 + i * 0.05 + Math.random() * 0.03, (Math.random() * 2 - 1) * 0.9, 0.045 + Math.random() * 0.03);
-    }
+    loadApplause(); // 顺带触发加载，下次得分即用真实录音（v1.6：已拔除合成掌声兜底，WAV 不可用时静默）
   }
 
   // 页面打开即播：浏览器「自动播放策略」会拦截带声音的自动播放。
@@ -447,7 +352,8 @@
       }
     };
     if (!playing()) {
-      for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
+      // 交互 + 前台恢复均重试（应用端切回窗口/后台回前台也能续播）
+      for (const t of ['pointerdown', 'keydown', 'touchstart', 'click', 'focus', 'visibilitychange']) {
         try { window.addEventListener(t, tryResume, { passive: true }); } catch (e) { /* ignore */ }
       }
     }

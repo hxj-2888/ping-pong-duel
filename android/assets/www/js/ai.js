@@ -16,6 +16,8 @@
 
   const T = (typeof TT !== 'undefined') ? TT : require('./engine.js');
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  // 变招动作时与球桌的最大距离（m）（v1.6 需求 23：杜绝 AI 远距离异常走位）
+  const TRICK_MAX_DIST = 0.7;
 
   const LEVELS = [
     // catchProb：该难度能接到的来球比例——以"固定间隔必漏 1 球"的计数方式实现
@@ -145,7 +147,12 @@
     // 人机对战专属微调（hellCatchMul，仅地狱生效）：观战保留 catch 1.0 的强版展示，
     // 人机对战默认 ×1（地狱完全不再刻意漏球，与观战一致）——玩家可在暂停面板用 catchMul 覆盖
     const catchBase = L.catchProb * (level === 3 && t.hellCatchMul != null ? t.hellCatchMul : 1);
-    const catchProb = clamp(catchBase * (t.catchMul == null ? 1 : t.catchMul), 0.20, 1.0); // 上限 1.0：地狱 100% 不刻意漏球
+    // 漏球率线性模型（修复旧版 1.2 后无变化）：0.5~1.5 全程线性有效——
+    // 漏球率 = 基准漏球率 / 倍率（×1.5 漏球减为 2/3、×0.5 漏球翻倍），封顶 80%、下限 0.5%；
+    // 地狱基准 1.0 恒不漏球（miss=0），不受倍率影响
+    const catchMul = t.catchMul == null ? 1 : t.catchMul;
+    const catchMiss = catchBase >= 1 ? 0 : Math.min(0.8, Math.max(0.005, (1 - catchBase) / catchMul));
+    const catchProb = 1 - catchMiss;
     // 攻击/敏捷的"溢出"加成（仅调高 >×1 时生效，×1 时恒为 0/系数 1，默认强度不变）：
     // 概率类基准已到顶（困难/地狱 smashProb=1、agility=1）或为 0（简单不扣杀）时，
     // 把多余倍率转成同属性的其他维度，避免滑杆"拖了没反应"的死区
@@ -161,13 +168,16 @@
     const agiUnder = Math.max(0, 1 - agilityMul); // 0~0.5，调低<×1 的惩罚
     const agility = clamp(L.agility * agilityMul, 0, 1);
     const errScale = 1 - agiOver * 0.6; // 溢出→站位误差缩小（困难/地狱调高敏捷=站位更准）
+    // 敏捷>1（滑杆值 >×1）移动速度加成：最大 +25%（×1.5 封顶）——
+    // 写入玩家 speedMul（引擎 step 逐帧应用），与惩罚占空比并存
+    const speedBonus = Math.min(0.25, Math.max(0, agilityMul - 1) * 0.5);
     // 敏捷<1 惩罚：占空比额外折扣（mul=0.5 时再打 75 折）+ 前后(z)移动也纳入门控 + 追球死区放大
     const moveDuty = clamp(agility * (1 - agiUnder * 0.5), 0, 1);
     const moveDead = 0.045 * (1 + agiUnder * 1.5);
     // 接扣杀：**位置门 × 概率掷骰**——扣杀来球时 |落点-站位| ≤ 可接半径(0.35) 且高度/时序成立
     // 才算"够得着"，再按 smashDef 概率掷骰（困难0.55/地狱0.95）决定接不接：
     // 定标目标有效反击率 困难~50% / 地狱~80%（打偏/骗位即漏，骰子只作用于够得着的球）
-    const smashDef = clamp((L.smashDef || 0) * (t.catchMul == null ? 1 : t.catchMul), 0, 1);
+    const smashDef = clamp((L.smashDef || 0) * catchMul, 0, 1);
     const smashReach = 0.35;
     // 非对打阶段（发球/得分/结束）：清空变招计数与位移
     if (engine.phase !== 'play') {
@@ -178,6 +188,7 @@
       s.trickTimer = 0;
     }
     const p = engine.players[side];
+    p.speedMul = 1 + speedBonus; // 敏捷>1 移动速度加成（最大 +25%），引擎 step 每帧应用
     const opp = engine.players[1 - side];
     const b = engine.ball;
     const f = p.facing;
@@ -248,6 +259,12 @@
       if (incoming) {
         if (smashIn) targetZ = side === 0 ? -T.RULES.PLAYER_Z : T.RULES.PLAYER_Z;
         else targetZ = clamp(b.pos.z - f * 0.42, -T.RULES.Z_BACK, T.RULES.Z_BACK);
+      }
+      // 变招距离限制（v1.6 需求 23）：变招动作时与球桌距离不得超过 0.7m——
+      // 目标 z 钳制到 ±(台半长+0.7)，杜绝 AI 远距离异常走位
+      if (s.trickTimer > 0) {
+        const trickZMax = T.RULES.TABLE_LENGTH / 2 + TRICK_MAX_DIST;
+        targetZ = clamp(targetZ, side === 0 ? -trickZMax : T.RULES.Z_FWD, side === 0 ? -T.RULES.Z_FWD : trickZMax);
       }
       const dzF = (targetZ - p.z) * f; // 沿朝向的位移（正=向前）
       // 前后(z)移动门控：敏捷<1 惩罚时纳入占空比（否则前后无条件移动，惩罚形同虚设）；
@@ -355,7 +372,8 @@
             if (!s.trickRolled) {
               s.trickRolled = true;
               s.exch++;
-              if (s.exch >= 2) {
+              // 变招距离限制（需求 23）：距球桌超过 0.7m 时不触发变招，改打常规球
+              if (s.exch >= 2 && Math.abs(p.z) <= T.RULES.TABLE_LENGTH / 2 + TRICK_MAX_DIST) {
                 if (rnd(s) < Math.min(1, (L.trickBase || 0) + s.trickAccum)) {
                   s.trickOn = true;
                   s.trickAccum = 0; // 变招后清空

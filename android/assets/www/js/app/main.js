@@ -21,6 +21,34 @@
     PPD.GameAudio.ui();
     PPD.startAIVsAI();
   });
+  // ---------- 联机框（主页「联机对战」入口，等同新开页面） ----------
+  if (PPD.ui.btnNetEntry) {
+    PPD.ui.btnNetEntry.addEventListener('click', () => {
+      PPD.GameAudio.ensure();
+      PPD.GameAudio.ui();
+      PPD.show(PPD.ui.netPanel, true);
+      refreshNetModeBtn(); // 打开时同步 本地/公网 按钮、⚠ 与 IP 输入行状态
+    });
+  }
+  function closeNetPanel() {
+    PPD.show(PPD.ui.netWait, false);
+    PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.menu, true); // 联机框等同新开页面：关闭后恢复主菜单
+    if (PPD.app.net) PPD.app.net.close(); // 未入对局就离开联机框：断开连接
+    PPD.app.roomCode = '';
+    PPD.app.reconnecting = false;
+    PPD.app.reconnectAttempt = 0;
+    PPD.app.reconnectStartedAt = 0;
+    if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
+  }
+  PPD.closeNetPanel = closeNetPanel;
+  if (PPD.ui.btnNetBack) {
+    PPD.ui.btnNetBack.addEventListener('click', () => {
+      PPD.GameAudio.ensure();
+      PPD.GameAudio.ui();
+      closeNetPanel();
+    });
+  }
   PPD.ui.btnHost.addEventListener('click', () => {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
@@ -57,8 +85,8 @@
     const inp = PPD.ui.lanTargetInput;
     if (!row || !inp) return;
     if (PPD.isWebVersion) { PPD.show(row, false); return; } // 网页版本地联机探索中：不需要填对方地址
-    // 本地模式 + 非本机时才需要"对方设备地址"（本机/局域网页面会自动推断，可不填）
-    const show = !PPD.isLocalHost && !PPD.app.publicServer;
+    // 本地模式下显示"对方设备地址"输入行（需求 9：切本地模式后面板下方自动弹出，支持 IP+房间码加入）
+    const show = !PPD.app.publicServer;
     PPD.show(row, show);
     // 局域网页面（http://本机IP:端口）：默认预填当前服务器地址（对方=房主这台电脑），可改
     if (show && !inp.value.trim() && location.protocol === 'http:' && /^\d{1,3}(\.\d{1,3}){3}/.test(location.hostname)) {
@@ -72,6 +100,7 @@
       PPD.ui.btnNetMode.title = '本地联机正在探索中，暂不对网页版开放；网页版默认公网联机';
       PPD.ui.btnNetMode.classList.add('exploring');
       PPD.show(PPD.ui.btnNetMode, true);
+      PPD.show(PPD.ui.btnNetWarn, false); // 网页版固定公网：无切换，不显示 ⚠ 说明按钮
       refreshLanTargetRow();
       return;
     }
@@ -79,6 +108,9 @@
     PPD.ui.btnNetMode.title = '';
     PPD.show(PPD.ui.btnNetMode, true);
     PPD.ui.btnNetMode.textContent = PPD.app.publicServer ? '联机:公网' : '联机:本地';
+    // 公网感叹号提示（需求 19）：公网模式显示，点击展开说明、再点收回
+    PPD.show(PPD.ui.btnNetWarn, PPD.app.publicServer);
+    if (!PPD.app.publicServer) PPD.show(PPD.ui.netWarnNote, false);
     refreshLanTargetRow();
   }
   PPD.ui.btnNetMode.addEventListener('click', () => {
@@ -91,41 +123,29 @@
     PPD.app.publicServer = !PPD.app.publicServer;
     refreshNetModeBtn();
     if (PPD.app.publicServer) {
-      const addr = (PPD.app.publicServerUrl || '').trim();
-      PPD.setStatus(addr ? `联机服务器：公网（自建 ${addr}）` : '联机服务器：公网（Cloudflare）');
+      PPD.setStatus('联机服务器：公网（Cloudflare）');
     } else if (PPD.isLocalHost) {
       PPD.setStatus('联机服务器：本地（局域网）');
     } else {
       PPD.setStatus('联机服务器：本地（可填对方设备地址，或让对方直接打开 http://房主IP:8765）');
     }
   });
-  // 公网联机服务器地址（设置面板）：可指向自建 ECS 等低延迟服务器（ws://IP:端口）。
-  // 启动时从本地记忆恢复；改动即生效并记忆（下次联机公网直连该地址）。
-  (function initPublicServerUrl() {
-    try {
-      const saved = localStorage.getItem('ppd_public_server');
-      if (saved) PPD.app.publicServerUrl = saved;
-    } catch (e) { /* ignore */ }
-    const inp = PPD.ui.publicServerInput;
-    if (inp) {
-      inp.value = PPD.app.publicServerUrl || '';
-      inp.addEventListener('change', () => {
-        PPD.app.publicServerUrl = (inp.value || '').trim();
-        try { localStorage.setItem('ppd_public_server', PPD.app.publicServerUrl); } catch (e) { /* ignore */ }
-        PPD.setStatus(PPD.app.publicServerUrl ? `公网联机服务器：${PPD.app.publicServerUrl}` : '公网联机服务器：默认（Cloudflare）');
-      });
-    }
-  })();
+  // 公网 ⚠ 感叹号：点击展开「玩家量过大将导致服务器负载卡顿」说明，再次点击收回
+  if (PPD.ui.btnNetWarn) {
+    PPD.ui.btnNetWarn.addEventListener('click', () => {
+      PPD.GameAudio.ui();
+      PPD.show(PPD.ui.netWarnNote, PPD.ui.netWarnNote.style.display === 'none');
+    });
+  }
   // 网页版（https）默认公网：浏览器安全策略禁止 https 页面直连局域网 ws://（混合内容，实测构造即被拦截），
   // 网页版的"本地"仅作为输入/引导入口；本地联机请用桌面版或直接打开 http://房主IP:8765
   if (PPD.isWebVersion) {
     PPD.app.publicServer = true;
     PPD.setStatus('网页版联机：公网（本地联机正在探索中，暂不对网页版开放）');
   } else if (location.protocol === 'file:') {
-    // 内置安卓版（APK 打包，file:// 页面无本机服务器）：默认公网联机，
-    // 服务器地址在设置「公网联机服务器地址」配置（默认 Cloudflare，可填自建 ECS 低延迟地址）
+    // 内置安卓版（APK 打包，file:// 页面无本机服务器）：默认公网联机（Cloudflare）
     PPD.app.publicServer = true;
-    PPD.setStatus('安卓版联机：公网（设置中可填自建服务器地址，默认 Cloudflare）');
+    PPD.setStatus('安卓版联机：公网（Cloudflare）');
   }
   refreshNetModeBtn();
 
@@ -137,6 +157,8 @@
     const lb = el.parentElement && el.parentElement.querySelector ? el.parentElement.querySelector('b') : null;
     if (lb) lb.textContent = Math.round(vol * 100) + '%';
   }
+  // 需求 10：点击设置全局视为游戏暂停（手机/电脑通用）。对局中打开设置 → paused=true
+  // 冻结本地引擎推进与渲染（联机模式服务端继续推进，恢复时快照自动锚定）；关闭设置恢复。
   function openSettings() {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
@@ -145,9 +167,24 @@
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
     syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());
     syncVolSlider(PPD.ui.setSfxVol, PPD.GameAudio.getSfxVol());
+    // 对局中（mode 非空）：设置面板即暂停界面，不叠加暂停面板
+    if (PPD.app.mode) {
+      PPD.app.settingsPause = true;
+      PPD.app.paused = true;
+      PPD.show(PPD.ui.pausePanel, false);
+      PPD.updateGameTools();
+    }
     PPD.show(PPD.ui.settingsPanel, true);
   }
-  function closeSettings() { PPD.show(PPD.ui.settingsPanel, false); }
+  function closeSettings() {
+    PPD.show(PPD.ui.settingsPanel, false);
+    if (PPD.app.settingsPause) {
+      PPD.app.settingsPause = false;
+      PPD.app.paused = false;
+      PPD.GameAudio.ensure();
+      PPD.updateGameTools();
+    }
+  }
   PPD.openSettings = openSettings;
   PPD.closeSettings = closeSettings;
   PPD.ui.btnSettings.addEventListener('click', openSettings);
@@ -178,12 +215,6 @@
   PPD.ui.btnAgain.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.restartMatch(); });
   PPD.ui.btnMenu.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.backToMenu(); });
   PPD.ui.btnQuit.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.quitGame(); });
-  // 等待房间面板：返回主页（backToMenu 内部会关闭联机连接）
-  PPD.ui.btnRoomBack.addEventListener('click', () => {
-    PPD.GameAudio.ensure();
-    PPD.GameAudio.ui();
-    PPD.backToMenu();
-  });
 
   // 画质切换（高/低）：写回记忆 + 立即生效（DPR、观众席缓存、低画质渲染开关）
   if (PPD.ui.quality) {
@@ -211,16 +242,62 @@
     });
   }
 
-  // 提示
-  PPD.ui.tips.innerHTML = `
-    国际赛事标准：球台 2.74×1.525m（高 0.76m）· 网高 0.1525m · 球 40mm / 2.7g · 拍面 15×15cm<br>
-    规则：11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发
-  `;
+  // 主页通用说明已全部移除（v1.6 需求 16）：国际赛事标准与全部操作规则统一收纳进独立说明书页；
+  // 比赛页仅在比分栏下方保留一行简易操作说明（见 modes.js 各 start* 的 hintBar 文案）
 
   // 手机端：显示"下载安卓版"入口（APK 内置版 file:// 页面不显示，避免自下载）
   if (PPD.ui.btnDownloadApk && PPD.isTouch && location.protocol !== 'file:') {
     PPD.show(PPD.ui.btnDownloadApk, true);
     if (PPD.ui.apkHelpLink) PPD.show(PPD.ui.apkHelpLink, true); // 百度/微信等浏览器下载被拦时，引导到下载帮助页
+  }
+
+  // 手机端：隐藏「本地双人（分屏）」入口（v1.6 取消手机分屏作战，需求 11；电脑端本地双人保留）
+  if (PPD.ui.btnLocal && PPD.isTouch) PPD.show(PPD.ui.btnLocal, false);
+
+  // ---------- 说明书（独立全屏页面，等同新开页面；主页通用说明已全部移除） ----------
+  // 平台分流：打开时按设备过滤胶囊（data-platform=pc/mobile/both）
+  function filterManualCapsules() {
+    if (!PPD.ui.manualPanel || typeof PPD.ui.manualPanel.querySelectorAll !== 'function') return;
+    const isMobile = PPD.isTouch;
+    const caps = PPD.ui.manualPanel.querySelectorAll('.manual-capsule');
+    for (let i = 0; i < caps.length; i++) {
+      const el = caps[i];
+      const p = el.getAttribute ? (el.getAttribute('data-platform') || 'both') : 'both';
+      el.style.display = (p === 'both' || (p === 'mobile') === isMobile) ? '' : 'none';
+    }
+  }
+  function openManual() {
+    PPD.GameAudio.ensure();
+    PPD.GameAudio.ui();
+    filterManualCapsules();
+    // 对局中打开说明书：视为暂停（与设置一致），关闭恢复
+    if (PPD.app.mode) {
+      PPD.app.manualPause = true;
+      PPD.app.paused = true;
+      PPD.show(PPD.ui.pausePanel, false);
+      PPD.updateGameTools();
+    }
+    PPD.show(PPD.ui.manualPanel, true);
+  }
+  function closeManual() {
+    PPD.show(PPD.ui.manualPanel, false);
+    if (PPD.app.manualPause) {
+      PPD.app.manualPause = false;
+      PPD.app.paused = false;
+      PPD.GameAudio.ensure();
+      PPD.updateGameTools();
+    }
+  }
+  PPD.openManual = openManual;
+  PPD.closeManual = closeManual;
+  // 电脑端：设置在设置按钮正下方、同尺寸（需求 18）；手机端入口在触控底栏（需求 13/17）
+  if (PPD.ui.btnManualMenu) {
+    if (!PPD.isTouch) PPD.show(PPD.ui.btnManualMenu, true);
+    PPD.ui.btnManualMenu.addEventListener('click', openManual);
+  }
+  if (PPD.ui.btnManualTouch) PPD.ui.btnManualTouch.addEventListener('click', openManual);
+  if (PPD.ui.btnManualBack) {
+    PPD.ui.btnManualBack.addEventListener('click', () => { PPD.GameAudio.ui(); closeManual(); });
   }
 
   // 主页滚动已改用浏览器原生滚动条（自定义右端滑动条已移除，见修改记录四十五）
@@ -236,18 +313,6 @@
   if (PPD.syncUnlocksFromRecords) PPD.syncUnlocksFromRecords();
   // 设置面板版本号（与 package.json / AndroidManifest 一致，单一来源 PPD.app.version）
   if (PPD.ui.appVersion) PPD.ui.appVersion.textContent = 'v' + (PPD.app.version || '');
-  // 说明书胶囊按平台分流：手机端只显示手机内容，电脑端只显示电脑内容（data-platform=pc/mobile/both）
-  // 测试桩 DOM 无 querySelectorAll 时跳过
-  if (typeof document.querySelectorAll === 'function') {
-    const isMobile = PPD.isTouch;
-    const caps = document.querySelectorAll('.manual-capsule');
-    for (let i = 0; i < caps.length; i++) {
-      const el = caps[i];
-      const p = el.getAttribute ? (el.getAttribute('data-platform') || 'both') : 'both';
-      const show = p === 'both' || (p === 'mobile') === isMobile;
-      if (!show) el.style.display = 'none';
-    }
-  }
   // 调试：?auto=ai 自动进入人机对战（便于截图/自动化验证）
   if (/[?&]auto=ai/.test(location.search)) PPD.startAI();
   // 调试：?net=public 强制联机走公网（桌面端自动化验证用，网页版本就同域 /ws）

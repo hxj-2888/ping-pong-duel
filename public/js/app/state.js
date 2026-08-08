@@ -49,26 +49,30 @@
     btnJoin: document.getElementById('btnJoin'),
     btnNetMode: document.getElementById('btnNetMode'),
     joinInput: document.getElementById('joinInput'),
-    lanTargetRow: document.getElementById('lanTargetRow'),     // 本地联机：对方设备地址输入行
+    lanTargetRow: document.getElementById('lanTargetRow'),     // 本地联机：对方设备地址输入行（联机框内）
     lanTargetInput: document.getElementById('lanTargetInput'),
-    lanManual: document.getElementById('lanManual'),           // 本地联机教程小方框
     lanFirewallNote: document.getElementById('lanFirewallNote'), // 房主面板：手动放行防火墙提醒
+    // 联机框（主页「联机对战」入口打开的全屏面板，等同新开页面；原 roomPanel 合并为内部等待区）
+    netPanel: document.getElementById('netPanel'),
+    btnNetEntry: document.getElementById('btnNetEntry'),
+    btnNetBack: document.getElementById('btnNetBack'),
+    btnNetWarn: document.getElementById('btnNetWarn'),
+    netWarnNote: document.getElementById('netWarnNote'),
+    netWait: document.getElementById('netWait'),
+    netStatus: document.getElementById('netStatus'),
     // 设置（主页与比赛页右上角 ⚙）：判定虚线 / 背景音乐 / 游戏音效
     btnSettings: document.getElementById('btnSettings'),
     btnSettingsGame: document.getElementById('btnSettingsGame'),
     settingsPanel: document.getElementById('settingsPanel'),
     btnSettingsClose: document.getElementById('btnSettingsClose'),
-    publicServerInput: document.getElementById('publicServerInput'), // 公网联机服务器地址（可指向自建 ECS）
     setShowHitRanges: document.getElementById('setShowHitRanges'),
     setMusic: document.getElementById('setMusic'),
     setSound: document.getElementById('setSound'),
     setMusicVol: document.getElementById('setMusicVol'),
     setSfxVol: document.getElementById('setSfxVol'),
-    roomPanel: document.getElementById('roomPanel'),
     roomCode: document.getElementById('roomCode'),
     roomHint: document.getElementById('roomHint'),
     lanUrls: document.getElementById('lanUrls'),
-    btnRoomBack: document.getElementById('btnRoomBack'),
     statusBar: document.getElementById('statusBar'),
     btnDownloadApk: document.getElementById('btnDownloadApk'), // 手机端：下载安卓版 APK
     overlay: document.getElementById('overlay'),
@@ -121,18 +125,19 @@
     joyKnob: document.getElementById('joyKnob'),
     btnCrouch: document.getElementById('btnCrouch'),
     btnSmash: document.getElementById('btnSmash'),
-    // P2（右半屏副屏玩家）触控组：摇杆 + 扣 + 蹲，功能与 P1 一致（仅本地分屏显示）
-    p2Controls: document.getElementById('p2Controls'),
-    joyBase2: document.getElementById('joyBase2'),
-    joyKnob2: document.getElementById('joyKnob2'),
-    btnCrouch2: document.getElementById('btnCrouch2'),
-    btnSmash2: document.getElementById('btnSmash2'),
+    // 手机端说明书入口（需求 13/17：利用删除分屏后的空白位，与功能方块同尺寸）
+    btnManualTouch: document.getElementById('btnManualTouch'),
     btnPause: document.getElementById('btnPause'),
     btnExit: document.getElementById('btnExit'),
     pausePanel: document.getElementById('pausePanel'),
     pauseAITune: document.getElementById('pauseAITune'), // 人机：地狱通关后的电脑 AI 数值调控
     btnResume: document.getElementById('btnResume'),
     btnPauseExit: document.getElementById('btnPauseExit'),
+    // 说明书（独立全屏页面，等同新开页面；电脑入口=设置按钮下方，手机入口=触控底栏）
+    manualPanel: document.getElementById('manualPanel'),
+    btnManualMenu: document.getElementById('btnManualMenu'),
+    btnManualTouch: document.getElementById('btnManualTouch'),
+    btnManualBack: document.getElementById('btnManualBack'),
   };
 
   // 联机服务器选择：
@@ -148,7 +153,6 @@
   // （本地联机"探索中"暂不开放、个人生涯禁用），便于在局域网页面直接验证网页版 UI。
   const isWebVersion = (!isLocalHost && isHttps) || /[?&]web=1/.test(location.search);
   function wsUrl() {
-    const custom = (app.publicServerUrl || '').trim();
     if (!app.publicServer) {
       // 本地模式：本地服务器（node server.js）一律是明文 ws；
       // 优先用"对方设备地址"（房主 IP:端口，网页版/局域网页面可手动填），否则自动用当前页面地址
@@ -156,11 +160,9 @@
       const host = t || location.host;
       if (host) return 'ws://' + host;
       // 无 host（内置安卓版 file:// 页面）：本地模式没有可连的服务器，退回公网默认
-      return custom || 'wss://ping-pong-duel.pages.dev/ws';
+      return 'wss://ping-pong-duel.pages.dev/ws';
     }
-    // 公网模式：优先用用户配置的服务器地址（设置面板，可指向自建 ECS 低延迟服务器）；
-    // 未配置时：桌面端默认 Cloudflare，网页版/局域网页面默认同域 /ws
-    if (custom) return custom;
+    // 公网模式：桌面端默认 Cloudflare，网页版/局域网页面默认同域 /ws
     if (isLocalHost) {
       return 'wss://ping-pong-duel.pages.dev/ws'; // 桌面端切公网：默认直连 Cloudflare
     }
@@ -179,7 +181,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '1.5.2',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '1.6',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiLevelA: 1,         // AI 观战：红方 AI 难度
@@ -197,8 +199,7 @@
     reconnecting: false, // 是否正在自动重连（防并发触发）
     reconnectAttempt: 0, // 已自动重连次数（超过上限回菜单）
     reconnectStartedAt: 0, // 本轮重连开始时刻（超时判定）
-    publicServer: false, // 联机服务器：false=本地（node server.js）/ true=公网（Cloudflare 或自建）
-    publicServerUrl: '', // 公网联机服务器地址（设置面板配置，可指向自建 ECS：ws://IP:端口；空=默认）
+    publicServer: false, // 联机服务器：false=本地（node server.js）/ true=公网（Cloudflare/同域 /ws）
     lanTarget: '',        // 本地联机"对方设备地址"（IP 或 IP:端口；留空=自动用当前页面地址）
     lanInfo: null,        // GET /api/info 返回的局域网联机信息（房主等待面板显示用）
     serverVersion: null,  // 本地服务器版本（心跳 pong 带 ver；用于识别旧服务器）
@@ -232,11 +233,11 @@
     // 红/蓝双方观众状态：得分方欢呼量 cheer、对方摇头量 shake（0..1，主循环每帧衰减）
     fan: { cheer: [0, 0], shake: [0, 0] },
     showHitRanges: false, // 判定范围虚线（设置面板开关，默认关闭）
-    dpr: 1,              // 当前画布像素比（DPR 上限 2；低画质=1）
+    dpr: 1,              // 当前画布像素比（高画质=设备像素比；低画质=1/封顶）
     resizeDirty: false,  // 暂停/结算期间窗口尺寸变化 → 需要补一帧渲染
     // 画质：mode='high'（默认高画质）/ 'low'（低画质省电）；low=当前低画质标记；
-    // frameRate=渲染帧率上限（30/45/60/无上限，物理仍 120Hz 步进）
-    quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 60 },
+    // frameRate=渲染帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率，物理仍 120Hz 步进）
+    quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
   };
 
@@ -247,14 +248,15 @@
   function resize() {
     app.resizeW = window.innerWidth;
     app.resizeH = window.innerHeight;
-    // 分辨率档位：渲染物理像素封顶到目标分辨率（超出的屏按比例降 DPR，避免无谓填充率）——
-    // 高画质=电脑 2560×1440 / 手机 800p（渲染宽），低画质=电脑 1080p / 手机 400p。
+    // 分辨率档位：高画质**不封顶**——dpr 直接用设备像素比，自动适配设备最高屏幕分辨率；
+    // 低画质渲染物理像素封顶到目标分辨率（超出的屏按比例降 DPR，避免无谓填充率）——
+    // 低画质=电脑 1080p / 手机 400p（渲染宽）。
     // 渲染坐标仍用 CSS 像素（setTransform 缩放）；dpr<1（如 4K 屏选低画质）→ 1080p 放大显示，属预期省电
     const rw = Math.max(1, app.resizeW), rh = Math.max(1, app.resizeH);
-    const cap = app.quality && app.quality.low
-      ? (isTouch ? 400 / rw : Math.min(1920 / rw, 1080 / rh))   // 低：手机 400p / 电脑 1080p
-      : (isTouch ? 800 / rw : Math.min(2560 / rw, 1440 / rh));  // 高：手机 800p / 电脑 2560×1440
-    const dpr = Math.min(window.devicePixelRatio || 1, cap);
+    const lowCap = isTouch ? 400 / rw : Math.min(1920 / rw, 1080 / rh); // 低：手机 400p / 电脑 1080p
+    const dpr = app.quality && app.quality.low
+      ? Math.min(window.devicePixelRatio || 1, lowCap)
+      : (window.devicePixelRatio || 1); // 高画质：不封顶，跟随设备最高分辨率
     app.dpr = dpr;
     canvas.width = Math.max(1, Math.round(app.resizeW * dpr));
     canvas.height = Math.max(1, Math.round(app.resizeH * dpr));
@@ -302,14 +304,14 @@
     ui.setNoCrowd.disabled = app.quality.low; // 低画质观众恒关，勾选框置灰
   }
 
-  // ---------- 帧率上限（30/45/60/无上限，默认 60；localStorage 记忆） ----------
+  // ---------- 帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率；localStorage 记忆） ----------
   const FRAME_RATE_KEY = 'ppd_frame_rate';
   try {
     const raw = localStorage.getItem(FRAME_RATE_KEY);
     if (raw === 'unlimited') app.quality.frameRate = 'unlimited';
     else {
       const v = parseInt(raw, 10);
-      if (v === 30 || v === 45 || v === 60) app.quality.frameRate = v;
+      if (v === 30 || v === 60) app.quality.frameRate = v;
     }
   } catch (e) { /* ignore */ }
   if (ui.frameRate) ui.frameRate.value = String(app.quality.frameRate);
@@ -358,9 +360,9 @@
     if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
   }
 
-  // 切换帧率上限（30/45/60/无上限）：渲染门控即时生效（物理仍 120Hz；无上限=每帧 RAF 都渲染）
+  // 切换帧率上限（30/60/无上限）：渲染门控即时生效（物理仍 120Hz；无上限=每帧 RAF 都渲染）
   function setFrameRate(f) {
-    app.quality.frameRate = f === 30 || f === 45 || f === 'unlimited' ? f : 60;
+    app.quality.frameRate = f === 30 || f === 60 || f === 'unlimited' ? f : 'unlimited';
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(FRAME_RATE_KEY, String(app.quality.frameRate)); } catch (e) { /* ignore */ }
   }
 

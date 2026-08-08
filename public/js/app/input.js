@@ -69,15 +69,8 @@
 
   // ---------- 手机端触控按钮 ----------
   function showTouch(v) {
+    // 手机端已取消本地分屏（需求 11）：P2 触控组与分屏适配已删除，仅 P1 一组控件
     PPD.show(PPD.ui.touchControls, v && PPD.isTouch);
-    // P2（右半屏副屏玩家）触控组：仅本地分屏显示（人机/联机/观战隐藏）
-    const duo = v && PPD.isTouch && PPD.app.mode === 'local';
-    PPD.show(PPD.ui.p2Controls, duo);
-    // 窄屏分屏时缩小控件（测试桩 DOM 无 classList.toggle，需防御）
-    const tc = PPD.ui.touchControls;
-    if (tc && tc.classList && typeof tc.classList.toggle === 'function') {
-      tc.classList.toggle('local-duo', duo);
-    }
   }
 
   // 全方位摇杆：拖动映射左/右/前/后（可斜向移动），松手回中
@@ -143,11 +136,8 @@
     };
     // 蹲下按钮（手机端）：按住蹲下（与电脑 Ctrl 相同效果）；扣球已改为滑屏（见 canvas pointerup）
     hold(PPD.ui.btnCrouch, 'crouch', 'keyP1');
-    // P2（右半屏副屏玩家）：蹲下按钮（仅本地分屏显示）
-    hold(PPD.ui.btnCrouch2, 'crouch', 'keyP2');
-    // 全方位摇杆：P1（左半屏）与 P2（右半屏）各一套
+    // 手机端已取消本地分屏：仅 P1 一套摇杆（P2 触控组已删除）
     makeJoy(PPD.ui.joyBase, PPD.ui.joyKnob, 'keyP1');
-    makeJoy(PPD.ui.joyBase2, PPD.ui.joyKnob2, 'keyP2');
   }
   bindTouch();
 
@@ -195,14 +185,16 @@
     if (mulKey === 'catchMul') {
       // 人机地狱默认接球率 ×1.0（与 loop.js 传的 hellCatchMul:1 一致：永不刻意漏球）
       const hellMul = (PPD.app.mode === 'ai' && level === 3) ? 1.0 : 1;
-      const cp = clampV(L.catchProb * hellMul * mul, 0.20, 1.0);
-      const miss = cp >= 1 ? '永不漏球' : `每 ${Math.max(2, Math.round(1 / (1 - cp)))} 球漏 1`;
+      const base = L.catchProb * hellMul;
+      // 与 ai.js 同一漏球率线性模型：漏球率 = 基准漏球率 / 倍率（0.5~1.5 全程线性有效）
+      const miss = base >= 1 ? 0 : Math.min(0.8, Math.max(0.005, (1 - base) / mul));
+      const missTxt = base >= 1 ? '永不漏球' : `每 ${Math.max(2, Math.round(1 / miss))} 球漏 1`;
       // 防扣显示"实测有效反击率"：裸概率 × 每档实测定标系数（README:45 探针：
       // 困难 55%→~50%、地狱 95%→~80%，位置门±0.35m + 高度/时序损耗所致）
       const DEF_EFF = { 2: 0.91, 3: 0.84 };
       const gate = DEF_EFF[level] || 1;
       const sd = clampV((L.smashDef || 0) * mul, 0, 1) * gate;
-      return `接球率 ${Math.round(cp * 100)}%（${miss}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
+      return `非刻意漏球率 ${Math.round(miss * 100)}%（${missTxt}）` + (L.smashDef > 0 ? `· 防扣约 ${Math.round(sd * 100)}%` : '');
     }
     if (mulKey === 'smashMul') {
       const over = Math.max(0, mul - 1);
@@ -217,7 +209,10 @@
       // 与 ai.js 同公式：基础 × 倍率（夹取）+ <1 惩罚占空比折扣；按实际值显示
       // （修复困难/地狱拉低滑杆仍显示"移动 100%"的 bug）
       const eff = clampV(L.agility * mul * (1 - under * 0.5), 0, 1);
+      // 敏捷>1 移动速度加成（与 ai.js 同公式：最大 +25%）
+      const bonus = Math.min(25, Math.round(Math.max(0, mul - 1) * 0.5 * 100));
       let txt = eff >= 1 ? `移动 100%${over > 0 ? '（溢出→站位更准）' : ''}` : `移动 ${Math.round(eff * 100)}%`;
+      if (bonus > 0) txt += ` · 速度加成 +${bonus}%`;
       if (under > 0) txt += '（减速惩罚）';
       return txt;
     }
@@ -332,10 +327,18 @@
   bindAIName(PPD.ui.pauseAiNameA, 0);
   bindAIName(PPD.ui.pauseAiNameB, 1);
   window.addEventListener('keydown', (e) => {
-    // Esc：个人生涯页 > 设置面板 > 比赛中暂停/继续
+    // Esc：个人生涯页 > 说明书 > 联机框 > 设置面板 > 比赛中暂停/继续
     if (e.code === 'Escape') {
       if (PPD.ui.careerPanel && PPD.ui.careerPanel.style.display !== 'none' && PPD.closeCareer) {
         PPD.closeCareer();
+        return;
+      }
+      if (PPD.ui.manualPanel && PPD.ui.manualPanel.style.display !== 'none' && PPD.closeManual) {
+        PPD.closeManual();
+        return;
+      }
+      if (PPD.ui.netPanel && PPD.ui.netPanel.style.display !== 'none' && PPD.closeNetPanel) {
+        PPD.closeNetPanel();
         return;
       }
       if (PPD.ui.settingsPanel && PPD.ui.settingsPanel.style.display !== 'none') {

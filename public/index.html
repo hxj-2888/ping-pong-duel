@@ -17,6 +17,8 @@
   <!-- 主菜单 -->
   <div id="menu" class="panel">
     <button id="btnSettings" class="settings-btn" title="设置">⚙</button>
+    <!-- 电脑端说明书按钮：设置在设置按钮正下方、同尺寸（需求 18；手机端入口在触控底栏） -->
+    <button id="btnManualMenu" class="manual-menu-btn" title="说明书" style="display:none">📖</button>
     <div class="menu-scroll">
       <div class="logo">
         <div class="logo-ball">●</div>
@@ -61,63 +63,71 @@
           </label>
         </div>
         <div class="row">
-          <button id="btnHost" class="btn">创建联机房间</button>
-          <button id="btnJoin" class="btn">加入房间</button>
+          <button id="btnNetEntry" class="btn primary">🎮 联机对战</button>
         </div>
-        <div class="row">
-          <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
-        </div>
-        <!-- 本地联机：对方设备地址（可选）。本机/局域网页面自动用当前地址、可不填；
-             网页版等无法自动推断服务器时才需要手动填房主 IP（如 192.168.1.5:8765） -->
-        <div class="row lan-target-row" id="lanTargetRow" style="display:none">
-          <input id="lanTargetInput" placeholder="对方设备地址（如 192.168.1.5:8765，可留空）" spellcheck="false" autocapitalize="off" autocomplete="off">
-        </div>
-        <div class="row">
-          <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
-        </div>
-        <!-- 本地联机教程小方框（与实际联机链路对齐，见合并说明/使用说明 联机对战） -->
-        <details class="manual-details lan-manual" id="lanManual">
-          <summary>📶 本地联机教程</summary>
-          <div class="manual-content">
-            <p class="manual-title">本地联机（两台设备同一网络，无需公网）</p>
-            <p>入口就在本页主菜单：「创建联机房间」=房主，「加入房间」=对方（输 4 位房间码）。地址列表有多个是正常的——电脑有几个网卡就列几行（如 WLAN / 以太网 / Radmin VPN），<b>选与对方同一网络的那个</b>，不需要填两个 IP，对方只输一个房间码即可。</p>
-            <p class="manual-title">房主（这台电脑）</p>
-            <p>① 点「创建联机房间」② 等待面板显示 4 位房间码和地址列表，把「地址 + 房间码」发给对方 ③ 按面板提醒<b>手动</b>放行防火墙（游戏不会自动修改防火墙）</p>
-            <p class="manual-title">对方（手机 / 另一台电脑）</p>
-            <p>① 连与房主同一个 Wi-Fi（别用手机流量）② 浏览器打开房主发的地址，如 <b>http://192.168.1.5:8765</b>（直接从房主电脑加载游戏，无需安装）③ 输入房主的 4 位房间码 → 加入</p>
-            <p class="manual-title">手机打不开 / 连不上（按顺序排查）</p>
-            <p>① 房主以管理员身份运行一次 <b>tools\局域网放行.cmd</b>（Windows 防火墙放行 TCP 8765）② 确认同一网络、路由器没开「AP 隔离 / 访客网络隔离」③ 房主游戏窗口保持打开（桌面版关窗会同时关闭服务器）④ 状态栏提示「⚠ 本地服务器版本过旧」时重启本地服务器</p>
-            <p class="manual-title">网页版说明</p>
-            <p>网页版的本地联机<b>正在探索中，暂不对网页版开放</b>（https 页面受浏览器安全策略限制，无法直连局域网服务器）。网页版默认公网联机；本地联机请使用桌面版 / 安装包，或让朋友直接打开房主分享的 <b>http://IP:8765</b> 加入。</p>
-          </div>
-        </details>
       <div id="statusBar" class="status"></div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v152.apk" download="PingPongDuel-v152.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v160.apk" download="PingPongDuel-v160.apk" style="display:none">📱 下载安卓版（直接安装）</a>
         <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
       <div id="recordsPanel" class="records-mini">个人生涯 · 加载中…</div>
     </div>
-    <div id="tips" class="tips"></div>
   </div>
   </div>
 
-  <!-- 联机等待 -->
-  <div id="roomPanel" class="panel room-panel" style="display:none">
-    <h2>房间已创建</h2>
-    <div id="roomCode" class="room-code">----</div>
-    <p id="roomHint">等待对手加入…</p>
-    <!-- 局域网联机地址（本地模式由 app/net.js 拉取 /api/info 填充；公网模式隐藏） -->
-    <div id="lanUrls" class="lan-urls" style="display:none"></div>
-    <!-- 房主开联机时的解禁提醒：仅文字提示，绝不自动修改防火墙 -->
-    <div id="lanFirewallNote" class="lan-firewall-note" style="display:none">
-      <div class="lan-fw-title">⚠ 请手动放行防火墙（游戏不会自动修改）</div>
-      <p>首次联机：以管理员身份运行一次 <b>tools\局域网放行.cmd</b>，或在「控制面板 → Windows Defender 防火墙 → 允许应用」中放行 TCP 8765，否则对方连不上（症状：一直"连接中"/超时）。</p>
-      <p>地址有多个 = 电脑有多个网卡（WLAN / 以太网 / Radmin VPN），把<b>与对方同一网络</b>的那个地址连同 4 位房间码发给对方。</p>
+  <!-- 联机框（主页「联机对战」入口打开，等同新开页面）：模式切换/建房/加入/房主等待/教程全部收纳 -->
+  <div id="netPanel" class="net-panel" style="display:none">
+    <div class="net-card">
+      <div class="net-header">
+        <h2>联机对战</h2>
+        <button id="btnNetBack" class="btn">← 返回主菜单</button>
+      </div>
+      <!-- 模式切换：本地/公网 + 公网 ⚠ 说明（点击展开，再点收回） -->
+      <div class="net-mode-row">
+        <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
+        <button id="btnNetWarn" class="btn small net-warn" style="display:none" title="说明">⚠</button>
+      </div>
+      <div id="netWarnNote" class="net-warn-note" style="display:none">⚠ 玩家量过大将导致服务器负载卡顿</div>
+      <!-- 操作区 -->
+      <div class="row">
+        <button id="btnHost" class="btn primary">创建联机房间</button>
+        <button id="btnJoin" class="btn">加入房间</button>
+      </div>
+      <div class="row">
+        <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
+      </div>
+      <!-- 本地联机：对方设备地址（本地模式下显示，可填 IP 或 IP:端口，支持 IP+房间码加入） -->
+      <div class="row lan-target-row" id="lanTargetRow" style="display:none">
+        <input id="lanTargetInput" placeholder="对方设备地址（如 192.168.1.5:8765，可留空）" spellcheck="false" autocapitalize="off" autocomplete="off">
+      </div>
+      <!-- 房主等待区（原独立等待面板合并进来）：本地联机网址显示在房间码上方 -->
+      <div id="netWait" style="display:none">
+        <div id="lanUrls" class="lan-urls" style="display:none"></div>
+        <div id="roomCode" class="room-code">----</div>
+        <p id="roomHint">等待对手加入…</p>
+        <!-- 房主开联机时的解禁提醒：仅文字提示，绝不自动修改防火墙 -->
+        <div id="lanFirewallNote" class="lan-firewall-note" style="display:none">
+          <div class="lan-fw-title">⚠ 请手动放行防火墙（游戏不会自动修改）</div>
+          <p>首次联机：以管理员身份运行一次 <b>tools\局域网放行.cmd</b>，或在「控制面板 → Windows Defender 防火墙 → 允许应用」中放行 TCP 8765，否则对方连不上（症状：一直"连接中"/超时）。</p>
+          <p>地址有多个 = 电脑有多个网卡（WLAN / 以太网 / Radmin VPN），把<b>与对方同一网络</b>的那个地址连同 4 位房间码发给对方。</p>
+        </div>
+        <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
+      </div>
+      <!-- 精简联机教程（完整内容在说明书，杜绝重复） -->
+      <details class="manual-details">
+        <summary>📶 联机教程</summary>
+        <div class="manual-content">
+          <p class="manual-title">本地联机（两台设备同一网络，无需公网）</p>
+          <p>房主点「创建联机房间」，面板显示 4 位房间码和本机地址列表（有多个网卡就列多行，选与对方同一网络的那个）；对方连同一 Wi-Fi，打开 <b>http://房主IP:8765</b> 输入房间码加入。首次联机请<b>手动</b>放行防火墙 TCP 8765（游戏不会自动修改防火墙）。</p>
+          <p class="manual-title">公网联机（任何网络）</p>
+          <p>点「联机:本地」切换为「联机:公网」，再建房/加入即可；通过 Cloudflare 服务器，公网任何地方的朋友都能加入。</p>
+          <p class="manual-title">网页版说明</p>
+          <p>网页版默认公网联机；本地联机请用桌面版 / 安装包，或让朋友直接打开房主分享的 <b>http://IP:8765</b> 加入。</p>
+        </div>
+      </details>
+      <div id="netStatus" class="status"></div>
     </div>
-    <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
-    <button id="btnRoomBack" class="btn">返回主页</button>
   </div>
 
   <!-- 游戏画面 -->
@@ -154,7 +164,7 @@
       <button id="btnSettingsGame" class="tool-btn" title="设置">⚙</button>
       <button id="btnPause" class="tool-btn">暂停</button>
       <button id="btnExit" class="tool-btn">退出</button>
-      <span id="fpsMeter" class="fps-meter" title="估测帧数（60/45/30 档封顶 60；无上限档显示真实帧率）">60</span>
+      <span id="fpsMeter" class="fps-meter" title="估测帧数（30/60 档封顶 60；无上限档显示真实帧率，自动匹配设备刷新率）">60</span>
     </div>
     <!-- 暂停面板 -->
     <div id="pausePanel" class="pause-panel" style="display:none">
@@ -220,23 +230,15 @@
         <button id="btnPauseExit" class="btn">退出比赛（返回主页面）</button>
       </div>
     </div>
-    <!-- 手机端触控（触屏设备才显示）：摇杆移动 + 蹲下按钮；扣球用上滑手势（单击=推球） -->
+    <!-- 手机端触控（触屏设备才显示）：摇杆移动 + 蹲下按钮 + 说明书入口；扣球用上滑手势（单击=推球） -->
     <div id="touchControls" class="touch-controls" style="display:none">
       <div class="tc-group">
         <div id="joyArea" class="joy-area">
           <div id="joyBase" class="joy-base"><div id="joyKnob" class="joy-knob"></div></div>
         </div>
         <div class="tc-btns">
+          <button id="btnManualTouch" class="tbtn manual-btn" aria-label="说明书">📖</button>
           <button id="btnCrouch" class="tbtn crouch-btn" aria-label="蹲下">蹲</button>
-        </div>
-      </div>
-      <!-- P2（右半屏副屏玩家）：摇杆 + 蹲下（仅本地分屏显示） -->
-      <div id="p2Controls" class="tc-group" style="display:none">
-        <div class="tc-btns">
-          <button id="btnCrouch2" class="tbtn crouch-btn" aria-label="蹲下">蹲</button>
-        </div>
-        <div id="joyArea2" class="joy-area">
-          <div id="joyBase2" class="joy-base"><div id="joyKnob2" class="joy-knob"></div></div>
         </div>
       </div>
     </div>
@@ -291,146 +293,127 @@
       </label>
       <label class="toggle-label">帧率
         <select id="frameRate">
-          <option value="60" selected>60</option>
-          <option value="45">45</option>
+          <option value="unlimited" selected>无上限（自动匹配刷新率）</option>
+          <option value="60">60</option>
           <option value="30">30</option>
-          <option value="unlimited">无上限</option>
         </select>
       </label>
-      <!-- 公网联机服务器地址：默认 Cloudflare；可填自建服务器（如 ECS）地址 ws://IP:端口，
-           桌面端「联机:公网」将直连该地址（自建服务器可大幅降低延迟，见 tools/部署到ECS） -->
-      <label class="toggle-label">公网联机服务器地址
-        <input id="publicServerInput" type="text" placeholder="留空=默认（Cloudflare），可填 ws://ECS_IP:8765" spellcheck="false" autocapitalize="off" autocomplete="off">
-      </label>
-      <details class="manual-details">
-        <summary>📖 说明书（操作说明）</summary>
-        <div class="manual-content">
-          <!-- 平台分流：data-platform = pc(仅电脑) / mobile(仅手机) / both(通用)；启动时按设备过滤 -->
-          <!-- 玩法机制全量说明：操作 / 判定 / 规则 / AI 特性 / 虚线 / 生涯 / 联机 均收入胶囊 -->
-          <details class="manual-capsule" data-platform="pc" open>
-            <summary>电脑操作</summary>
-            <div class="manual-capsule-body">
-              <p>移动：A/D 或 ←/→ 左右移动，W/S 或 ↑/↓ 前后移动（方向键四向移动）；Shift 跑步加速，Ctrl 蹲下（接球箱下探到贴地 0.02m，任何低球可接起）</p>
-              <p>发球：鼠标瞄准对方半台落点，发球轨迹线实时跟随，单击发球（瞄准解不出合法发球时轨迹消失、发不出球，调整鼠标位置即可）</p>
-              <p>对打：左键推球、右键扣球；左键推球后 280ms 内按右键可把蓄力期推球升级为扣球（本地双人 P2 用 , 推球 / . 扣球）</p>
-              <p>高吊：蹲下+推球（推球进阶技巧，喂出高球逼对方扣杀；仅普通来球——扣杀来球时保持蹲防推球=接扣杀）</p>
-              <p>反击扣杀：扣杀来球预判起拍（球到前提前按推球）+推球即可接回，站立即可；只有贴地低扣（低于站姿箱底 0.70m）才需要蹲下</p>
-              <p>反击扣杀奖励：成功反击电脑扣杀时，该回球视为扣杀、电脑应对概率减半（地狱 0.95→0.475、困难 0.55→0.275）；扣杀/低平快球来球均有免起拍延迟命中窗，可反应式按键</p>
-              <p>低平快球反击奖励（更高档）：蹲下+推球接回低平快球时，该回球更高球速 + 打向边角，且同样视为扣杀、电脑应对概率减半</p>
-              <p>移动范围：可在己方半场内自由前后左右移动（台面两侧可一直走到球网附近），不能站上球桌；移动中也能击球</p>
-              <p>电脑 AI 数值调控：击败地狱难度后，人机对战的暂停面板变为 4 项 AI 参数滑杆（反应/接球率/攻击性/敏捷，即时生效）</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="mobile" open>
-            <summary>手机操作</summary>
-            <div class="manual-capsule-body">
-              <p>摇杆移动（可斜向）· 单击推球 · 上滑扣球（快速向上滑动）·「蹲」蹲下（接球箱贴地 0.02m，可接任何低球）</p>
-              <p>发球：点两下屏幕——第一下进入瞄准（手指移到哪轨迹跟到哪），第二下发球</p>
-              <p>分屏双人：左右半屏各一套操控（摇杆 + 蹲，P1 左半屏 / P2 右半屏；上滑扣球、单击推球），点按各自半屏推球/发球</p>
-              <p>高吊：蹲下 + 单击推球（普通来球；扣杀来球时=蹲防接扣杀）</p>
-              <p>反击扣杀奖励：成功反击电脑扣杀（预判/蹲防推球接回）时，该回球视为扣杀、电脑应对概率减半</p>
-              <p>低平快球反击奖励（更高档）：接回低平快球（蹲下）后回球更快更刁钻，电脑更难接</p>
-              <p>支持多点触控：本地分屏双人可同时触摸操作</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="both">
-            <summary>接球判定与击球手感</summary>
-            <div class="manual-capsule-body">
-              <p>碰撞箱（进箱即命中）：以球员为中心、向网前偏移 0.42m 的长方体（1.2m 宽 × 0.8m 深 × 0.7m 高，可接球高 0.70~1.40m）；球进入箱体后点击推球/扣球即命中，球拍自动伸向球完成击球动画</p>
-              <p>推球：弧线抬高、干净直接过网（卸力吸收来球速度，带下旋）</p>
-              <p>扣球：更快更狠（约 22m/s+），贴网下压 + 强上旋；扣球只会打出快扣杀——球够高（≥约 1.0m，左上角「可扣杀 ✓」提示）才能扣过网，球不够高时直接判定球撞网（对方得分），不会降级成慢速球</p>
-              <p>蹲下：箱体下探到贴地（0.02m），任何还在空中的低球都能接起；蹲得越久移动越慢（速度 ×0.40 → 最低 ×0.20）；蹲站转换：初始瞬发，但 3 秒内反复蹲站会加大转换延迟（每次 +0.15s，最多 0.5s）</p>
-              <p>高吊：蹲下+推球放出高弧线（喂到对方半场逼出扣杀机会）——仅对普通来球生效；扣杀来球时保持蹲防推球（接扣杀）；球太低时自动退回普通防守回球</p>
-              <p>反击扣杀（实测）：扣杀来球用预判起拍（球到前提前按推球）+ 推球即可接回去，站立即可（实测困难/地狱 AI 扣杀接住 ~47-48%）；只有贴地低扣才需要蹲下——蹲下反会降低成功率（箱顶变低漏高位来球）</p>
-              <p>反击免延迟窗口：扣杀/低平快球来球时，挥拍后 0.28s 内球在接球箱即命中（免 0.08s 起拍延迟），可反应式按键；普通来球需等 0.08s 风起</p>
-              <p>反击扣杀奖励（操作奖励）：成功反击电脑扣杀（预判起拍+推球接回）时，该回球视为扣杀、电脑应对概率减半</p>
-              <p>低平快球反击奖励（更高档）：成功接回低平快球（蹲下+推球）时，该回球更高球速 + 刁钻边角落位，且同样视为扣杀、电脑应对概率减半——比反击扣杀的回报更高</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="both">
-            <summary>判分与规则</summary>
-            <div class="manual-capsule-body">
-              <p>11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
-              <p>得分：对方未能回球（opp-miss）/ 出界（out）/ 同半台两次弹跳（double）/ 违例拦击（volley）/ 发球失误（serve-fault）</p>
-              <p>发球位置：发球方站在台面中路附近（台边站位解不出合法发球），瞄准对方半台</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="both">
-            <summary>AI 对手特性（人机对战）</summary>
-            <div class="manual-capsule-body">
-              <p>四档难度：简单（反应慢、站位偏、只推球不扣杀，接球率约 55%）/ 中等（反应适中、高球常扣杀，接球率约 95%）/ 困难（反应快、追位准、高球必扣杀，接球率约 97.5%）/ 地狱（反应/站位/扣杀全面拉满，0% 刻意漏球，可反击扣杀）</p>
-              <p>刻意低球：困难有 1/5、地狱有 1/2 的概率把回球打成低平快球（贴网低飞、落地深而低弹），站立接球箱底 0.70m 处容错极小，蹲下接最稳；简单/中等不打低球</p>
-              <p>高吊与变招：困难/地狱/中等会偶尔放高吊球（逼出扣杀机会）；对打两回合不进球后 AI 可能变招（改打低平快球/高吊并横向移动 0.4~0.7m，变招概率随难度与未变招时长提升）</p>
-              <p>接扣杀：困难/地狱按「位置门 × 概率」接玩家扣杀——落点在 AI 站位 ±0.35m 内且高度/时序成立才算够得着，再按档位概率接住（困难 55%→有效反击约 50%、地狱 95%→约 80%）；打边角/骗位即漏；AI 判定无法扣杀时大部分会放弃扣杀改打安全球</p>
-              <p>观战（AI vs AI）与人机对战一致：地狱 0% 刻意漏球；观战暂停面板可调双方难度与 4 项 AI 参数</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="both">
-            <summary>判定范围虚线</summary>
-            <div class="manual-capsule-body">
-              <p>设置（右上角 ⚙）中「判定范围虚线」开关，默认关闭；开启后球/球拍周围显示判定范围虚线（进箱变绿高亮并「嘀」提示音）</p>
-              <p>左上角面板实时显示：接球箱尺寸、球高、进箱状态与「可扣杀 / 可高吊」提示（与引擎同一求解判定，预判起手更从容）；关闭则虚线、提示音与面板一并隐藏</p>
-              <p>AI 观战只显示实时球高/进箱，不做可扣杀/可高吊指示（与玩家操作无关）</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="pc">
-            <summary>个人生涯（电脑）</summary>
-            <div class="manual-capsule-body">
-              <p>每局结束自动记录胜负（人机 / 本地双人 / 联机都会计入，**含真人记录**），后端留最近 60 条——本地版写入应用目录 records.json，公网联机写入 Cloudflare</p>
-              <p>主菜单下方「个人生涯」面板显示总场次 / 胜率摘要，点击展开整页分页战绩列表（10 条/页：模式 · 胜/负 · 难度 · 比分 · 时间 · 名字）</p>
-              <p>本地双人记录以 P1 视角计胜负；联机记录以你自己的视角计胜负（真人对手）</p>
-              <p>无后端/离线时静默不打扰；重开应用记录仍在（本地版存于 records.json）</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="pc">
-            <summary>联机对战（电脑）</summary>
-            <div class="manual-capsule-body">
-              <p>「联机:本地」模式（默认）：一方「创建联机房间」，另一方输入 4 位房间码加入——适合同一局域网内的两台电脑/手机</p>
-              <p>「联机:公网」模式：点菜单「联机:本地/公网」切换，再建房/加入——通过 Cloudflare 服务器（wss://ping-pong-duel.pages.dev/ws），公网任何地方的朋友都能加入</p>
-              <p>局域网联机：房主电脑运行服务器（启动游戏即可），对方在同一网络（或 Radmin VPN）打开 http://房主IP:8765 输入房间码加入；首次需放行防火墙 TCP 8765</p>
-              <p>网页版（ping-pong-duel.pages.dev）固定走公网，无需切换</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="mobile">
-            <summary>本地联机（手机）</summary>
-            <div class="manual-capsule-body">
-              <p>条件：手机与电脑连同一个 WiFi（不能用访客网络/开启隔离的网络），电脑上先启动「乒乓对决」服务器</p>
-              <p>电脑端：开启服务器后界面显示本机 IP 与端口（8765）与房间码；Windows 防火墙弹窗时点「允许」，或在防火墙放行 TCP 8765</p>
-              <p>手机端：设置 → 公网联机服务器地址 填 http://电脑IP:8765（或加入时填对方设备地址）；选「联机:本地」；输入房间码 → 加入</p>
-              <p>连不上：核对电脑 IP、确认同一 WiFi、检查电脑防火墙是否放行 8765、路由器是否开 AP 隔离、手机是否误连移动数据；跨网可用 Radmin VPN 的虚拟 IP</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="mobile">
-            <summary>个人生涯（手机）</summary>
-            <div class="manual-capsule-body">
-              <p>战绩保存在手机本地，无需联网；每局结束自动保存（人机 / 本地双人 / 联机都会计入，**含真人记录**；胜/负、比分、日期）</p>
-              <p>注意：卸载 App 或清除应用数据会清空全部战绩；换手机/重装前如需保留请留意</p>
-              <p>填了服务器地址（http://电脑IP:8765）时会同步到该电脑（跨设备共享战绩）</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="mobile">
-            <summary>手机安装（PWA）</summary>
-            <div class="manual-capsule-body">
-              <p>浏览器菜单 →「添加到主屏幕 / 安装应用」，即可像 App 一样从桌面图标进入（下载完即可装）</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="both">
-            <summary>模式</summary>
-            <div class="manual-capsule-body">
-              <p>人机对战（简单/中等/困难/地狱）· AI 观战 · 本地双人 · 联机（4 位房间码）</p>
-            </div>
-          </details>
-          <details class="manual-capsule" data-platform="both">
-            <summary>提示</summary>
-            <div class="manual-capsule-body">
-              <p>瞄准位置解不出合法发球时，轨迹线消失且发不出球，调整鼠标/手指位置即可</p>
-              <p>移动中也能击球；蹲下能接贴地球但会降低移动速度；扣球需球够高，否则撞网判负</p>
-            </div>
-          </details>
-        </div>
-      </details>
       <div class="app-version">版本 <span id="appVersion"></span></div>
       <button id="btnSettingsClose" class="btn primary">完成</button>
+    </div>
+  </div>
+
+  <!-- 说明书（独立全屏页面，等同新开页面；主页/比赛页入口打开。平台分流 data-platform=pc/mobile/both） -->
+  <div id="manualPanel" class="manual-panel" style="display:none">
+    <div class="manual-card">
+      <div class="manual-header">
+        <h2>📖 说明书</h2>
+        <button id="btnManualBack" class="btn">← 返回</button>
+      </div>
+      <div class="manual-scroll">
+        <details class="manual-capsule" data-platform="pc" open>
+          <summary>电脑操作</summary>
+          <div class="manual-capsule-body">
+            <p>移动：A/D 或 ←/→ 左右移动，W/S 或 ↑/↓ 前后移动（方向键四向移动）；Shift 跑步加速，Ctrl 蹲下（接球箱下探到贴地 0.02m，任何低球可接起）</p>
+            <p>发球：鼠标瞄准对方半台落点，发球轨迹线实时跟随，单击发球（瞄准解不出合法发球时轨迹消失、发不出球，调整鼠标位置即可）</p>
+            <p>对打：左键推球、右键扣球；左键推球后 280ms 内按右键可把蓄力期推球升级为扣球（本地双人 P2 用 , 推球 / . 扣球）</p>
+            <p>高吊：蹲下+推球（推球进阶技巧，喂出高球逼对方扣杀；仅普通来球——扣杀来球时保持蹲防推球=接扣杀）</p>
+            <p>反击扣杀：扣杀来球预判起拍（球到前提前按推球）+推球即可接回，站立即可；只有贴地低扣（低于站姿箱底 0.70m）才需要蹲下</p>
+            <p>反击扣杀奖励：成功反击电脑扣杀时，该回球视为扣杀、电脑应对概率减半（地狱 0.95→0.475、困难 0.55→0.275）；扣杀/低平快球来球均有免起拍延迟命中窗，可反应式按键</p>
+            <p>低平快球反击奖励（更高档）：蹲下+推球接回低平快球时，该回球更高球速 + 打向边角，且同样视为扣杀、电脑应对概率减半</p>
+            <p>移动范围：可在己方半场内自由前后左右移动（台面两侧可一直走到球网附近），不能站上球桌；移动中也能击球</p>
+            <p>电脑 AI 数值调控：击败地狱难度后，人机对战的暂停面板变为 4 项 AI 参数滑杆（反应/非刻意漏球率/攻击性/敏捷，即时生效）</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="mobile" open>
+          <summary>手机操作</summary>
+          <div class="manual-capsule-body">
+            <p>摇杆移动（可斜向）· 单击推球 · 上滑扣球（快速向上滑动）·「蹲」蹲下（接球箱贴地 0.02m，可接任何低球）</p>
+            <p>发球：点两下屏幕——第一下进入瞄准（手指移到哪轨迹跟到哪），第二下发球</p>
+            <p>高吊：蹲下 + 单击推球（普通来球；扣杀来球时=蹲防接扣杀）</p>
+            <p>反击扣杀奖励：成功反击电脑扣杀（预判/蹲防推球接回）时，该回球视为扣杀、电脑应对概率减半</p>
+            <p>低平快球反击奖励（更高档）：接回低平快球（蹲下）后回球更快更刁钻，电脑更难接</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>接球判定与击球手感</summary>
+          <div class="manual-capsule-body">
+            <p>碰撞箱（进箱即命中）：以球员为中心、向网前偏移 0.42m 的长方体（1.2m 宽 × 0.8m 深 × 0.7m 高，可接球高 0.70~1.40m）；球进入箱体后点击推球/扣球即命中，球拍自动伸向球完成击球动画</p>
+            <p>推球：弧线抬高、干净直接过网（卸力吸收来球速度，带下旋）</p>
+            <p>扣球：更快更狠（约 22m/s+），贴网下压 + 强上旋；扣球只会打出快扣杀——球够高（≥约 1.0m，左上角「可扣杀 ✓」提示）才能扣过网，球不够高时直接判定球撞网（对方得分），不会降级成慢速球</p>
+            <p>蹲下：箱体下探到贴地（0.02m），任何还在空中的低球都能接起；蹲得越久移动越慢（速度 ×0.40 → 最低 ×0.20）；蹲站转换：初始瞬发，但 3 秒内反复蹲站会加大转换延迟（每次 +0.15s，最多 0.5s）</p>
+            <p>高吊：蹲下+推球放出高弧线（喂到对方半场逼出扣杀机会）——仅对普通来球生效；扣杀来球时保持蹲防推球（接扣杀）；球太低时自动退回普通防守回球</p>
+            <p>反击扣杀（实测）：扣杀来球用预判起拍（球到前提前按推球）+ 推球即可接回去，站立即可（实测困难/地狱 AI 扣杀接住 ~47-48%）；只有贴地低扣才需要蹲下——蹲下反会降低成功率（箱顶变低漏高位来球）</p>
+            <p>反击免延迟窗口：扣杀/低平快球来球时，挥拍后 0.28s 内球在接球箱即命中（免 0.08s 起拍延迟），可反应式按键；普通来球需等 0.08s 风起</p>
+            <p>反击扣杀奖励（操作奖励）：成功反击电脑扣杀（预判起拍+推球接回）时，该回球视为扣杀、电脑应对概率减半</p>
+            <p>低平快球反击奖励（更高档）：成功接回低平快球（蹲下+推球）时，该回球更高球速 + 刁钻边角落位，且同样视为扣杀、电脑应对概率减半——比反击扣杀的回报更高</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>判分与规则</summary>
+          <div class="manual-capsule-body">
+            <p>11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
+            <p>得分：对方未能回球（opp-miss）/ 出界（out）/ 同半台两次弹跳（double）/ 未过网（no-cross）/ 违例拦击（volley）/ 发球失误（serve-fault）</p>
+            <p>发球位置：发球方站在台面中路附近（台边站位解不出合法发球），瞄准对方半台</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>AI 对手特性（人机对战）</summary>
+          <div class="manual-capsule-body">
+            <p>四档难度：简单（反应慢、站位偏、只推球不扣杀，非刻意漏球率约 45%）/ 中等（反应适中、高球常扣杀，非刻意漏球率约 5%）/ 困难（反应快、追位准、高球必扣杀，非刻意漏球率约 2.5%）/ 地狱（反应/站位/扣杀全面拉满，0% 刻意漏球，可反击扣杀）</p>
+            <p>刻意低球：困难有 1/5、地狱有 1/2 的概率把回球打成低平快球（贴网低飞、落地深而低弹），站立接球箱底 0.70m 处容错极小，蹲下接最稳；简单/中等不打低球</p>
+            <p>高吊与变招：困难/地狱/中等会偶尔放高吊球（逼出扣杀机会）；对打两回合不进球后 AI 可能变招（改打低平快球/高吊并横向移动 0.4~0.7m，变招概率随难度与未变招时长提升；变招时与球桌距离不超过 0.7m）</p>
+            <p>接扣杀：困难/地狱按「位置门 × 概率」接玩家扣杀——落点在 AI 站位 ±0.35m 内且高度/时序成立才算够得着，再按档位概率接住（困难 55%→有效反击约 50%、地狱 95%→约 80%）；打边角/骗位即漏；AI 判定无法扣杀时大部分会放弃扣杀改打安全球</p>
+            <p>观战（AI vs AI）与人机对战一致：地狱 0% 刻意漏球；观战暂停面板可调双方难度与 4 项 AI 参数</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>判定范围虚线</summary>
+          <div class="manual-capsule-body">
+            <p>设置（右上角 ⚙）中「判定范围虚线」开关，默认关闭；开启后显示判定范围虚线（进箱变绿高亮并「嘀」提示音）。手机端仅保留 接球箱 + 配套虚线 + 球高标识，不显示扣杀/高吊虚线指示</p>
+            <p>左上角面板实时显示：接球箱尺寸、球高、进箱状态（电脑端另有「可扣杀 / 可高吊」提示，与引擎同一求解判定，预判起手更从容）；关闭则虚线、提示音与面板一并隐藏</p>
+            <p>AI 观战只显示实时球高/进箱，不做可扣杀/可高吊指示（与玩家操作无关）</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>个人生涯</summary>
+          <div class="manual-capsule-body">
+            <p>每局结束自动记录胜负（人机 / 本地双人 / 联机都会计入，含真人记录），后端留最近 60 条——本地版写入 records.json，公网联机写入 Cloudflare</p>
+            <p>主菜单下方「个人生涯」面板显示总场次 / 胜率摘要，点击展开整页分页战绩列表（10 条/页）；本地双人记录以 P1 视角计胜负，联机记录以你自己的视角计胜负</p>
+            <p>手机端：战绩保存在手机本地，无需联网；卸载 App 或清除应用数据会清空全部战绩，换手机/重装前请留意</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>联机对战</summary>
+          <div class="manual-capsule-body">
+            <p>入口：主页「联机对战」→ 联机框（等同新开页面），内含 本地/公网 切换、建房/加入、房间码、对方设备地址与房主等待面板。</p>
+            <p>「联机:本地」模式（默认）：一方「创建联机房间」，另一方输入 4 位房间码加入——适合同一局域网内的两台电脑/手机；对方在同一网络（或 Radmin VPN）打开 http://房主IP:8765 输入房间码加入；首次需手动放行防火墙 TCP 8765</p>
+            <p>「联机:公网」模式：切到公网后再建房/加入——通过 Cloudflare 服务器（wss://ping-pong-duel.pages.dev/ws），公网任何地方的朋友都能加入；⚠ 玩家量过大将导致服务器负载卡顿</p>
+            <p>网页版（ping-pong-duel.pages.dev）固定走公网，无需切换；本地联机请用桌面版 / 安装包</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="mobile">
+          <summary>手机安装（PWA）</summary>
+          <div class="manual-capsule-body">
+            <p>浏览器菜单 →「添加到主屏幕 / 安装应用」，即可像 App 一样从桌面图标进入（下载完即可装）</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>国际赛事标准</summary>
+          <div class="manual-capsule-body">
+            <p>球台 2.74×1.525m（高 0.76m）· 网高 0.1525m · 球 40mm / 2.7g · 拍面 15×15cm</p>
+            <p>规则：11 分制（10 平后净胜 2 分）· 每 2 分发球轮换 · 发球须先落本方再落对方半台 · 触网入界重发</p>
+          </div>
+        </details>
+        <details class="manual-capsule" data-platform="both">
+          <summary>模式与提示</summary>
+          <div class="manual-capsule-body">
+            <p>模式：人机对战（简单/中等/困难/地狱）· AI 观战 · 本地双人（电脑）· 联机（4 位房间码）</p>
+            <p>瞄准位置解不出合法发球时，轨迹线消失且发不出球，调整鼠标/手指位置即可</p>
+            <p>移动中也能击球；蹲下能接贴地球但会降低移动速度；扣球需球够高，否则撞网判负</p>
+          </div>
+        </details>
+      </div>
     </div>
   </div>
 

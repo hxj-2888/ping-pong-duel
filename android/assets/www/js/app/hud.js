@@ -52,7 +52,7 @@
             PPD.GameAudio.cheer();   // 得分 → 掌声音效
             PPD.triggerCheer(e.s);   // 得分方观众欢呼、对方摇头
             const winner = winnerName(e.s);
-            const reasonText = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误' }[engine.pointReason] || '';
+            const reasonText = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网' }[engine.pointReason] || '';
             showPoint(`${winner} 得分${reasonText ? ' · ' + reasonText : ''}`);
           }
           break;
@@ -175,11 +175,12 @@
     if (panel && panel.style.display !== (PPD.app.showHitRanges ? '' : 'none')) {
       panel.style.display = PPD.app.showHitRanges ? '' : 'none';
     }
-    // AI 观战：实时计算球高/进箱，但**不做**可扣杀/可高吊指示（玩家操作无关，见下），
-    // 因此观战时隐藏扣杀/高吊两行
+    // AI 观战：实时计算球高/进箱，但**不做**可扣杀/可高吊指示（玩家操作无关）；
+    // 手机端（需求 14）：仅保留 接球箱/配套虚线/球高标识，移除扣杀、高吊对应的虚线指示
     const isAivai = mode === 'aivai';
-    if (PPD.ui.hrSmashRow) PPD.ui.hrSmashRow.style.display = isAivai ? 'none' : '';
-    if (PPD.ui.hrLobRow) PPD.ui.hrLobRow.style.display = isAivai ? 'none' : '';
+    const hideSmashLob = isAivai || PPD.isTouch;
+    if (PPD.ui.hrSmashRow) PPD.ui.hrSmashRow.style.display = hideSmashLob ? 'none' : '';
+    if (PPD.ui.hrLobRow) PPD.ui.hrLobRow.style.display = hideSmashLob ? 'none' : '';
     if (!elH || !elS || (mode !== 'local' && mode !== 'ai' && mode !== 'online' && mode !== 'aivai')) return;
     // 球位置：本地/人机/观战用引擎，联机用快照（飞行 b / 持球 bh）
     let bv = null;
@@ -229,8 +230,8 @@
       lastInBox = {};
     }
     // 可扣杀/可高吊指示（节流 0.12s；仅判定虚线开启时求解，虚线关闭时省掉隐藏求解开销；
-    // AI 观战不做这两项指示——与玩家操作无关）
-    if ((elSm || elLb) && PPD.app.showHitRanges && PPD.app.engine && mode !== 'aivai') {
+    // AI 观战不做这两项指示——与玩家操作无关；手机端已移除（需求 14））
+    if ((elSm || elLb) && PPD.app.showHitRanges && PPD.app.engine && mode !== 'aivai' && !PPD.isTouch) {
       const now = performance ? performance.now() : Date.now();
       if (now - lastSmashCheck > 120) {
         lastSmashCheck = now;

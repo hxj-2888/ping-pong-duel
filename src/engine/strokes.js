@@ -96,6 +96,26 @@
     const targetSpin = st.type === 1 ? -f * 34 : f * 95;
     b.spin.x = ctx.lerp(b.spin.x, targetSpin, 0.88);
     b.spin.y = 0; b.spin.z = 0;
+    // 补全合法回球校验（修复偶像/变招球未过网却判得分）：物理兜底路径（无求解验证）的出球
+    // 用 rallyFlightOk 校验合法过网；若球会以非法高度（擦网顶下缘低于合法净空）越过球网，
+    // 强制改打撞网（对方得分，判分显示「未过网」）；短球/正常落地不受影响
+    if (!ctx.rallyFlightOk(b.pos, b.vel, b.spin, 1 - pi, 0.01, 100)) {
+      const sim = { pos: { ...b.pos }, vel: { ...b.vel }, spin: { ...b.spin } };
+      let clipped = false;
+      for (let i = 0; i < 40; i++) {
+        ctx.physicsStep(sim, 0.02, (ev) => { if (ev.type === 'netclip') clipped = true; });
+        if (clipped) break;
+        if (sim.pos.y - ctx.RULES.BALL_RADIUS <= 0.004) break; // 落地（短球/出界）：不干预
+        if (Math.sign(b.pos.z) !== 0 && Math.sign(b.pos.z) !== Math.sign(sim.pos.z)) break; // 已自然撞网/正常跨越
+      }
+      if (clipped) {
+        // 非法擦网顶过网 → 改打撞网：球打到网上弹回本方 → 对方得分（未过网）
+        const tN = Math.max(0.08, Math.abs(b.pos.z) / 6);
+        const vyN = (0.82 - b.pos.y + 0.5 * ctx.RULES.GRAVITY * tN * tN) / tN;
+        b.vel = ctx.vec(0, ctx.clamp(vyN, -2, 4), f * 6);
+        b.spin = ctx.vec(0, 0, 0);
+      }
+    }
     const inCounter = b.hitType === 2 || b.hitType === 3; // 来球是扣杀或低平快球（反击奖励判定用）
     b.hitBy = pi;
     b.hitType = st.type;
@@ -103,6 +123,7 @@
     b.counterSmash = (inCounter && st.type !== 2 && !state.players[pi].isAI) ? 1 : 0;
     b.lastBounce = pi;
     b.netTouched = false;
+    b.netBlocked = false;
     state.mayHit = [false, false];
     st.hit = true;
     state.rallyCount++;
@@ -152,6 +173,7 @@
     b.counterSmash = 0; // 发球不是反击扣杀回球
     b.lastBounce = -1;
     b.netTouched = false;
+    b.netBlocked = false;
     state.phase = 'play';
     state.phaseT = 0;
     state.serveStage = 'waitOwn';

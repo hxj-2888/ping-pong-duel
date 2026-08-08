@@ -82,7 +82,8 @@
       // 跑步（Shift）加速 / 蹲下（Ctrl）减速（蹲越久越慢）
       const crouchSpeedMul = ctx.RULES.CROUCH_SPEED_MUL -
         (ctx.RULES.CROUCH_SPEED_MUL - ctx.RULES.CROUCH_MIN_SPEED_MUL) * Math.min(1, p.crouchDur / ctx.RULES.CROUCH_DECAY_TIME);
-      const moveSpeed = ctx.RULES.PLAYER_SPEED * (inp.run ? ctx.RULES.RUN_SPEED_MUL : (1 + (crouchSpeedMul - 1) * p.crouch));
+      // 移动速度：基础速度 × 敏捷速度加成(speedMul，AI 敏捷>1 时最大 1.25；玩家恒 1) × 跑步/蹲下倍率
+      const moveSpeed = ctx.RULES.PLAYER_SPEED * (p.speedMul || 1) * (inp.run ? ctx.RULES.RUN_SPEED_MUL : (1 + (crouchSpeedMul - 1) * p.crouch));
       const dir = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
       p.padX = ctx.clamp(p.padX + dir * moveSpeed * dt, -ctx.RULES.MAX_X, ctx.RULES.MAX_X);
       p.vx = ctx.damp(p.vx, dir * moveSpeed, 10, dt);
@@ -187,6 +188,7 @@
       if (ev.type === 'bounce') ctx.onBallBounce(state);
       else if (ev.type === 'net') {
         state.ball.netTouched = true;
+        state.ball.netBlocked = true; // 球撞网被弹回本方 → 未过网（判分显示「未过网」）
         ctx.pushEvent(state, 'net');
       } else if (ev.type === 'netclip') {
         state.ball.netTouched = true;

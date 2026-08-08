@@ -85,19 +85,23 @@ function makeElement(id) {
 const ELEMENT_IDS = [
   'game', 'menu', 'gameScreen', 'nameInput', 'btnLocal', 'btnHost', 'btnJoin', 'btnNetMode',
   'joinInput', 'btnSettings', 'btnSettingsGame', 'settingsPanel', 'btnSettingsClose',
-  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomPanel', 'roomCode', 'roomHint', 'btnRoomBack', 'statusBar',
+  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomCode', 'roomHint', 'statusBar',
+  // 联机框（主页「联机对战」入口，等同新开页面）：模式切换/建房/加入/等待/教程
+  'btnNetEntry', 'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus',
+  'lanTargetRow', 'lanTargetInput', 'lanUrls', 'lanFirewallNote',
+  // 说明书（独立全屏页面）：电脑=设置按钮下方，手机=触控底栏
+  'manualPanel', 'btnManualMenu', 'btnManualTouch', 'btnManualBack',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
-  'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot', 'tips',
+  'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot',
   'hrSmashRow', 'hrLobRow', 'smashStatus', 'lobStatus',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility', 'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch', 'btnSmash',
-  'p2Controls', 'joyBase2', 'joyKnob2', 'btnCrouch2', 'btnSmash2', // 分屏副屏玩家（P2）触控组：摇杆+扣+蹲
   'gameTools', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
-  'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/45/60)
+  'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/60/无上限)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'recordsPanel', // 个人生涯小方框（records.js 渲染摘要，点击展开整页）
   'careerPanel', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', 'btnCareerBack', // 个人生涯单开页（分页）
@@ -289,9 +293,9 @@ async function main() {
     check('关闭后：左上角判定面板整体隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
     t.elements.get('btnSettingsClose').dispatch('click', {});
     check('设置面板关闭', t.elements.get('settingsPanel').style.display === 'none');
-    // 画质：默认高；切低 → 生效标记 + 视图模型 low/虚线临时关闭（用户勾选不变）；帧率默认 60
-    check('画质默认高（DPR 封顶 2560×1440，窗口 1280×720 → dpr 2）', t.app.quality.mode === 'high' && t.app.quality.low === false && t.app.dpr === 2);
-    check('帧率上限默认 60', t.app.quality.frameRate === 60);
+    // 画质：默认高（不封顶，跟随设备像素比）；切低 → 生效标记 + 视图模型 low/虚线临时关闭；帧率默认无上限
+    check('画质默认高（高画质不封顶，窗口 1280×720 + DPR2 → dpr 2）', t.app.quality.mode === 'high' && t.app.quality.low === false && t.app.dpr === 2);
+    check('帧率上限默认无上限', t.app.quality.frameRate === 'unlimited');
     check('右上角帧数元素存在', !!t.elements.get('fpsMeter'));
     // 关闭环境观众：默认勾选（关闭）+ 视图模型 noCrowd=true；取消勾选 → noCrowd=false
     check('关闭环境观众默认勾选（app.noCrowd=true）', t.app.noCrowd === true && t.elements.get('setNoCrowd').checked === true);
@@ -430,37 +434,7 @@ async function main() {
     }
     await sleep(100); // 等 fireShot 的 70ms 清除定时器过期，避免污染后续直接写 keyP1 的用例
 
-    // P2（副屏玩家）触控：摇杆 + 蹲 + 扣，功能与 P1 一致（本地分屏右半屏，走 keyP2/engine players[1]）
-    t.app.engine.players[1].x = 0;
-    t.app.engine.players[1].vx = 0;
-    t.app.engine.players[1].padX = 0;
-    t.elements.get('joyBase2').dispatch('pointerdown', { pointerId: 8, pointerType: 'touch', clientX: 210, clientY: 566, preventDefault() {} });
-    t.runFrames(30);
-    check('P2 摇杆右推：P2 向右移动', t.app.engine.players[1].x > 0.2);
-    t.elements.get('joyBase2').dispatch('pointerup', { pointerId: 8, preventDefault() {} });
-    t.runFrames(20);
-    // P2 蹲下按钮（与 P1 蹲下按钮同一套逻辑，写 keyP2.crouch）
-    t.elements.get('btnCrouch2').dispatch('pointerdown', { preventDefault() {} });
-    t.runFrames(2);
-    check('P2 蹲下按钮：P2 蹲下生效', t.app.engine.players[1].crouch === 1);
-    t.elements.get('btnCrouch2').dispatch('pointerup', { preventDefault() {} });
-    t.runFrames(24);
-    check('P2 松开蹲下按钮：恢复站立（转换延迟后）', t.app.engine.players[1].crouch === 0);
-    // P2 扣球按钮（右半屏副屏玩家）：单按=扣球（进入扣球挥拍 type2）
-    {
-      const e = t.app.engine;
-      TT.resetMatch(e);
-      e.phase = 'play'; e.serveStage = 'rally'; e.mayHit = [false, true];
-      e.ball.inHand = false;
-      e.ball.pos = { x: 0, y: 1.20, z: 1.55 };
-      e.ball.vel = { x: 0, y: 0.4, z: -3.0 };
-      e.ball.spin = { x: 0, y: 0, z: 0 };
-      e.ball.hitBy = 0; e.ball.lastBounce = 0;
-      t.runFrames(2);
-      t.swipeUp(700, 360, 60); // 右半屏上滑扣球（P2）
-      t.runFrames(3);
-      check('P2 上滑扣球：P2 进入扣球挥拍', t.app.engine.players[1].stroke.active && t.app.engine.players[1].stroke.type === 2);
-    }
+    // P2 分屏触控已随 v1.6 取消手机本地分屏而移除（需求 11）；P2 仅保留电脑端键盘操作
 
     // Shift 跑步加速 / Ctrl 蹲下减速（电脑端按键）
     const p0 = t.app.engine.players[0];
@@ -827,25 +801,7 @@ async function main() {
         tE.elements.get('touchControls').style.display === 'none');
     }
 
-    // 分屏双人（本地）+ 触屏：P2（副屏玩家）触控组仅本地分屏显示；退出/人机模式隐藏
-    {
-      const tL = await boot({ touch: true, search: '?touch=1' });
-      tL.click('btnLocal');
-      tL.runFrames(2);
-      check('分屏触屏：P2 触控组显示（摇杆+蹲）',
-        tL.elements.get('p2Controls').style.display !== 'none' &&
-        !!tL.elements.get('joyBase2') && !!tL.elements.get('btnCrouch2'));
-      check('分屏触屏：主触控容器带 local-duo 类', tL.elements.get('touchControls').classList.contains('local-duo'));
-      tL.elements.get('btnExit').dispatch('click', {});
-      tL.runFrames(2);
-      check('退出分屏：P2 触控组隐藏', tL.elements.get('p2Controls').style.display === 'none');
-    }
-    {
-      const tA = await boot({ touch: true, search: '?touch=1' });
-      tA.click('btnAI');
-      tA.runFrames(2);
-      check('人机触屏：P2 触控组隐藏（仅分屏显示）', tA.elements.get('p2Controls').style.display === 'none');
-    }
+    // 分屏双人（本地）+ 触屏：v1.6 已取消手机本地分屏（需求 11），P2 触控组与 local-duo 类一并移除
 
     // 右上角工具：暂停 / 继续（人机难度开局锁定，无局内切换按钮）
     check('AI 模式：局内难度按钮已移除（难度锁定）', !t.elements.get('btnDiff'));
@@ -1060,7 +1016,8 @@ async function main() {
     await sleep(10);
     check('建房请求已发送', t.sentMessages.some((m) => m.t === 'create'));
     t.feed({ t: 'room', code: 'AB12', side: 0, name: '房主', wait: true });
-    check('等待面板显示房间码', t.elements.get('roomPanel').style.display !== 'none' && t.elements.get('roomCode').textContent === 'AB12');
+    check('联机框等待区显示房间码', t.elements.get('netPanel').style.display !== 'none' &&
+      t.elements.get('netWait').style.display !== 'none' && t.elements.get('roomCode').textContent === 'AB12');
     t.feed({ t: 'room', code: 'AB12', side: 0, name: '房主', wait: false });
     check('建房方进入游戏', t.app.mode === 'online' && t.app.side === 0);
     const snap0 = makeSnap(3, 7, 0, { n: ['房主', '小红'] });
