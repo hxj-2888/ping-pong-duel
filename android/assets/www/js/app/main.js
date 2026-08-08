@@ -278,11 +278,10 @@
       PPD.show(PPD.ui.pausePanel, false);
       PPD.updateGameTools();
     }
-    // v1.6.1：真正页面切换——从主菜单打开时隐藏主菜单（不叠加游戏界面）；手机端显示滑钮并同步尺寸
+    // v1.6.1：真正页面切换——从主菜单打开时隐藏主菜单（不叠加游戏界面）；滑钮按内容溢出自动显示
     PPD.app._manualFromMenu = !!(PPD.ui.menu && PPD.ui.menu.style.display !== 'none');
     if (PPD.app._manualFromMenu) PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.manualPanel, true);
-    if (PPD.ui.manualScrollbar) PPD.show(PPD.ui.manualScrollbar, PPD.isTouch);
     if (PPD.updateManualScrollbar) requestAnimationFrame(PPD.updateManualScrollbar);
   }
   function closeManual() {
@@ -308,10 +307,13 @@
     PPD.ui.btnManualBack.addEventListener('click', () => { PPD.GameAudio.ui(); closeManual(); });
   }
 
-  // 说明书滑钮（v1.6.1，手机端显示）：纵向滑轨 + 可拖拽滑钮 ↔ 内容滚动双向同步
+  // 说明书滑钮（v1.6.2，双端通用）：内容溢出时显示纵向滑轨 + 可拖拽滑钮，拖动↔滚动双向同步
   function updateManualScrollbar() {
     const bar = PPD.ui.manualScrollbar, thumb = PPD.ui.manualScrollThumb, sc = PPD.ui.manualScroll;
     if (!bar || !thumb || !sc) return;
+    const overflow = sc.scrollHeight > sc.clientHeight + 2;
+    PPD.show(bar, overflow); // 内容溢出才显示滑钮（不再仅限手机端）
+    if (!overflow) { thumb.style.height = '0px'; thumb.style.top = '0px'; return; }
     const max = Math.max(1, sc.scrollHeight - sc.clientHeight);
     const ratio = sc.clientHeight / Math.max(1, sc.scrollHeight);
     thumb.style.height = Math.max(24, Math.round(bar.clientHeight * ratio)) + 'px';

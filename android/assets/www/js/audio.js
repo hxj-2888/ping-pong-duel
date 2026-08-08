@@ -90,10 +90,12 @@
       // 缓存命中：直接复用已解码缓冲（应用端重复 ensure 不再重复 fetch 解码）
       if (decodeCache.has('bgm')) {
         decodeCache.get('bgm').then((buf) => {
-          if (buf && !bgmBuf) {
-            bgmBuf = buf;
-            trimBgmBuffer();
-            computeBgmInfo();
+          if (!buf || bgmBuf) return;
+          bgmBuf = buf;
+          trimBgmBuffer();
+          computeBgmInfo();
+          // v1.6.2：仅 ctx 运行中且无活动音源才切到缓冲源（停元素），杜绝重复/静默
+          if (ctx && ctx.state === 'running' && !bgmSource) {
             if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
             startMusic();
           }
@@ -108,9 +110,11 @@
           bgmBuf = buf;
           trimBgmBuffer();   // 首尾相连：裁掉开头/结尾近静音
           computeBgmInfo();
-          // 解码完成：停掉元素兜底再启零间隙循环，避免双音
-          if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
-          startMusic();
+          // v1.6.2：仅 ctx 运行中才停元素并切零间隙缓冲；挂起时保持元素兜底出声（避免"音乐没了"）
+          if (ctx && ctx.state === 'running') {
+            if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
+            startMusic();
+          }
           return buf;
         })
         .catch(() => { /* 解码失败：保留 <audio> 兜底 */ return null; })
@@ -201,9 +205,11 @@
 
   function startMusic() {
     // v1.6.1 修复多层重叠杂音：**单一音源互斥**——任意时刻只保留一个音乐音源。
-    // 优先 WebAudio 解码缓冲：AudioBufferSourceNode.loop=true → 零间隙无缝循环
+    // v1.6.2 修复"音乐没了"：ctx 未运行（自动播放策略挂起）时**不建缓冲源、不停元素**——
+    // 元素兜底继续出声，待 ctx 恢复运行后由 resume/startMusic 幂等切换（杜绝"静默源+被停元素"）。
     if (bgmBuf && ctx) {
       if (bgmSource) return;
+      if (ctx.state !== 'running') return; // ctx 挂起：不切缓冲，元素兜底继续
       if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } } // 停掉元素兜底，防双音叠加
       const src = ctx.createBufferSource();
       src.buffer = bgmBuf;
@@ -338,13 +344,18 @@
       (bgmSource && ctx && ctx.state === 'running') ||
       (bgmEl && !bgmEl.paused && musicOn);
     const resume = () => {
-      if (ctx && ctx.state === 'suspended' && ctx.resume) {
-        try { ctx.resume(); } catch (e) { /* ignore */ }
+      // v1.6.2：单一音源 + 无静默——缓冲路径存在时：ctx 挂起则先恢复运行，恢复后补启缓冲源
+      // （绝不额外启动元素）；ctx 尚未运行时由元素兜底出声；元素路径仅在无解码缓冲时使用。
+      const needResume = ctx && ctx.state === 'suspended' && ctx.resume;
+      if (needResume) {
+        try { ctx.resume().then(() => { if (musicOn && bgmBuf && !bgmSource) startMusic(); }).catch(() => { /* ignore */ }); } catch (e) { /* ignore */ }
       }
       if (!musicOn) return;
       if (bgmBuf) {
-        // v1.6.1：缓冲路径存在时只恢复 ctx / 补启缓冲源，**绝不**额外启动 <audio> 元素（否则双音源叠加杂音）
-        if (!bgmSource) startMusic();
+        if (!bgmSource) {
+          if (ctx && ctx.state === 'running') startMusic();
+          else if (bgmEl && bgmEl.paused) { try { bgmEl.play(); } catch (e) { /* ignore */ } }
+        }
       } else if (bgmEl && bgmEl.paused) {
         try { bgmEl.play(); } catch (e) { /* ignore */ }
       }
