@@ -155,13 +155,10 @@
   const TUNE_SPEC = {
     tuneAReact: ['aiTuneA', 'reactMul'], tuneACatch: ['aiTuneA', 'catchMul'],
     tuneASmash: ['aiTuneA', 'smashMul'], tuneAAgility: ['aiTuneA', 'agilityMul'],
-    tuneAServe: ['aiTuneA', 'serveDistMul'], // v1.6.1：AI 发球距离
     tuneBReact: ['aiTuneB', 'reactMul'], tuneBCatch: ['aiTuneB', 'catchMul'],
     tuneBSmash: ['aiTuneB', 'smashMul'], tuneBAgility: ['aiTuneB', 'agilityMul'],
-    tuneBServe: ['aiTuneB', 'serveDistMul'],
     tuneOppReact: ['aiTuneB', 'reactMul'], tuneOppCatch: ['aiTuneB', 'catchMul'],
     tuneOppSmash: ['aiTuneB', 'smashMul'], tuneOppAgility: ['aiTuneB', 'agilityMul'],
-    tuneOppServe: ['aiTuneB', 'serveDistMul'],
   };
   // 重置按钮 → 要重置的 aiTune 对象（观战蓝方与 人机对手同写 aiTuneB）
   const TUNE_RESET = {
@@ -210,10 +207,6 @@
       if (L.smashProb === 0) return over > 0 ? '扣杀率 0%（溢出→回球更刁钻）' : '扣杀率 0%';
       if (sp >= 1) return `扣杀率 100%${over > 0 ? '（溢出→更刁钻）' : ''}`;
       return `扣杀率 ${Math.round(sp * 100)}%`;
-    }
-    if (mulKey === 'serveDistMul') {
-      // v1.6.1：AI 发球距离（0.5 短球贴网 ~ 1.5 深球压底线）
-      return `发球距离 ×${mul.toFixed(2)}（${mul < 1 ? '短球贴网' : mul > 1 ? '深球压底线' : '标准'}）`;
     }
     if (mulKey === 'agilityMul') {
       const over = Math.max(0, mul - 1);
@@ -274,7 +267,7 @@
     if (!btn) continue;
     btn.addEventListener('click', () => {
       const set = PPD.app[key];
-      set.reactMul = 1; set.catchMul = 1; set.smashMul = 1; set.agilityMul = 1; set.serveDistMul = 1;
+      set.reactMul = 1; set.catchMul = 1; set.smashMul = 1; set.agilityMul = 1;
       syncTuneSliders();
     });
   }
