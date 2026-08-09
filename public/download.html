@@ -141,7 +141,7 @@
     var status = document.getElementById('dlStatus');
     btn.addEventListener('click', function (e) {
       status.textContent = '正在校验安装包完整性…';
-      fetch('PingPongDuel-v162.apk', { cache: 'no-cache' })
+      fetch('PingPongDuel-v162.apk?v=162', { cache: 'no-cache' })
         .then(function (r) {
           if (!r.ok) throw new Error('服务器返回 ' + r.status);
           return r.blob();
