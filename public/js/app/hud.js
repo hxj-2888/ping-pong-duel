@@ -144,6 +144,7 @@
   }
   // 感知辅助上升沿跟踪：球进"人类控制方"箱体的一瞬间播一次提示音
   let lastInBox = {};
+  let lastBallH = ''; // 球高文本缓存（每帧 toFixed 结果相同则跳过 DOM 写入）
   // "可扣杀/可高吊"指示：与 AI 同一判定（computeShot 求解），节流避免频繁求解
   let lastSmashCheck = 0;
   // 求解结果指纹缓存（低端机优化）：computeShot 每次全量弹道搜索 ~1200~4500 子步，
@@ -205,7 +206,8 @@
     } else if (PPD.app.engine && PPD.app.engine.ball) {
       bv = PPD.app.engine.ball.pos;
     }
-    elH.textContent = bv ? bv.y.toFixed(2) + 'm' : '—';
+    const htxt = bv ? bv.y.toFixed(2) + 'm' : '—';
+    if (lastBallH !== htxt) { lastBallH = htxt; elH.textContent = htxt; }
     // 判定对象：人机=红方(昵称)，联机=自己，本地=P1+P2，AI 观战=红/蓝双方 AI
     const sides = (mode === 'local' || mode === 'aivai') ? [0, 1] : (mode === 'ai' ? [0] : [PPD.app.side]);
     const label = (i) => {
@@ -264,7 +266,8 @@
 
   // ---------- HUD ----------
   // 上次写入的 DOM 值缓存：分数/名字/发球点只在变化时才写（省每帧 DOM 写入/重排）
-  let lastHud = { p1: '', p2: '', s1: -1, s2: -1, dotLeft: null };
+  let lastHud = { p1: '', p2: '', s1: -1, s2: -1, dotLeft: null, dotOpacity: 0 };
+  let lastNetInfo = ''; // 联机/人机/观战状态栏文本缓存（每帧重算但值不变则跳过 DOM 写入）
   function updateHud() {
     let score = [0, 0], server = 0, phId = 0, names = PPD.app.names;
     if (PPD.app.mode === 'local' && PPD.app.engine) {
@@ -306,7 +309,7 @@
     const dotSide = PPD.app.mode === 'online' && PPD.app.side === 1 ? 1 - server : server;
     const dotLeft = dotSide === 0 ? 'calc(50% - 70px)' : 'calc(50% + 55px)';
     if (lastHud.dotLeft !== dotLeft) { lastHud.dotLeft = dotLeft; dot.style.left = dotLeft; }
-    dot.style.opacity = 1;
+    if (lastHud.dotOpacity !== 1) { lastHud.dotOpacity = 1; dot.style.opacity = 1; } // 恒 1，只写一次
 
     // 阶段横幅（仅在变化时）
     if (phId !== PPD.app.lastPhase) {
@@ -331,20 +334,19 @@
       }
     }
 
+    let netTxt = '本地双人';
     if (PPD.app.mode === 'online') {
-      PPD.ui.netInfo.textContent = PPD.app.net && PPD.app.net.connected ? `房间 ${PPD.app.roomCode}` : '连接中断';
+      netTxt = PPD.app.net && PPD.app.net.connected ? `房间 ${PPD.app.roomCode}` : '连接中断';
     } else if (PPD.app.mode === 'ai') {
       const L = PPD.AIC.LEVELS[PPD.app.aiLevel] || PPD.AIC.LEVELS[1];
-      PPD.ui.netInfo.textContent = `人机对战 · ${L.name}`;
+      netTxt = `人机对战 · ${L.name}`;
     } else if (PPD.app.mode === 'aivai') {
       const LA = PPD.AIC.LEVELS[PPD.app.aiLevelA] || PPD.AIC.LEVELS[1];
       const LB = PPD.AIC.LEVELS[PPD.app.aiLevelB] || PPD.AIC.LEVELS[1];
       const tuned = (t) => Object.values(t).some((v) => v !== 1);
-      PPD.ui.netInfo.textContent =
-        `AI 观战 · 红${LA.name}${tuned(PPD.app.aiTuneA) ? '⚙' : ''} vs 蓝${LB.name}${tuned(PPD.app.aiTuneB) ? '⚙' : ''}`;
-    } else {
-      PPD.ui.netInfo.textContent = '本地双人';
+      netTxt = `AI 观战 · 红${LA.name}${tuned(PPD.app.aiTuneA) ? '⚙' : ''} vs 蓝${LB.name}${tuned(PPD.app.aiTuneB) ? '⚙' : ''}`;
     }
+    if (lastNetInfo !== netTxt) { lastNetInfo = netTxt; PPD.ui.netInfo.textContent = netTxt; } // 值变化才写 DOM
 
     // 左上角：球高 + 进箱状态实时刷新（每帧）
     updateHitRangeLive();

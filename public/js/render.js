@@ -433,7 +433,9 @@
   // withCrowd=false（动画进行中）：静态层不含观众——动画层同时绘制全部观众，
   // 避免"静止层 rest 身影 + 动画层动势身影"同屏叠出复制体（欢呼举手/起身浮动的位移会让两层错开）。
   function rebuildCrowdCache(entry, cam, vw, vh, viewSide, mainCtx, withCrowd, density, teamFixed) {
-    const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
+    // 缓存 dpr 按**整屏** CSS 宽计算（clientWidth）：分屏时 vw=半视口宽，若用 canvas.width/vw
+    // 会得到 2×dpr → 半视口缓存按整屏像素烘焙（4× 冗余像素与内存），本地双人恒命中
+    const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, mainCtx.canvas.clientWidth || vw)) : 1;
     entry.static.canvas.width = Math.max(1, Math.round(vw * dpr));
     entry.static.canvas.height = Math.max(1, Math.round(vh * dpr));
     const cc = entry.static.ctx;
@@ -450,7 +452,8 @@
   // 全部观众由动画层绘制。动画层必须在 fan 非零时烘焙（30Hz），否则观众消失——这是关键约束。
   // 全分辨率 + 描边与静态层同画风。
   function rebuildAnimCache(entry, cam, vw, vh, viewSide, mainCtx, time, fan, teamFixed) {
-    const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, vw)) : 1;
+    // 同 rebuildCrowdCache：按整屏 CSS 宽计算缓存 dpr（分屏下避免 2×dpr → 4× 冗余像素）
+    const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, mainCtx.canvas.clientWidth || vw)) : 1;
     const s = CROWD_ANIM_SCALE;
     entry.anim.canvas.width = Math.max(1, Math.round(vw * dpr * s));
     entry.anim.canvas.height = Math.max(1, Math.round(vh * dpr * s));
@@ -497,7 +500,8 @@
         // 低画质 / 联机模式（noCrowd）：地板+围挡缓存（无观众席/看台），相机/尺寸/DPR 变化才重建
         if (st.key !== key) {
           st.key = key;
-          const dpr = Math.max(1, backing / Math.max(1, vw));
+          // 同 rebuildCrowdCache：按整屏 CSS 宽（clientWidth）算 dpr，分屏下避免 2×dpr → 4× 冗余像素
+          const dpr = Math.max(1, backing / Math.max(1, (ctx.canvas && ctx.canvas.clientWidth) || vw));
           st.canvas.width = Math.max(1, Math.round(vw * dpr));
           st.canvas.height = Math.max(1, Math.round(vh * dpr));
           const fc = st.ctx;
