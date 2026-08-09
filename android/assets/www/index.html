@@ -68,7 +68,7 @@
       <div id="statusBar" class="status"></div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v164.apk" download="PingPongDuel-v164.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v165.apk" download="PingPongDuel-v165.apk" style="display:none">📱 下载安卓版（直接安装）</a>
         <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
       <div id="recordsPanel" class="records-mini">个人生涯 · 加载中…</div>
@@ -273,12 +273,13 @@
       <label class="toggle-label">画质
         <select id="quality">
           <option value="high" selected>高画质</option>
+          <option value="medium">中画质（平衡）</option>
           <option value="low">低画质（省电流畅）</option>
         </select>
       </label>
       <label class="toggle-label">
         <input type="checkbox" id="setNoCrowd" checked>
-        关闭环境观众（高画质下生效）
+        关闭环境观众（高/中画质下生效）
       </label>
       <label class="toggle-label">帧率
         <select id="frameRate">

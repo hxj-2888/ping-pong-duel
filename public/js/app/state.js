@@ -182,7 +182,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '1.6.4',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '1.6.5',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiLevelA: 1,         // AI 观战：红方 AI 难度
@@ -236,7 +236,7 @@
     showHitRanges: false, // 判定范围虚线（设置面板开关，默认关闭）
     dpr: 1,              // 当前画布像素比（高画质=设备像素比；低画质=1/封顶）
     resizeDirty: false,  // 暂停/结算期间窗口尺寸变化 → 需要补一帧渲染
-    // 画质：mode='high'（默认高画质）/ 'low'（低画质省电）；low=当前低画质标记；
+    // 画质：mode='high'（默认高画质，不封顶）/ 'medium'（中画质：电脑高度 1920p 封顶 / 手机宽 750p）/ 'low'（低画质省电：电脑 1080p / 手机宽 400p）；low=当前低画质标记；
     // frameRate=渲染帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
@@ -250,14 +250,16 @@
     app.resizeW = window.innerWidth;
     app.resizeH = window.innerHeight;
     // 分辨率档位：高画质**不封顶**——dpr 直接用设备像素比，自动适配设备最高屏幕分辨率；
-    // 低画质渲染物理像素封顶到目标分辨率（超出的屏按比例降 DPR，避免无谓填充率）——
-    // 低画质=电脑 1080p / 手机 400p（渲染宽）。
-    // 渲染坐标仍用 CSS 像素（setTransform 缩放）；dpr<1（如 4K 屏选低画质）→ 1080p 放大显示，属预期省电
+    // 中/低画质渲染物理像素封顶到目标分辨率（超出的屏按比例降 DPR，避免无谓填充率）——
+    // 中画质=电脑高度 1920p 封顶（2K+ 级，16:9 下 ≈3413×1920）/ 手机宽 750p；
+    // 低画质=电脑 1920×1080（1080p）双封顶 / 手机宽 400p。
+    // 渲染坐标仍用 CSS 像素（setTransform 缩放）；dpr<1（如 4K 屏选中/低画质）→ 降分辨率放大显示，属预期省电
     const rw = Math.max(1, app.resizeW), rh = Math.max(1, app.resizeH);
-    const lowCap = isTouch ? 400 / rw : Math.min(1920 / rw, 1080 / rh); // 低：手机 400p / 电脑 1080p
-    const dpr = app.quality && app.quality.low
-      ? Math.min(window.devicePixelRatio || 1, lowCap)
-      : (window.devicePixelRatio || 1); // 高画质：不封顶，跟随设备最高分辨率
+    const m = (app.quality && app.quality.mode) || 'high';
+    let cap = 0;
+    if (m === 'low') cap = isTouch ? 400 / rw : Math.min(1920 / rw, 1080 / rh); // 低：手机 400p / 电脑 1080p
+    else if (m === 'medium') cap = isTouch ? 750 / rw : 1920 / rh;               // 中：手机 750p / 电脑 1920p（高）
+    const dpr = cap > 0 ? Math.min(window.devicePixelRatio || 1, cap) : (window.devicePixelRatio || 1); // 高：不封顶
     app.dpr = dpr;
     canvas.width = Math.max(1, Math.round(app.resizeW * dpr));
     canvas.height = Math.max(1, Math.round(app.resizeH * dpr));
@@ -285,11 +287,11 @@
   } catch (e) { /* ignore */ }
   app.showHitRanges = showHitRanges;
 
-  // ---------- 画质（高/低两档，默认高；localStorage 记忆） ----------
+  // ---------- 画质（高/中/低三档，默认高；localStorage 记忆） ----------
   const QUALITY_KEY = 'ppd_quality';
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(QUALITY_KEY) : null;
-    if (v === 'low' || v === 'high') app.quality.mode = v;
+    if (v === 'low' || v === 'medium' || v === 'high') app.quality.mode = v;
   } catch (e) { /* ignore */ }
   app.quality.low = app.quality.mode === 'low';
   if (ui.quality) ui.quality.value = app.quality.mode;
@@ -344,10 +346,11 @@
     try { localStorage.setItem(AI_NAMES_KEY, JSON.stringify(names)); } catch (e) { /* ignore */ }
   }
 
-  // 手动切换画质（高/低）：写回记忆 + 立即生效（低画质 → 分辨率降档 + 清观众席缓存）
+  // 手动切换画质（高/中/低）：写回记忆 + 立即生效（中/低画质 → 分辨率降档 + 清观众席缓存；低画质观众恒关）
   function setQuality(mode) {
-    app.quality.mode = mode === 'low' ? 'low' : 'high';
-    app.quality.low = app.quality.mode === 'low';
+    const m = mode === 'low' || mode === 'medium' ? mode : 'high';
+    app.quality.mode = m;
+    app.quality.low = m === 'low';
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(QUALITY_KEY, app.quality.mode); } catch (e) { /* ignore */ }
     if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
     if (PPD.ui.setNoCrowd) PPD.ui.setNoCrowd.disabled = app.quality.low; // 低画质观众恒关，勾选框置灰

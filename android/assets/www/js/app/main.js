@@ -222,7 +222,8 @@
     PPD.ui.quality.addEventListener('change', () => {
       PPD.GameAudio.ui && PPD.GameAudio.ui();
       PPD.setQuality(PPD.ui.quality.value);
-      PPD.setStatus(PPD.app.quality.low ? '画质：低（省电流畅）' : '画质：高');
+      const qn = PPD.app.quality.mode === 'low' ? '低（省电流畅）' : PPD.app.quality.mode === 'medium' ? '中（平衡）' : '高';
+      PPD.setStatus('画质：' + qn);
     });
   }
   // 关闭环境观众（勾选框，默认关闭）：写回记忆 + 立即生效（清观众席缓存）
