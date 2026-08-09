@@ -7,7 +7,7 @@
  * ============================================================ */
 'use strict';
 
-const CACHE = 'ppd-v4'; // v1.6.2：缓存名递增，强制各端（桌面/网页/APK）刷新旧 Service Worker 预缓存（应用壳）
+const CACHE = 'ppd-v5'; // v1.6.2：APK 下载不再拦截缓存（防坏缓存残片），缓存名递增清旧残片
 
 // 首次安装：预缓存应用外壳（核心文件；失败不阻塞安装）
 self.addEventListener('install', (e) => {
@@ -63,6 +63,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return; // API 不缓存
+  if (url.pathname.endsWith('.apk')) return;    // v1.6.2：APK 下载不拦截不缓存（防中断残片污染缓存 → 下载损坏）
   e.respondWith(
     fetch(req)
       .then((res) => {

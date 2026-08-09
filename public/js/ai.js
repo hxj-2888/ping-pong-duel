@@ -206,11 +206,17 @@
     // 接扣杀：**位置门 × 概率掷骰**——扣杀来球时 |落点-站位| ≤ 可接半径(0.35) 且高度/时序成立
     // 才算"够得着"，再按 smashDef 概率掷骰（困难0.55/地狱0.95）决定接不接：
     // 定标目标有效反击率 困难~50% / 地狱~80%（打偏/骗位即漏，骰子只作用于够得着的球）
-    // v1.6.2：地狱「接球」滑杆 → 防扣球 40%（×0.5）~ 90%（×1.5）均匀线性——**仅 AI 观战生效**；
-    // 玩家对战（人机，带 hellCatchMul）的地狱对手保持默认强度（×1=95% 防扣，漏球率线性模型，不削弱）
-    const smashDef = (level === 3 && t.hellCatchMul == null)
-      ? 0.40 + 0.50 * Math.max(0, Math.min(1, catchMul - 0.5))
-      : ((L.smashDef || 0) <= 0 ? 0 : clamp(1 - (1 - (L.smashDef || 0)) / catchMul, 0, 1));
+    // v1.6.2：AI 观战地狱「接球」滑杆 → 防扣球 40%（×0.5）~ 90%（×1.5）均匀线性；
+    // 人机对战（带 hellCatchMul）地狱 → 防扣率分段线性：×0.5→50%、×1→80%、×1.5→95%（上限封顶）
+    let smashDef;
+    if (level === 3 && t.hellCatchMul == null) {
+      smashDef = 0.40 + 0.50 * Math.max(0, Math.min(1, catchMul - 0.5));
+    } else if (level === 3) {
+      const m = Math.max(0.5, Math.min(1.5, catchMul));
+      smashDef = m <= 1 ? 0.50 + 0.60 * (m - 0.5) : 0.80 + 0.30 * (m - 1);
+    } else {
+      smashDef = (L.smashDef || 0) <= 0 ? 0 : clamp(1 - (1 - (L.smashDef || 0)) / catchMul, 0, 1);
+    }
     const smashReach = 0.35;
     // 非对打阶段（发球/得分/结束）：清空变招计数与位移
     if (engine.phase !== 'play') {
