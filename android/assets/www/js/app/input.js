@@ -193,15 +193,16 @@
       // 与 ai.js 同一漏球率线性模型：漏球率 = 基准漏球率 / 倍率（0.5~1.5 全程线性有效）
       const miss = base >= 1 ? 0 : Math.min(0.8, Math.max(0.005, (1 - base) / mul));
       const missTxt = base >= 1 ? '永不漏球' : `每 ${Math.max(2, Math.round(1 / miss))} 球漏 1`;
-      // 防扣显示"实测有效反击率"：裸概率 × 每档实测定标系数（README:45 探针：
-      // 困难 55%→~50%、地狱 95%→~80%，位置门±0.35m + 高度/时序损耗所致）
-      // 防扣（接扣球加成）等效值：AI 观战地狱 = 40%~90% 均匀线性（与 ai.js 一致，所见即所得）；
-      // 人机对战（mode==='ai'）与其余难度 = 漏球率线性模型 × 实测系数（困难 0.91 / 地狱 0.84），不削弱人机对手
+      // 防扣（接扣球加成）等效值：AI 观战地狱 = 40%~90% 均匀线性；人机对战地狱 = 分段线性
+      // ×0.5→50%、×1→80%、×1.5→95%（上限封顶，显示实际值）；其余难度 = 漏球率线性模型 × 实测系数（困难 0.91）
       let sd;
       if (level === 3 && PPD.app.mode !== 'ai') {
         sd = 0.40 + 0.50 * Math.max(0, Math.min(1, mul - 0.5));
+      } else if (level === 3) {
+        const m = Math.max(0.5, Math.min(1.5, mul));
+        sd = m <= 1 ? 0.50 + 0.60 * (m - 0.5) : 0.80 + 0.30 * (m - 1);
       } else {
-        const DEF_EFF = { 2: 0.91, 3: 0.84 };
+        const DEF_EFF = { 2: 0.91 };
         const gate = DEF_EFF[level] || 1;
         sd = (L.smashDef || 0) <= 0 ? 0 : clampV(1 - (1 - (L.smashDef || 0)) / mul, 0, 1) * gate;
       }
