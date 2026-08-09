@@ -144,17 +144,32 @@
   }
   // 感知辅助上升沿跟踪：球进"人类控制方"箱体的一瞬间播一次提示音
   let lastInBox = {};
-  // "可扣杀"指示：与 AI 同一判定（computeShot 扣杀求解不降级即"可扣杀"），节流避免频繁求解
+  // "可扣杀/可高吊"指示：与 AI 同一判定（computeShot 求解），节流避免频繁求解
   let lastSmashCheck = 0;
+  // 求解结果指纹缓存（低端机优化）：computeShot 每次全量弹道搜索 ~1200~4500 子步，
+  // 且两个指示函数轮流调用。按 球 pos(0.05m)/vel(0.5m/s) 量化 + 玩家侧 + 类型 生成
+  // key，同一状态下 300ms 内直接复用，避免对同一球况重复全量求解。
+  let hitRangeKey = null, hitRangeVal = false, hitRangeT = 0;
+  function solveHitRange(engine, i, type) {
+    const b = engine.ball;
+    const q = (v, g) => Math.round(v / g);
+    const key = `${i}|${type}|${q(b.pos.x, 0.05)}|${q(b.pos.y, 0.05)}|${q(b.pos.z, 0.05)}|${q(b.vel.x, 0.5)}|${q(b.vel.y, 0.5)}|${q(b.vel.z, 0.5)}`;
+    const now = performance ? performance.now() : Date.now();
+    if (hitRangeKey === key && now - hitRangeT < 300) return hitRangeVal;
+    const shot = PPD.TT.computeShot(engine, i, type, type === 1 ? { lob: true } : undefined);
+    hitRangeKey = key;
+    hitRangeVal = !!(shot && (type === 2 ? !shot.netHit : !shot.degraded));
+    hitRangeT = now;
+    return hitRangeVal;
+  }
   function canSmashNow(engine, i) {
     const b = engine && engine.ball;
     if (!b || !engine.players || engine.phase !== 'play' || b.inHand) return false;
     const p = engine.players[i], f = p.facing;
     const zc = p.z + f * 0.42;
     if (b.vel.z * f >= 0) return false;                       // 未朝本方来
-    if (Math.abs(b.pos.z - zc) > 2.6) return false;            // 太远（求解无意义且省开销）
-    const shot = PPD.TT.computeShot(engine, i, 2);
-    return !!(shot && !shot.netHit);
+    if (Math.abs(b.pos.z - zc) > 1.5) return false;            // 太远（求解无意义且省开销）
+    return solveHitRange(engine, i, 2);
   }
   // "可高吊"指示：蹲下+推球（推球进阶技巧）能否放出高吊——与人机 lb 同一求解判定
   function canLobNow(engine, i) {
@@ -163,9 +178,8 @@
     const p = engine.players[i], f = p.facing;
     const zc = p.z + f * 0.42;
     if (b.vel.z * f >= 0) return false;
-    if (Math.abs(b.pos.z - zc) > 2.6) return false;
-    const shot = PPD.TT.computeShot(engine, i, 1, { lob: true });
-    return !!(shot && !shot.degraded);
+    if (Math.abs(b.pos.z - zc) > 1.5) return false;
+    return solveHitRange(engine, i, 1);
   }
   function updateHitRangeLive() {
     const mode = PPD.app.mode;
@@ -229,11 +243,11 @@
     } else {
       lastInBox = {};
     }
-    // 可扣杀/可高吊指示（节流 0.12s；仅判定虚线开启时求解，虚线关闭时省掉隐藏求解开销；
+    // 可扣杀/可高吊指示（节流 0.30s；仅判定虚线开启时求解，虚线关闭时省掉隐藏求解开销；
     // AI 观战不做这两项指示——与玩家操作无关；手机端已移除（需求 14））
     if ((elSm || elLb) && PPD.app.showHitRanges && PPD.app.engine && mode !== 'aivai' && !PPD.isTouch) {
       const now = performance ? performance.now() : Date.now();
-      if (now - lastSmashCheck > 120) {
+      if (now - lastSmashCheck > 300) {
         lastSmashCheck = now;
         const smSides = mode === 'local' ? [0, 1] : (mode === 'ai' ? [0] : [PPD.app.side]);
         let anySmash = false, anyLob = false;

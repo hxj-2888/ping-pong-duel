@@ -91,13 +91,19 @@
   }
 
   // 预测球首次到达 z=zc 平面的时间与位置（含反弹/旋转/阻力，步进 20ms）
+  // 低端机优化：旧实现每个采样点从当前状态重头模拟 t 秒（predictBall 内部克隆
+  // 整球并重放），一次调用约 1.2 万子步；改为克隆一次、physicsStep 连续推进
+  // （内部按 SUBSTEP=1/240 细分，与 predictBall 同一物理实现），采样点检测 z
+  // 跨越后立即返回，约 350 子步——AI 模式物理模拟开销降一个数量级。
   function predictCrossing(ball, zc, maxT) {
     const steps = Math.ceil(maxT / 0.02);
-    let prevZ = ball.pos.z;
-    let prevPos = ball.pos;
+    const c = { pos: { ...ball.pos }, vel: { ...ball.vel }, spin: { ...ball.spin } };
+    let prevZ = c.pos.z;
+    let prevPos = { x: c.pos.x, y: c.pos.y };
     for (let i = 1; i <= steps; i++) {
       const t = i * 0.02;
-      const p = T.predictBall(ball, t);
+      T.physicsStep(c, 0.02, null);
+      const p = c.pos;
       if ((prevZ - zc) * (p.z - zc) <= 0) {
         const f = Math.abs(p.z - zc) / (Math.abs(p.z - zc) + Math.abs(prevZ - zc) + 1e-9);
         return {
@@ -107,7 +113,7 @@
         };
       }
       prevZ = p.z;
-      prevPos = p;
+      prevPos = { x: p.x, y: p.y };
     }
     return null;
   }
