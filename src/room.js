@@ -29,7 +29,8 @@ async function diag(ctx, s) {
 // 校验并规整一条通关记录
 function sanitizeRecord(b) {
   if (!b || typeof b !== 'object') return null;
-  const name = String(b.name || '玩家').slice(0, 20);
+  // 审计 #3:名字存储型 XSS——服务端剔除 < > 字符(前端渲染另有转义兜底,双保险)
+  const name = String(b.name || '玩家').replace(/[<>]/g, '').slice(0, 20);
   const mode = b.mode === 'ai' || b.mode === 'local' || b.mode === 'online' ? b.mode : 'other';
   const winner = b.winner === 0 ? 0 : 1;
   const sc = Array.isArray(b.score)
@@ -89,7 +90,12 @@ export class GameRoom extends DurableObject {
       return new Response(JSON.stringify({ ok: true, id: rec.id }), { headers: cors });
     }
     if (request.method === 'DELETE') {
-      // 按 id 删除一条记录（维护用；无鉴权，轻量榜单可接受）
+      // 按 id 删除一条记录（维护用）。审计 #18:公网 DELETE 无鉴权 → 任何人可任意删改战绩。
+      // 需 ?token= 匹配环境变量 RECORDS_TOKEN(wrangler secret 绑定);未配置时一律拒绝删除(只读保护)。
+      const want = this.env.RECORDS_TOKEN;
+      if (!want || url.searchParams.get('token') !== want) {
+        return new Response(JSON.stringify({ ok: false, e: 'forbidden' }), { status: 403, headers: cors });
+      }
       const id = url.searchParams.get('id');
       if (!id) {
         return new Response(JSON.stringify({ ok: false, e: 'no id' }), { status: 400, headers: cors });

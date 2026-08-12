@@ -1,12 +1,12 @@
 {
   "name": "ping-pong-duel",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "双人联机乒乓球游戏 · ITTF 标准尺寸 · 火柴人物理骨架 · 观众席欢呼 · 发球瞄准/跑步/蹲下 · 零依赖",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "test": "node test/net-test.js",
-    "test:all": "node test/net-test.js && node test/engine-stress.js && node test/physics-boundary-test.js && node test/ai-test.js && node test/browser-smoke.js && node test/crowd-anim-cache-test.js && node test/crowd-count-consistency-test.js && node test/crowd-anim-cycle-test.js && node test/crowd-resize-consistency-test.js && node test/crowd-team-consistency-test.js && node test/smash-counter-test.js && node test/net-retry-test.js && node test/input-mask-test.js && node test/do-alarm.js && node test/do-smoke.js && node test/http-robustness-test.js && node test/broadcast-floor-test.js && node tools/check-engine-sync.js",
+    "test:all": "node test/net-test.js && node test/engine-stress.js && node test/physics-boundary-test.js && node test/ai-test.js && node test/browser-smoke.js && node test/crowd-anim-cache-test.js && node test/crowd-count-consistency-test.js && node test/crowd-anim-cycle-test.js && node test/crowd-resize-consistency-test.js && node test/crowd-team-consistency-test.js && node test/smash-counter-test.js && node test/net-retry-test.js && node test/input-mask-test.js && node test/do-alarm.js && node test/do-smoke.js && node test/http-robustness-test.js && node test/broadcast-floor-test.js && node test/records-test.js && node test/seated-crowd-test.js && node test/serve-path-online.js && node tools/check-engine-sync.js",
     "test:sync": "node tools/check-engine-sync.js",
     "test:do": "node test/do-smoke.js && node test/do-alarm.js",
     "test:persist": "node test/do-persist.js",
