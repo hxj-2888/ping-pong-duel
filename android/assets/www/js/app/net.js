@@ -184,6 +184,7 @@
     });
     net.on('state', (m) => {
       PPD.app.lastStateAt = Date.now(); // 看门狗基线：服务端 Alarm 保证 ≥2Hz
+      const wasReconnecting = PPD.app.reconnecting; // 先记录：下方会清除重连标记
       // 数据流恢复（重连后首帧到达）：结束重连状态
       if (PPD.app.reconnecting) {
         PPD.app.reconnecting = false;
@@ -191,6 +192,19 @@
         PPD.app.reconnectStartedAt = 0;
         PPD.show(PPD.ui.overlay, false);
         PPD.setStatus('已恢复连接');
+      }
+      // 快照单调门：丢弃同会话内 t 倒退/重复的快照（防止 snapB.t 回退 → 渲染整帧回跳）。
+      // 重连首帧 / 引擎重置（新对局 t 从 0 重来，t 大幅变小）→ 清空窗口重新锚定后接受。
+      const newT = m.s && typeof m.s.t === 'number' ? m.s.t : null;
+      if (newT != null && PPD.app.snapB && typeof PPD.app.snapB.t === 'number' && newT <= PPD.app.snapB.t) {
+        if (wasReconnecting || newT < PPD.app.snapB.t - 1000) {
+          PPD.app.snapA = null;
+          PPD.app.snapB = null;
+          PPD.app.interpClock = null;
+          PPD.app.interpGap = null;
+        } else {
+          return; // 同会话乱序/重放：丢弃
+        }
       }
       if (!PPD.app.snapB) {
         PPD.app.snapA = null;
@@ -229,8 +243,12 @@
           const gap = Math.min(120, Math.max(16, PPD.app.snapB.t - PPD.app.snapA.t));
           PPD.app.interpGap = PPD.app.interpGap == null ? gap : PPD.app.interpGap * 0.7 + gap * 0.3;
           const target = PPD.app.snapB.t - PPD.app.interpGap;
-          if (PPD.app.interpClock == null || PPD.app.interpClock > PPD.app.snapB.t || target - PPD.app.interpClock > PPD.app.interpGap * 2) {
-            PPD.app.interpClock = target; // 开局/断流/追赶：跳到最新之后一个实测间隔
+          // 时钟只进不退：开局/断流/追赶时向前锚定；绝不在收到新快照时回退重置。
+          // 旧版 `interpClock > snapB.t` 会因网络单向延迟把时钟倒拨一个广播间隔，
+          // alpha 瞬间归 0，玩家/球拍/持球每收一条快照就跳回上一帧位置（画面回溯）。
+          // 超前部分交给 renderOnline 的 alpha>1 平滑前向外推（lerp 连续，无跳变）。
+          if (PPD.app.interpClock == null || target - PPD.app.interpClock > PPD.app.interpGap * 2) {
+            PPD.app.interpClock = target; // 开局/断流/追赶：只向前跳到最新之后一个实测间隔
           }
         } else {
           PPD.app.interpClock = t;

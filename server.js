@@ -444,6 +444,7 @@ function leaveRoom(client) {
 
 // ---------- 主循环：60Hz 模拟 + 广播 ----------
 setInterval(() => {
+  const nowTick = Date.now();
   for (const room of rooms.values()) {
     if (!room.clients[0] && !room.clients[1]) {
       rooms.delete(room.code);
@@ -452,9 +453,12 @@ setInterval(() => {
     TT.step(room.engine, 1 / TICK_HZ);
     const snap = TT.snapshot(room.engine);
     const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1 });
-    if (data !== room.lastSnap) {
+    // 保底广播：内容变化即发，或距上次发送 ≥50ms 也发一次——发球待发等静默相位保持
+    // ≥20Hz 插值锚点，避免客户端插值时钟断档后跳变/回溯（画面平滑的锚点连续性保证）
+    if (data !== room.lastSnap || nowTick - (room.lastSentAt || 0) >= 50) {
       stats.broadcast++;
       room.lastSnap = data;
+      room.lastSentAt = nowTick;
       for (const c of room.clients) {
         if (c && c.ws && c.ws.writable) {
           try { c.ws.write(encodeFrame(0x1, Buffer.from(data))); } catch (e) { /* ignore */ }
