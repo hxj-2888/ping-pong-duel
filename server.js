@@ -17,6 +17,11 @@ const TT = require('./public/js/engine.js');
 const PORT = Number(process.env.PORT) || 8765;
 const ROOT = path.join(__dirname, 'public');
 const TICK_HZ = 60;
+// WebSocket 消息上限(审计 #1:防内存/CPU DoS):
+// - 单连接累积缓冲超 WS_MAX_BUF → 直接断开(恶意客户端慢速灌数据拖死内存)
+// - 单帧/单条分片消息 payload 超 WS_MAX_FRAME → 拒绝并断开(超大帧一次性大分配 / 分片无限累积)
+const WS_MAX_BUF = 256 * 1024;
+const WS_MAX_FRAME = 64 * 1024;
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 // 协议版本：客户端/桌面启动器据此识别"旧服务器"（旧版不解析 k 位掩码输入，
 // 会导致客户端连上但输入全部被丢弃 → 进房后双方卡死）。版本号取 package.json + -local。
@@ -73,7 +78,9 @@ const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
 
 function sanitizeRecord(b) {
   if (!b || typeof b !== 'object') return null;
-  const name = String(b.name || '玩家').slice(0, 20);
+  // 审计 #3:名字存储型 XSS——20 字符内可含 <svg onload=...> 等 HTML 载荷,
+  // 服务端先剔除 < > 字符(前端渲染另有转义兜底,双保险)
+  const name = String(b.name || '玩家').replace(/[<>]/g, '').slice(0, 20);
   const mode = b.mode === 'ai' || b.mode === 'local' || b.mode === 'online' ? b.mode : 'other';
   const winner = b.winner === 0 ? 0 : 1;
   const sc = Array.isArray(b.score)
@@ -221,12 +228,15 @@ function encodeFrame(opcode, payload, mask) {
   return Buffer.concat([header, payload]);
 }
 
-// 从累积缓冲解析完整帧；返回 [frames, rest]
-function parseFrames(acc) {
+// 从累积缓冲解析完整帧；返回 [frames, rest]。
+// state = { fragOp, fragParts }：承载跨调用的分片状态——分片消息可能跨多个 data chunk,
+// 若状态只存在函数内,续片会被当成独立消息处理(原代码 bug),且分片累积上限失效(审计 #1)。
+// payload 超 maxPayload 抛错(上层捕获后断开连接,防超大帧/分片累积 DoS)
+function parseFrames(acc, maxPayload, state) {
   const frames = [];
   let buf = acc;
-  let fragOp = -1;
-  let fragParts = [];
+  let fragOp = state.fragOp;
+  let fragParts = state.fragParts;
   while (buf.length >= 2) {
     const b0 = buf[0], b1 = buf[1];
     const fin = (b0 & 0x80) !== 0;
@@ -239,7 +249,9 @@ function parseFrames(acc) {
       len = buf.readUInt16BE(2); off = 4;
     } else if (len === 127) {
       if (buf.length < 10) break;
-      len = Number(buf.readBigUInt64BE(2)); off = 10;
+      const n = buf.readBigUInt64BE(2);
+      if (n > BigInt(maxPayload)) throw new Error('frame too large');
+      len = Number(n); off = 10;
     }
     let maskKey = null;
     if (masked) {
@@ -254,6 +266,10 @@ function parseFrames(acc) {
     buf = buf.subarray(off + len);
 
     if (opcode === 0x0) { // continuation
+      // 分片累积上限:累计 payload 超限即拒绝(防分片无限累积)
+      let total = payload.length;
+      for (const p of fragParts) total += p.length;
+      if (total > maxPayload) throw new Error('fragment too large');
       fragParts.push(payload);
       if (fin) { frames.push({ opcode: fragOp, payload: Buffer.concat(fragParts) }); fragOp = -1; fragParts = []; }
     } else if (opcode === 0x1 || opcode === 0x2) {
@@ -263,6 +279,8 @@ function parseFrames(acc) {
       frames.push({ opcode, payload });
     }
   }
+  state.fragOp = fragOp;
+  state.fragParts = fragParts;
   return [frames, buf];
 }
 
@@ -352,10 +370,19 @@ server.on('upgrade', (req, socket) => {
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
 
-  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true };
+  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, fragState: { fragOp: -1, fragParts: [] } };
   socket.on('data', (chunk) => {
+    // 审计 #1:累积缓冲超限 → 恶意/失控客户端,直接断开(防内存 DoS)
+    if (client.buf.length + chunk.length > WS_MAX_BUF) { socket.destroy(); return; }
     client.buf = Buffer.concat([client.buf, chunk]);
-    const [frames, rest] = parseFrames(client.buf);
+    let frames, rest;
+    try {
+      [frames, rest] = parseFrames(client.buf, WS_MAX_FRAME, client.fragState);
+    } catch (e) {
+      // 审计 #1:超大帧/分片超限 → 断开,不再继续解析
+      socket.destroy();
+      return;
+    }
     client.buf = rest;
     for (const f of frames) {
       if (f.opcode === 0x8) { // close
@@ -383,6 +410,10 @@ server.on('upgrade', (req, socket) => {
 function handleClientMessage(client, msg) {
   if (msg.t === 'create') {
     stats.create++;
+    // 审计 #2:连接先建房 A 再 create/join 房 B → 房 A 的 room.clients 残留引用永不清理
+    // (主循环只删双空房,A 永久 60Hz 空转;且同 ws 同时收 A、B 两个房间广播互相污染)。
+    // 进入任何新房前先退出旧房(与 room-core 对齐)。
+    if (client.room) leaveRoom(client);
     const code = newRoomCode();
     const room = {
       code,
@@ -398,6 +429,8 @@ function handleClientMessage(client, msg) {
   }
   if (msg.t === 'join') {
     stats.join++;
+    // 审计 #2:同上,先退旧房再进新房,防房间永久泄漏与双房间广播互相污染
+    if (client.room) leaveRoom(client);
     const code = String(msg.room || '').toUpperCase().trim();
     const room = rooms.get(code);
     if (!room) {
