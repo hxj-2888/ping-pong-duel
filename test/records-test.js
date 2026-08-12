@@ -15,7 +15,7 @@ const ROOT = path.join(__dirname, '..');
 
 const child = spawn(process.execPath, ['server.js'], {
   cwd: ROOT,
-  env: Object.assign({}, process.env, { PORT: String(PORT), RECORDS_FILE: tmpFile }),
+  env: Object.assign({}, process.env, { PORT: String(PORT), RECORDS_FILE: tmpFile, RECORDS_TOKEN: 'test-token' }),
   stdio: 'inherit',
 });
 
@@ -95,16 +95,20 @@ async function waitUp() {
   const g1 = await req('GET', '/api/records?limit=1');
   check('GET limit=1 只返回 1 条', g1.json.records.length === 1);
 
-  // DELETE：按 id 删除（维护用）
+  // DELETE：按 id 删除（维护用）——审计 #18 需 token;无 token 一律 403
   const g0 = await req('GET', '/api/records?limit=20');
   const id0 = g0.json.records[0].id;
-  const d = await req('DELETE', '/api/records?id=' + encodeURIComponent(id0));
-  check('DELETE 按 id 删除：removed=1', d.status === 200 && d.json.ok === true && d.json.removed === 1);
+  const dNoToken = await req('DELETE', '/api/records?id=' + encodeURIComponent(id0));
+  check('DELETE 无 token：403 拒绝', dNoToken.status === 403);
+  const dBadToken = await req('DELETE', '/api/records?id=' + encodeURIComponent(id0) + '&token=wrong');
+  check('DELETE token 错误：403 拒绝', dBadToken.status === 403);
+  const d = await req('DELETE', '/api/records?id=' + encodeURIComponent(id0) + '&token=test-token');
+  check('DELETE 带正确 token 按 id 删除：removed=1', d.status === 200 && d.json.ok === true && d.json.removed === 1);
   const g2 = await req('GET', '/api/records?limit=20');
   check('DELETE 后记录少一条', g2.json.records.length === g0.json.records.length - 1);
-  const d2 = await req('DELETE', '/api/records?id=not_exist');
+  const d2 = await req('DELETE', '/api/records?id=not_exist&token=test-token');
   check('DELETE 不存在的 id：removed=0', d2.json.ok === true && d2.json.removed === 0);
-  const d3 = await req('DELETE', '/api/records');
+  const d3 = await req('DELETE', '/api/records?token=test-token');
   check('DELETE 无 id：400', d3.status === 400);
 
   // 静态页面不受影响

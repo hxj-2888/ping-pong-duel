@@ -171,8 +171,14 @@ const server = http.createServer((req, res) => {
       return;
     }
     if (req.method === 'DELETE') {
-      // 按 id 删除一条记录（维护用；与 Cloudflare DO 行为一致）
+      // 按 id 删除一条记录（维护用；与 Cloudflare DO 行为一致）。
+      // 审计 #18:公网/局域网 DELETE 无鉴权 → 任何人可任意删改战绩。加 token 保护:
+      // 需 ?token= 匹配环境变量 RECORDS_TOKEN;未配置 RECORDS_TOKEN 时一律拒绝删除(只读保护)。
+      const want = process.env.RECORDS_TOKEN;
       const q = new URLSearchParams(req.url.split('?')[1] || '');
+      if (!want || q.get('token') !== want) {
+        res.writeHead(403, cors); res.end(JSON.stringify({ ok: false, e: 'forbidden' })); return;
+      }
       const id = q.get('id');
       if (!id) { res.writeHead(400, cors); res.end(JSON.stringify({ ok: false, e: 'no id' })); return; }
       const list = loadRecords();
