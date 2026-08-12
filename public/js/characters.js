@@ -91,18 +91,20 @@
 
     // 步态相位随移动速度推进（横向 + 前后），移动中双腿始终有步法动作
     const speed = Math.hypot(vx, vz);
-    anim.stride += speed * dt * 3.0;
+    // 动画死区：<0.05m/s 视为静止，冻结步态/步幅/起伏——杀掉停止后残留微动造成的"原地抽动"
+    const speedAnim = speed < 0.05 ? 0 : speed;
+    anim.stride += speedAnim * dt * 3.0;
     // 移动幅度平滑：停止时双脚收回中立站姿，不会定格在跨步中途；蹲下时步幅收小
-    anim.stepAmp = lerp(anim.stepAmp, Math.min(1, speed * 0.9) * (1 - 0.45 * crouch), SMOOTH_STEP);
+    anim.stepAmp = lerp(anim.stepAmp, Math.min(1, speedAnim * 0.9) * (1 - 0.45 * crouch), SMOOTH_STEP);
     const stride = anim.stride;
-    const bob = speed * 0.025 * Math.sin(stride * 2) * (1 - 0.6 * crouch);
+    const bob = speedAnim * 0.025 * Math.sin(stride * 2) * (1 - 0.6 * crouch);
 
     // 躯干
     const stroke = pl.stroke || { active: false, type: 0, t: 0, dur: 0.4 };
     const strokeProg = stroke.active ? clamp(stroke.t / stroke.dur, 0, 1) : -1;
     // 视觉动作与引擎挥拍一致使用 easeOutQuad（前段加速更有力度感）
     const swingProg = strokeProg >= 0 ? 1 - (1 - strokeProg) * (1 - strokeProg) : -1;
-    let pitchTarget = 0.14 + Math.abs(vx) * 0.015 + crouch * 0.30; // 蹲下时身体前倾
+    let pitchTarget = 0.14 + speedAnim * 0.015 + crouch * 0.30; // 蹲下时身体前倾（速度死区防残留俯仰）
     let rollTarget = (pl.lean || 0) * 0.75;
     if (swingProg >= 0) {
       const swing = Math.sin(swingProg * Math.PI);

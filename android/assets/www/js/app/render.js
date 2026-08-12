@@ -471,18 +471,24 @@
     const me = view.players[side];
     const sp = snap && snap.p && snap.p[side];
     if (!me || !sp) return;
-    if (sp.st && sp.st[0] !== 0) return; // 挥拍中：用服务器插值
     const f = side === 0 ? 1 : -1;
+    const swinging = !!(sp.st && sp.st[0] !== 0);
+    const isServer = snap.sv === side;
     const oldPad = { x: me.paddle.p.x, z: me.paddle.p.z };
+    // 位置/速度/蹲姿始终用本地预测：挥拍前后连续，消除"挥拍结束瞬间从服务器插值硬切回预测"
+    // 的位置/速度跳变（行走动画抽动主因）。挥拍期间仅球拍保持服务器插值的挥拍轨迹。
     me.x = pred.x; me.z = pred.z; me.vx = pred.vx || 0; me.vz = pred.vz || 0;
     me.crouch = pred.crouch || 0;
-    me.paddle.p.x = pred.padX;
-    me.paddle.p.y = (pred.crouch || 0) >= 0.5 ? PPD.TT.RULES.CROUCH_PADDLE_Y : 0.98;
-    me.paddle.p.z = pred.z + f * 0.42;
-    me.paddle.n = { x: 0, y: 0, z: f };
-    me.paddle.v = { x: 0, y: 0, z: 0 };
-    // 持球（发球）随预测球拍平移
-    if (view.ballInHand) {
+    if (!swinging) {
+      me.paddle.p.x = pred.padX;
+      me.paddle.p.y = (pred.crouch || 0) >= 0.5 ? PPD.TT.RULES.CROUCH_PADDLE_Y : 0.98;
+      me.paddle.p.z = pred.z + f * 0.42;
+      me.paddle.n = { x: 0, y: 0, z: f };
+      me.paddle.v = { x: 0, y: 0, z: 0 };
+    }
+    // 持球（发球）随预测球拍平移：仅持球方（snap.sv === side）把球贴到自己手上；
+    // 非持球方执行会用自己球拍的预测位移去平移持球方的球（球贴着自己漂移）。
+    if (view.ballInHand && isServer) {
       view.ballInHand.x += me.paddle.p.x - oldPad.x;
       view.ballInHand.z += me.paddle.p.z - oldPad.z;
     }
@@ -544,7 +550,9 @@
       stepPrediction(dt);
       applyLocalPrediction(view, snap);
     }
-    view.servePath = servePathFromSnap(snap); // 联机发球预测轨迹（与人机/本地一致）
+    // 联机发球瞄准线/落点仅持球方（snap.sv === side）显示；非持球方不显示
+    // （否则对方半台出现瞄准线/落点标记，观感像"球/点在自己身前"）
+    view.servePath = snap.sv === PPD.app.side ? servePathFromSnap(snap) : null;
     updateTrail(view); // 联机用插值/外推位置，也能看到尾影
     const myX = PPD.app.pred ? PPD.app.pred.x : snap.p[PPD.app.side].x;
     const cam = makeCam(PPD.app.side, myX, 0, 0, w, h);
