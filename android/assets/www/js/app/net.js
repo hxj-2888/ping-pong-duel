@@ -193,26 +193,37 @@
         PPD.show(PPD.ui.overlay, false);
         PPD.setStatus('已恢复连接');
       }
-      // 快照单调门：丢弃同会话内 t 倒退/重复的快照（防止 snapB.t 回退 → 渲染整帧回跳）。
-      // 重连首帧 / 引擎重置（新对局 t 从 0 重来，t 大幅变小）→ 清空窗口重新锚定后接受。
-      const newT = m.s && typeof m.s.t === 'number' ? m.s.t : null;
-      if (newT != null && PPD.app.snapB && typeof PPD.app.snapB.t === 'number' && newT <= PPD.app.snapB.t) {
-        if (wasReconnecting || newT < PPD.app.snapB.t - 1000) {
-          PPD.app.snapA = null;
-          PPD.app.snapB = null;
-          PPD.app.interpClock = null;
-          PPD.app.interpGap = null;
-        } else {
-          return; // 同会话乱序/重放：丢弃
+      // 快照缓冲（最近 6 帧，含引擎时间 t）：供 renderOnline 按插值时钟做跨帧平滑插值。
+      // 单调门：丢弃同会话内 t 倒退/重复的快照（防止缓冲时间回退 → 渲染整帧回跳）。
+      // 重连首帧 / 引擎重置（新对局 t 从 0 重来，t 大幅变小）→ 清空缓冲重新锚定后接受。
+      const buf = (PPD.app.snapBuf = PPD.app.snapBuf || []);
+      const snap = m.s || m;
+      const newT = typeof snap.t === 'number' ? snap.t : null;
+      if (newT != null && buf.length) {
+        const lastT = buf[buf.length - 1].t;
+        if (newT <= lastT) {
+          if (wasReconnecting || newT < lastT - 1000) {
+            buf.length = 0;
+            PPD.app.snapA = null;
+            PPD.app.snapB = null;
+            PPD.app.interpClock = null;
+            PPD.app.interpGap = null;
+            PPD.app.interpLagged = false;
+          } else {
+            return; // 同会话乱序/重放：丢弃
+          }
         }
       }
+      buf.push({ t: newT, s: snap });
+      if (buf.length > 6) buf.shift();
+      // snapA/snapB 保持最近两帧（HUD 比分/发球方/阶段直接读 snapB；预测 reconcile 用最新）
       if (!PPD.app.snapB) {
         PPD.app.snapA = null;
       } else {
         PPD.app.snapA = PPD.app.snapB;
         PPD.app.tA = PPD.app.tB;
       }
-      PPD.app.snapB = m.s || m;
+      PPD.app.snapB = snap;
       PPD.app.tB = performance.now();
       // 本地玩家输入预测：以服务器快照为锚（详见 render.js stepPrediction）。
       // 首次初始化；明显偏差（输入丢失/卡顿恢复/重连）时重置回服务器位置，避免长期漂移。
@@ -232,24 +243,26 @@
           PPD.app.pred.t = performance.now();
         }
       }
-      // 插值显示时钟（引擎时间 ms）：广播间隔按**实测快照间距自适应**（本地 60Hz≈17ms、
-      // 公网 20Hz≈50ms、抖动时取滑动均值），客户端滞后一个实测间隔对相邻快照插值平滑
-      // （见 renderOnline/viewModelFromSnapInterp）。开局/断流/追赶时跳对齐；正常时由渲染循环按真实时间 1x 推进。
-      // 修复：旧版固定 50ms 假设在 60Hz 本地广播下时钟恒落后两个间隔，alpha 被钳到 0 造成"画面回退/人物回溯"。
+      // 插值显示时钟（引擎时间 ms）：快照缓冲 + 实测间隔自适应（本地 60Hz≈17ms、公网 20Hz≈50ms）。
+      // 时钟滞后最新快照 1.5 个实测间隔（渲染延迟 ~25-80ms），恒有可插值的相邻帧对，
+      // 渲染时在缓冲内找跨时钟的帧对做 [0,1] 纯插值 → 任意广播率都平滑、无跳变无回退。
+      // 首帧/断流/追赶（落后超 3 间隔）时向前锚定；正常由渲染循环按真实时间 1x 推进。
       {
         const t = typeof PPD.app.snapB.t === 'number' ? PPD.app.snapB.t : 0;
-        if (PPD.app.snapA && typeof PPD.app.snapA.t === 'number' && typeof PPD.app.snapB.t === 'number' && PPD.app.snapB.t > PPD.app.snapA.t) {
-          // 实测快照间距（滑动均值，限幅 16~120ms，避免单帧抖动/重连大跳污染）
-          const gap = Math.min(120, Math.max(16, PPD.app.snapB.t - PPD.app.snapA.t));
+        if (buf.length >= 2) {
+          const gap = Math.min(120, Math.max(16, buf[buf.length - 1].t - buf[buf.length - 2].t));
           PPD.app.interpGap = PPD.app.interpGap == null ? gap : PPD.app.interpGap * 0.7 + gap * 0.3;
-          const target = PPD.app.snapB.t - PPD.app.interpGap;
-          // 时钟只进不退：开局/断流/追赶时向前锚定；绝不在收到新快照时回退重置。
-          // 旧版 `interpClock > snapB.t` 会因网络单向延迟把时钟倒拨一个广播间隔，
-          // alpha 瞬间归 0，玩家/球拍/持球每收一条快照就跳回上一帧位置（画面回溯）。
-          // 超前部分由 renderOnline 的时钟封顶（Math.min(clock, snapB.t)）做纯插值消化。
-          // 向前追赶阈值收紧到 3 个实测间隔，避免保底广播间隔波动时反复触发向前跳（瞬移源）。
-          if (PPD.app.interpClock == null || target - PPD.app.interpClock > PPD.app.interpGap * 3) {
-            PPD.app.interpClock = target; // 开局/断流/追赶：只向前跳到最新之后一个实测间隔
+          const lag = Math.max(25, Math.min(80, (PPD.app.interpGap || 50) * 1.5));
+          const target = PPD.app.snapB.t - lag;
+          // 滞后建立：首帧/缓冲刚满 2 帧（interpLagged=false）时锚定到 target 建立渲染滞后
+          // （否则时钟贴最新帧 → alpha 恒 1 → 低广播率按整帧步进 = 抽动）。
+          // 此后时钟按真实时间 1x 推进（与服务器引擎时间同步率一致，小漂移由 lag 吸收），
+          // 只在落后超 3 间隔（断流/追赶）时向前重锚，绝不回退重置。
+          if (!PPD.app.interpLagged) {
+            PPD.app.interpClock = target;
+            PPD.app.interpLagged = true;
+          } else if (target - PPD.app.interpClock > PPD.app.interpGap * 3) {
+            PPD.app.interpClock = target;
           }
         } else {
           PPD.app.interpClock = t;
