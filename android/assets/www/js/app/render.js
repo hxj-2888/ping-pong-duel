@@ -512,19 +512,20 @@
       const lag = Math.min(0.12, Math.max(0, (now - PPD.app.tB) / 1000 - 0.03));
       ex = { x: snap.b[3] * lag, y: snap.b[4] * lag, z: snap.b[5] * lag };
     }
-    // 双快照插值：snapA(上一帧) → snapB(最新)，alpha 由显示时钟驱动
-    let view;
-    const sa = PPD.app.snapA;
-    if (sa && typeof sa.t === 'number' && typeof snap.t === 'number' && snap.t > sa.t) {
-      const clock = PPD.app.interpClock != null ? PPD.app.interpClock : snap.t;
-      // alpha 不再钳制下限 0：时钟略落后于上一快照时对玩家位置线性外推（lerp alpha<0），
-      // 避免"回到上一快照位置"的画面回退/人物回溯（旧版固定 50ms 滞后在 60Hz 广播下 alpha 恒被钳 0）；
-      // 上限 1.2 防时钟跑太前跳变。球维持速度外推（快球低延迟）
-      const alpha = Math.max(-0.5, Math.min(1.2, (clock - sa.t) / (snap.t - sa.t)));
-      view = viewModelFromSnapInterp(sa, snap, alpha, PPD.app.side, ex);
-    } else {
-      view = viewModelFromSnap(snap, PPD.app.side, ex);
-    }
+      // 双快照插值：snapA(上一帧) → snapB(最新)，alpha 由显示时钟驱动
+      let view;
+      const sa = PPD.app.snapA;
+      if (sa && typeof sa.t === 'number' && typeof snap.t === 'number' && snap.t > sa.t) {
+        // 显示时钟封顶在最新快照引擎时间：保证 alpha ∈ [0,1] 纯插值（相邻快照间 0→1 平滑）。
+        // 旧版时钟超前 → alpha 恒被钳 1.2 → 1.2x 前向外推放大快照位置抖动 → 人物原地反复瞬移。
+        // 封顶后新快照到达时 alpha 归 0，但 sa 即旧 snapB，位置连续（无回跳无抽搐）。
+        const clock = PPD.app.interpClock != null ? Math.min(PPD.app.interpClock, snap.t) : snap.t;
+        // alpha 下限 -0.5：首帧/时钟暂落后上一快照时轻微外推过渡；上限 1 由时钟封顶保证
+        const alpha = Math.max(-0.5, Math.min(1, (clock - sa.t) / (snap.t - sa.t)));
+        view = viewModelFromSnapInterp(sa, snap, alpha, PPD.app.side, ex);
+      } else {
+        view = viewModelFromSnap(snap, PPD.app.side, ex);
+      }
     // 本地玩家输入预测：连续积分 + 覆盖自身视图（消除 ~RTT 控制延迟）
     if (PPD.app.pred) {
       const dt = PPD.app.pred.t ? Math.min(0.05, (now - PPD.app.pred.t) / 1000) : 0;
