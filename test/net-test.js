@@ -19,6 +19,7 @@ function wsClient() {
       send: (o) => ws.send(JSON.stringify(o)),
       get latest() { return latest; },
       drain: () => { inbox.length = 0; },
+      has: (pred) => inbox.some((m) => pred(m)),
       next: (pred, timeout) => new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('等待消息超时')), timeout || 8000);
       const check = () => {
@@ -49,7 +50,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), RECONNECT_GRACE_MS: '2000' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', () => {});
@@ -141,9 +142,12 @@ async function main() {
     const stAfter = a.latest.s;
     check('非结束时 rematch 无效', stAfter.sc[0] + stAfter.sc[1] >= 1);
 
-    // 断线通知
+    // 断线通知(审计 #6 宽限模式):正常断线不立即通知对手——进重连宽限期(席位保留,
+    // 对手不弹"已离开"遮罩),宽限到期(测试 2s)清扫释放后才通知对手
     b.ws.close();
-    const leftMsg = await a.next((m) => m.t === 'peer_left');
+    await sleep(800);
+    check('断线后宽限期内不立即通知对手', !a.has((m) => m.t === 'peer_left'));
+    const leftMsg = await a.next((m) => m.t === 'peer_left', 12000);
     check('房主收到对手离开通知', leftMsg.side === 1);
 
     a.ws.close();

@@ -10,6 +10,14 @@
   // 服务端 Alarm 保证联机数据流 ≥2Hz（强制兜底广播）：
   // 因此"联机中 >4s 收不到 state"即可判定为死链（不会把发球待发静止误判为卡死）。
   // 重连自动重新加入原房间（带 side 提示，服务端据此夺回原席位），最多 2 次，失败回菜单。
+  //
+  // 三层重试机制说明(审计 #12,各管一段、互不干扰):
+  // 1) NetClient 握手重试(network.js maxRetries=2):连接从未 open 成功时,close 后自动重连,
+  //    首次+2 次重试=最多 3 次尝试(间隔 1.2s×1.5^n);一旦 open 过即交棒给下层。
+  // 2) join 超时自愈(joinTimer,下方 scheduleJoinRetry):WS 已 open 但 create/join 无响应,
+  //    首次 12s、后续 6s 重连,共 4 次——防 DO 冷启动误报"建房超时"。
+  // 3) 看门狗重连(MAX_RECONNECTS=2):open 成功后联机中判定 state/pong 超时,重连回原房间。
+  // 最坏情况(连接从未成功)下 1)与 2)会叠加,实际 ~6 次握手/20-30s,属正常自愈路径而非死循环。
   const WATCHDOG_MS = 1000;    // 看门狗检查周期
   const STATE_STALE_MS = 6000; // state 超过该时长未更新 → 判定数据流中断（Alarm ≥2Hz，留足网络抖动余量）
   const PONG_STALE_MS = 20000; // pong 超过该时长未收到 → 判定半死连接
@@ -70,6 +78,13 @@
 
   // ---------- 联机消息 ----------
   function setupNet(hostMode) {
+    // 审计 #4:清理上一会话残留的 joinTimer——陈旧定时器会在用户退出联机后仍触发
+    // net.connect() 复活已关闭连接,后台建幽灵房间(最多 4 次持续 ~30s),并与新会话并发互相覆盖。
+    if (PPD.app.joinTimer) { clearTimeout(PPD.app.joinTimer); PPD.app.joinTimer = null; }
+    // 审计 #5:会话 token——backToMenu/closeNetPanel 递增;本会话各消息回调校验 token 失配即返回,
+    // 防止在途 room/state 响应在用户退出后仍执行(被硬拉回对局)。
+    PPD.app.netSessionToken = (PPD.app.netSessionToken || 0) + 1;
+    const token = PPD.app.netSessionToken;
     // 每次开启新联机会话：复位重连状态与插值时钟
     PPD.app.reconnecting = false;
     PPD.app.reconnectAttempt = 0;
@@ -77,21 +92,29 @@
     PPD.app.lastStateAt = 0;
     PPD.app.lastPongAt = 0;
     PPD.app.roomCode = ''; // 全新会话：清残留房间码，确保 hostMode 始终新建房间（修复本地建房失败）
+    // 审计 #7:清跨会话残留的快照缓冲/插值状态——新房间引擎 t 从 0 开始,旧缓冲末帧 t 若 <1000ms,
+    // 单调门判定不满足"大幅变小"条件 → 开局 ~1s 快照被丢弃 + 旧帧造成插值跳变
+    PPD.app.snapBuf = null;
     PPD.app.interpClock = null;
     PPD.app._interpLast = null;
+    PPD.app.interpGap = null;
     PPD.app.pred = null; // 本地玩家预测状态随新会话重建
+    // 审计 #11:保存本会话玩家名——断线重连 join 用这个名字(不能用 names[0]:
+    // 加入方 names[0] 可能被房主名覆盖,重连会让槽位被改名、生涯记录记错名)
+    PPD.app.sessionName = PPD.getPlayerName ? (PPD.getPlayerName() || (hostMode ? '房主' : '挑战者')) : PPD.app.names[0];
 
     const net = new PPD.NetClient(PPD.wsUrl()); // 连接时按 本地/公网 选择端点
     PPD.app.net = net;
     // 建房/加入超时自愈：DO 冷启动/驱逐/网络抖动时服务器可能不响应 create/join
     // （WS 已 open 但 DO 尚未就绪或消息丢失），6s 无 room 响应 → 重连重试（最多 2 次）
     let joinTries = 0;
-    let joinTimer = null;
-    const clearJoinTimer = () => { if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; } };
+    const clearJoinTimer = () => { if (PPD.app.joinTimer) { clearTimeout(PPD.app.joinTimer); PPD.app.joinTimer = null; } };
     const scheduleJoinRetry = () => {
       clearJoinTimer();
       // v1.6.2：首次 12s（DO 冷启动/驱逐恢复宽限），后续 6s；共 4 次重试——避免部署后冷启动误报"建房超时"
-      joinTimer = setTimeout(() => {
+      PPD.app.joinTimer = setTimeout(() => {
+        // 审计 #4:会话已切换(用户退出/重开联机/返回菜单)→ 本定时器作废,绝不复活旧连接
+        if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return;
         if (joinTries >= 4) {
           PPD.setStatus(hostMode ? '建房超时，请重试' : '加入超时，请确认房间码后重试');
           return;
@@ -103,6 +126,7 @@
       }, joinTries === 0 ? 12000 : 6000);
     };
     net.on('open', () => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.setStatus('已连接服务器');
       // 心跳：连接期间每 5s 一次。作用：
       // 1) 等待对手/空闲时保持服务器侧活跃，减少 DO 驱逐；
@@ -115,8 +139,9 @@
         net.send({ t: 'create', name: PPD.app.names[0] });
         scheduleJoinRetry();
       } else if (PPD.app.reconnectAttempt > 0 && PPD.app.roomCode) {
-        // 断线自动重连：重新加入原房间（带 side 提示，服务端据此夺回原席位）
-        net.send({ t: 'join', room: PPD.app.roomCode, name: PPD.app.names[0], side: PPD.app.side });
+        // 断线自动重连：重新加入原房间（带 side 提示，服务端据此夺回原席位）。
+        // 审计 #11:用会话保存的本名(不能用 names[0]——加入方会被房主名覆盖导致槽位改名)
+        net.send({ t: 'join', room: PPD.app.roomCode, name: PPD.app.sessionName, side: PPD.app.side });
       } else if (hostMode) {
         net.send({ t: 'create', name: PPD.app.names[0] });
         scheduleJoinRetry();
@@ -126,6 +151,7 @@
       }
     });
     net.on('room', (m) => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       clearJoinTimer();
       PPD.GameAudio.ensure();
       PPD.app.roomCode = m.code;
@@ -171,6 +197,7 @@
       }
     });
     net.on('pong', (m) => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.app.lastPongAt = Date.now();
       // 本地模式：新版 server.js 的 pong 带 ver 字段；旧服务器（缺 k 位掩码输入解析）没有 →
       // 提示重启服务器，避免"进房后双方卡死"（输入被旧服务器静默丢弃）。只提示一次。
@@ -183,6 +210,7 @@
       }
     });
     net.on('state', (m) => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换:退出后迟到的快照不得再执行(审计 #5)
       PPD.app.lastStateAt = Date.now(); // 看门狗基线：服务端 Alarm 保证 ≥2Hz
       const wasReconnecting = PPD.app.reconnecting; // 先记录：下方会清除重连标记
       // 数据流恢复（重连后首帧到达）：结束重连状态
@@ -341,15 +369,18 @@
       }
     });
     net.on('peer_left', () => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.showOverlay('对手已离开', '可返回菜单重新开始。', '返回菜单', PPD.backToMenu);
     });
     net.on('rematch', () => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.hideGameOver();
       PPD.app.snapA = null;
       PPD.app.lastPhase = -1;
       PPD.app.lastEventKeys.clear();
     });
     net.on('error', (e) => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       const msg = e.e || '连接错误';
       // 浏览器"混合内容"拦截（https 网页版 new WebSocket('ws://…') 构造即抛错，已实测）：
       // 网页版无法直连局域网服务器，给出明确引导，且不要触发重连
@@ -369,6 +400,8 @@
     });
     net.on('close', () => {
       clearJoinTimer();
+      // 审计 #4:会话已切换(用户退出/重开)→ 不触发本连接的自动重连,也不清心跳(新会话的心跳归新连接管)
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return;
       if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
       // 对局中或等待面板（房主已建房）意外断线（非用户主动关闭）：走自动重连，
       // forceReconnect 会显示重连遮罩；重连成功后按 roomCode re-join 回到原房间
