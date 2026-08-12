@@ -35,11 +35,17 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netOperate, true); // 恢复操作区（下次建房/加入可再操作）
     PPD.show(PPD.ui.menu, true); // 联机框等同新开页面：关闭后恢复主菜单
+    // 审计 #4/#5:退出联机 → 递增会话 token(本连接在途消息回调全部作废)+ 清理会话定时器。
+    // 不递增 token 的话,陈旧 joinTimer 会在 12s/6s 后触发 net.connect() 复活已关闭连接
+    // (后台建幽灵房间),看门狗/心跳定时器也空转不清理。
+    PPD.app.netSessionToken = (PPD.app.netSessionToken || 0) + 1;
     if (PPD.app.net) PPD.app.net.close(); // 未入对局就离开联机框：断开连接
     PPD.app.roomCode = '';
     PPD.app.reconnecting = false;
     PPD.app.reconnectAttempt = 0;
     PPD.app.reconnectStartedAt = 0;
+    if (PPD.app.joinTimer) { clearTimeout(PPD.app.joinTimer); PPD.app.joinTimer = null; }
+    if (PPD.app.watchdogTimer) { clearInterval(PPD.app.watchdogTimer); PPD.app.watchdogTimer = null; }
     if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
   }
   PPD.closeNetPanel = closeNetPanel;

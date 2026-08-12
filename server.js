@@ -22,6 +22,13 @@ const TICK_HZ = 60;
 // - 单帧/单条分片消息 payload 超 WS_MAX_FRAME → 拒绝并断开(超大帧一次性大分配 / 分片无限累积)
 const WS_MAX_BUF = 256 * 1024;
 const WS_MAX_FRAME = 64 * 1024;
+// 僵尸连接宽限(审计 #6,镜像 room-core 语义):
+// - RECONNECT_GRACE_MS:重连宽限期。重连带原席位加入时,占位客户端失联超此时间 → 静默接管该席位;
+//   宽限期内 → 席位仍属于旧连接,新连接按"房间已满"处理(防止重连瞬间被抢占)。
+// - ZOMBIE_MS:僵尸清扫时限。连接失联(拔网线/AP 断开,close 可能数分钟不触发)超此时间 →
+//   定期清扫释放席位并销毁 socket,否则席位永久占用、对手卡死。
+const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 15 * 1000;
+const ZOMBIE_MS = Number(process.env.ZOMBIE_MS) || 30 * 1000;
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 // 协议版本：客户端/桌面启动器据此识别"旧服务器"（旧版不解析 k 位掩码输入，
 // 会导致客户端连上但输入全部被丢弃 → 进房后双方卡死）。版本号取 package.json + -local。
@@ -370,8 +377,10 @@ server.on('upgrade', (req, socket) => {
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
 
-  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, fragState: { fragOp: -1, fragParts: [] } };
+  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, lastSeen: Date.now(), fragState: { fragOp: -1, fragParts: [] } };
   socket.on('data', (chunk) => {
+    // 审计 #6:任何数据到达都视为连接存活(僵尸清扫据此判定失联)
+    client.lastSeen = Date.now();
     // 审计 #1:累积缓冲超限 → 恶意/失控客户端,直接断开(防内存 DoS)
     if (client.buf.length + chunk.length > WS_MAX_BUF) { socket.destroy(); return; }
     client.buf = Buffer.concat([client.buf, chunk]);
@@ -403,7 +412,10 @@ server.on('upgrade', (req, socket) => {
   socket.on('error', () => { /* ignore */ });
   socket.on('close', () => {
     client.alive = false;
-    leaveRoom(client);
+    // 审计 #6:断线不立即释放席位、不通知对手——进入重连宽限期(镜像 room-core handleClose):
+    // 席位保留、名字保留,玩家宽限期内重连(带 side)对局无缝恢复;宽限到期由清扫器释放并
+    // 通知对手,避免一次网络抖动就把整局打崩成"对手已离开"。
+    detachClient(client);
   });
 });
 
@@ -420,10 +432,12 @@ function handleClientMessage(client, msg) {
       engine: TT.createEngine(),
       clients: [null, null],
       lastSnap: '',
+      lastSeen: [Date.now(), Date.now()], // 每席位最近活跃/断线时刻(审计 #6:断线宽限与僵尸清扫依据)
     };
     rooms.set(code, room);
     client.room = room; client.side = 0; client.name = String(msg.name || '玩家1').slice(0, 12);
     room.clients[0] = client;
+    room.lastSeen[0] = Date.now();
     broadcast(room, { t: 'room', code, side: 0, name: client.name, wait: true });
     return;
   }
@@ -437,13 +451,27 @@ function handleClientMessage(client, msg) {
       send(client, { t: 'error', e: '房间不存在' });
       return;
     }
+    // 审计 #6:side 接管——断线自动重连带原席位加入(msg.side=0/1,仅重连客户端才带 side)。
+    // 本地服务器无身份鉴权,带 side 即视为重连请求:占位连接(可能已失联未触发 close)静默替换、
+    // 释放旧连接(不惊动对手);DO 端因有 WebSocket readyState 与持久化 attachment,保留更严格的
+    // curDead 判定(见 src/room-core.js handleJoin),本地从简以保证"一次网络抖动不打崩对局"。
+    const wantSide = (msg.side === 0 || msg.side === 1) ? msg.side : -1;
+    if (wantSide >= 0 && room.clients[wantSide] && room.clients[wantSide] !== client) {
+      const old = room.clients[wantSide];
+      old.room = null;
+      stats.close++;
+      try { old.ws.destroy(); } catch (e) { /* ignore */ }
+      room.clients[wantSide] = null;
+    }
     if (room.clients[0] && room.clients[1]) {
       send(client, { t: 'error', e: '房间已满' });
       return;
     }
     client.room = room; client.name = String(msg.name || '玩家2').slice(0, 12);
-    client.side = room.clients[0] ? 1 : 0;
+    // 优先落位到请求的 side(接管成功则空出);否则按现有占位分配
+    client.side = (wantSide >= 0 && !room.clients[wantSide]) ? wantSide : (room.clients[0] ? 1 : 0);
     room.clients[client.side] = client;
+    room.lastSeen[client.side] = Date.now();
     broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: false });
     return;
   }
@@ -458,28 +486,62 @@ function send(client, msg) {
   }
 }
 
+// ---------- 断线宽限与席位释放(审计 #6,镜像 room-core) ----------
+// lastSeen 语义:每席位最近活跃/断线时刻;0 = 席位已释放(不再参与宽限计时)。
+// 断线(close/拔网线)不立即释放席位,进宽限期等重连;宽限到期才释放并通知对手。
+
+// 断线摘除:只摘连接,不通知对手、不释放席位——进宽限期(RECONNECT_GRACE_MS 内可重连恢复)
+function detachClient(client) {
+  if (!client.room) return;
+  const room = client.room;
+  const idx = room.clients.indexOf(client);
+  if (idx >= 0) {
+    room.clients[idx] = null;
+    room.lastSeen[idx] = Date.now(); // 宽限期从断线时刻起算
+  }
+  client.room = null;
+}
+
+// 释放某席位(宽限到期/主动离开/僵尸清扫):摘除连接、通知对手、标记释放
+function freeSlot(room, idx) {
+  if (room.clients[idx] === null && room.lastSeen[idx] === 0) return; // 已释放,防重复通知
+  room.clients[idx] = null;
+  room.lastSeen[idx] = 0; // 0=已释放:不再参与宽限计时,房间可被回收
+  const other = room.clients[0] || room.clients[1];
+  if (other) {
+    send(other, { t: 'peer_left', side: idx });
+    const snap = TT.snapshot(room.engine);
+    const my = other === room.clients[0] ? 0 : 1;
+    send(other, { t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my });
+  }
+}
+
+// 用户主动离开(换房/退出):立即释放席位并通知对手(不等宽限)
 function leaveRoom(client) {
   if (!client.room) return;
   stats.close++;
   const room = client.room;
   const idx = room.clients.indexOf(client);
-  if (idx >= 0) room.clients[idx] = null;
   client.room = null;
-  const other = room.clients[0] || room.clients[1];
-  if (other) {
-    send(other, { t: 'peer_left', side: idx });
-    const snap = TT.snapshot(room.engine);
-    send(other, { t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: other.side });
-  } else {
-    rooms.delete(room.code);
+  if (idx < 0) return;
+  freeSlot(room, idx);
+  if (!room.clients[0] && !room.clients[1]) rooms.delete(room.code);
+}
+
+// 房间是否仍应保留:任一席位有存活连接,或任一席位处于断线宽限期(等重连)
+function roomAlive(room, now) {
+  for (let i = 0; i < 2; i++) {
+    if (room.clients[i]) return true;                                  // 在线
+    if (now - room.lastSeen[i] <= RECONNECT_GRACE_MS) return true;     // 断线宽限中(等重连)
   }
+  return false;
 }
 
 // ---------- 主循环：60Hz 模拟 + 广播 ----------
 setInterval(() => {
   const nowTick = Date.now();
   for (const room of rooms.values()) {
-    if (!room.clients[0] && !room.clients[1]) {
+    if (!roomAlive(room, nowTick)) {
       rooms.delete(room.code);
       continue;
     }
@@ -500,6 +562,32 @@ setInterval(() => {
     }
   }
 }, 1000 / TICK_HZ);
+
+// 审计 #6:断线清扫(每 5s,镜像 room-core sweepStale)——
+// 拔网线/AP 断开时 socket close 可能数分钟不触发,席位被永久占用、对手卡死(本地重连必失败)。
+// - 存活连接失联超 ZOMBIE_MS → 僵尸:释放席位并通知对手,销毁 socket;
+// - 断线宽限(RECONNECT_GRACE_MS)到期仍未重连 → 释放席位并通知对手;
+// - 双方席位都释放 → 删房。
+// 正常客户端有心跳(ping 5s/次),lastSeen 恒新鲜,不会被误杀。
+setInterval(() => {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    for (let i = 0; i < 2; i++) {
+      const c = room.clients[i];
+      if (c && now - c.lastSeen > ZOMBIE_MS) {
+        stats.close++;
+        freeSlot(room, i);
+        try { c.ws.destroy(); } catch (e) { /* ignore */ }
+      } else if (!c && room.lastSeen[i] !== 0 && now - room.lastSeen[i] > RECONNECT_GRACE_MS) {
+        stats.close++;
+        freeSlot(room, i);
+      }
+    }
+  }
+  for (const [code, room] of rooms) {
+    if (!roomAlive(room, now)) rooms.delete(code);
+  }
+}, 5000);
 
 // 诊断统计：每 10s 打印一次（有活动或房间存在才打印，避免空转噪音）。
 // 排查"进房卡死"：房间在但 in=0 → 输入没到服务器（旧服务器/连接问题）；
