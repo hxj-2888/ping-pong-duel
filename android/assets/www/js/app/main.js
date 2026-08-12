@@ -35,11 +35,17 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netOperate, true); // 恢复操作区（下次建房/加入可再操作）
     PPD.show(PPD.ui.menu, true); // 联机框等同新开页面：关闭后恢复主菜单
+    // 审计 #4/#5:退出联机 → 递增会话 token(本连接在途消息回调全部作废)+ 清理会话定时器。
+    // 不递增 token 的话,陈旧 joinTimer 会在 12s/6s 后触发 net.connect() 复活已关闭连接
+    // (后台建幽灵房间),看门狗/心跳定时器也空转不清理。
+    PPD.app.netSessionToken = (PPD.app.netSessionToken || 0) + 1;
     if (PPD.app.net) PPD.app.net.close(); // 未入对局就离开联机框：断开连接
     PPD.app.roomCode = '';
     PPD.app.reconnecting = false;
     PPD.app.reconnectAttempt = 0;
     PPD.app.reconnectStartedAt = 0;
+    if (PPD.app.joinTimer) { clearTimeout(PPD.app.joinTimer); PPD.app.joinTimer = null; }
+    if (PPD.app.watchdogTimer) { clearInterval(PPD.app.watchdogTimer); PPD.app.watchdogTimer = null; }
     if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
   }
   PPD.closeNetPanel = closeNetPanel;
@@ -168,6 +174,8 @@
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
     syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());
     syncVolSlider(PPD.ui.setSfxVol, PPD.GameAudio.getSfxVol());
+    // 审计 #8:打开设置时预填已保存的公网联机服务器地址
+    if (PPD.ui.setPublicServerUrl) PPD.ui.setPublicServerUrl.value = PPD.app.publicServerUrl || '';
     // 对局中（mode 非空）：设置面板即暂停界面，不叠加暂停面板
     if (PPD.app.mode) {
       PPD.app.settingsPause = true;
@@ -176,6 +184,20 @@
       PPD.updateGameTools();
     }
     PPD.show(PPD.ui.settingsPanel, true);
+  }
+  // 审计 #8:保存公网联机服务器地址（手机端战绩跨设备同步）——localStorage 持久化 + 写回 app。
+  // 格式 ws://IP:8765 或 http://IP:8765；清空则仅存手机本地。
+  if (PPD.ui.btnSavePublicServerUrl) {
+    PPD.ui.btnSavePublicServerUrl.addEventListener('click', () => {
+      PPD.GameAudio.ui();
+      const v = (PPD.ui.setPublicServerUrl && PPD.ui.setPublicServerUrl.value || '').trim();
+      PPD.app.publicServerUrl = v;
+      try { localStorage.setItem('ppd_public_server_url', v); } catch (e) { /* ignore */ }
+      if (PPD.ui.publicServerUrlStatus) {
+        PPD.ui.publicServerUrlStatus.textContent = v ? '已保存：' + v : '已清除（战绩仅存手机本地）';
+      }
+      PPD.setStatus(v ? '服务器地址已保存' : '已清除服务器地址');
+    });
   }
   function closeSettings() {
     PPD.show(PPD.ui.settingsPanel, false);

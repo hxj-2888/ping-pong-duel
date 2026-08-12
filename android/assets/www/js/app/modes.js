@@ -84,10 +84,22 @@
     PPD.show(PPD.ui.manualPanel, false);
     PPD.show(PPD.ui.pausePanel, false);
     PPD.GameAudio.setIntensity(0); // 回到主菜单：背景音乐恢复常规节奏
+    // 审计 #4/#5:返回菜单 → 递增会话 token(在途 room/state 响应全部作废,不再拉回对局)+
+    // 清理会话定时器(陈旧 joinTimer 复活已关闭连接建幽灵房间;watchdog/heartbeat 空转)
+    PPD.app.netSessionToken = (PPD.app.netSessionToken || 0) + 1;
     if (PPD.app.net) PPD.app.net.close();
+    if (PPD.app.joinTimer) { clearTimeout(PPD.app.joinTimer); PPD.app.joinTimer = null; }
+    if (PPD.app.watchdogTimer) { clearInterval(PPD.app.watchdogTimer); PPD.app.watchdogTimer = null; }
+    if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
     PPD.app.mode = null;
     PPD.app.engine = null;
     PPD.app.snapA = PPD.app.snapB = null;
+    // 审计 #7:清跨会话残留的快照缓冲/插值状态,避免新房间开局被旧缓冲单调门误判丢弃 ~1s
+    PPD.app.snapBuf = null;
+    PPD.app.interpClock = null;
+    PPD.app._interpLast = null;
+    PPD.app.interpGap = null;
+    PPD.app.lastEventKeys.clear(); // 退出对局:清事件去重集,避免旧事件在新对局被吞
     PPD.app.lastPhase = -1;
     PPD.app.sideSet = false; // 下次联机会话重新确立 side
     // 清残留联机状态：房间码/重连计数，避免下次建房误走"重连旧房间"路径（本地建房失败修复）

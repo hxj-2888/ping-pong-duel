@@ -124,6 +124,14 @@
   let careerRecords = [];
   let careerPage = 0;
 
+  // 审计 #3:玩家名是用户输入,渲染进 innerHTML 前必须转义(服务端已去 < >,此处兜底
+  // 手机端 localStorage 未经服务端清洗的数据),防存储型 XSS
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
   function careerItemHtml(r) {
     const d = DIFF[r.difficulty] || '中等';
     const t = new Date(r.ts || Date.now());
@@ -132,7 +140,7 @@
     const sc = `${r.score ? r.score[0] : '?'}:${r.score ? r.score[1] : '?'}`;
     const wl = r.winner === 0 ? '胜' : '负';
     const modeLbl = r.mode === 'ai' ? '人机' : (r.mode === 'local' ? '双人' : (r.mode === 'online' ? '联机' : '对战'));
-    return `<div class="career-item">${wl} · ${modeLbl} · ${d} · ${sc} · ${time} · ${r.name || '玩家'}</div>`;
+    return `<div class="career-item">${wl} · ${modeLbl} · ${d} · ${sc} · ${time} · ${escapeHtml(r.name || '玩家')}</div>`;
   }
 
   function renderCareerPage() {
