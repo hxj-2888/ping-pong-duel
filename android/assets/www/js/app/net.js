@@ -246,8 +246,9 @@
           // 时钟只进不退：开局/断流/追赶时向前锚定；绝不在收到新快照时回退重置。
           // 旧版 `interpClock > snapB.t` 会因网络单向延迟把时钟倒拨一个广播间隔，
           // alpha 瞬间归 0，玩家/球拍/持球每收一条快照就跳回上一帧位置（画面回溯）。
-          // 超前部分交给 renderOnline 的 alpha>1 平滑前向外推（lerp 连续，无跳变）。
-          if (PPD.app.interpClock == null || target - PPD.app.interpClock > PPD.app.interpGap * 2) {
+          // 超前部分由 renderOnline 的时钟封顶（Math.min(clock, snapB.t)）做纯插值消化。
+          // 向前追赶阈值收紧到 3 个实测间隔，避免保底广播间隔波动时反复触发向前跳（瞬移源）。
+          if (PPD.app.interpClock == null || target - PPD.app.interpClock > PPD.app.interpGap * 3) {
             PPD.app.interpClock = target; // 开局/断流/追赶：只向前跳到最新之后一个实测间隔
           }
         } else {
