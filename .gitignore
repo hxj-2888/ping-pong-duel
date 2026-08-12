@@ -23,3 +23,6 @@ records.json
 dist/
 %PKG%/
 
+ 
+# 分发压缩包（*.zip 合成产物，不入库） 
+*.zip
