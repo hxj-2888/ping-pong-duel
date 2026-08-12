@@ -226,7 +226,7 @@
       PPD.app.snapB = snap;
       PPD.app.tB = performance.now();
       // 本地玩家输入预测：以服务器快照为锚（详见 render.js stepPrediction）。
-      // 首次初始化；明显偏差（输入丢失/卡顿恢复/重连）时重置回服务器位置，避免长期漂移。
+      // 首次初始化；偏差校准（输入丢失/卡顿恢复/重连）时校正预测位置，避免长期漂移。
       // 正常对局时服务器只是滞后于预测（追赶中），不重置——保证本地手感即时。
       {
         const sp = PPD.app.snapB.p;
@@ -234,11 +234,23 @@
         if (me) {
           if (!PPD.app.pred) {
             PPD.app.pred = { x: me.x, z: me.z, vx: me.vx || 0, vz: me.vz || 0, padX: me.pc ? me.pc[0] : me.x, crouch: me.cq || 0 };
-          } else if (Math.abs(me.x - PPD.app.pred.x) > 0.6 || Math.abs(me.z - PPD.app.pred.z) > 0.6) {
-            PPD.app.pred.x = me.x; PPD.app.pred.z = me.z;
-            PPD.app.pred.vx = me.vx || 0; PPD.app.pred.vz = me.vz || 0;
-            PPD.app.pred.padX = me.pc ? me.pc[0] : me.x;
-            PPD.app.pred.crouch = me.cq || 0;
+          } else if (Math.abs(me.x - PPD.app.pred.x) > 1.0 || Math.abs(me.z - PPD.app.pred.z) > 1.0) {
+            const ex = me.x - PPD.app.pred.x, ez = me.z - PPD.app.pred.z;
+            if (Math.abs(ex) > 3 || Math.abs(ez) > 3) {
+              // 严重失步（重连/传送/卡顿恢复）：整体硬校准回服务器
+              PPD.app.pred.x = me.x; PPD.app.pred.z = me.z;
+              PPD.app.pred.vx = me.vx || 0; PPD.app.pred.vz = me.vz || 0;
+              PPD.app.pred.padX = me.pc ? me.pc[0] : me.x;
+              PPD.app.pred.crouch = me.cq || 0;
+            } else {
+              // 平滑纠偏：移动网络下预测领先 RTT×速度 可达 0.6m+，旧版硬切 pred=me 会
+              // 造成行走时反复瞬移/抽动（相机跟随 pred 一起抖）。改为按比例收敛位置、
+              // 保留输入驱动速度（行走动画连续），仅位置缓慢回归服务器。
+              const k = 0.2;
+              PPD.app.pred.x += ex * k;
+              PPD.app.pred.z += ez * k;
+              PPD.app.pred.padX = PPD.app.pred.x + (PPD.app.side === 0 ? 0.18 : -0.18);
+            }
           }
           PPD.app.pred.t = performance.now();
         }
