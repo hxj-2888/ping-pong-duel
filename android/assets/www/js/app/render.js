@@ -512,20 +512,32 @@
       const lag = Math.min(0.12, Math.max(0, (now - PPD.app.tB) / 1000 - 0.03));
       ex = { x: snap.b[3] * lag, y: snap.b[4] * lag, z: snap.b[5] * lag };
     }
-      // 双快照插值：snapA(上一帧) → snapB(最新)，alpha 由显示时钟驱动
-      let view;
-      const sa = PPD.app.snapA;
-      if (sa && typeof sa.t === 'number' && typeof snap.t === 'number' && snap.t > sa.t) {
-        // 显示时钟封顶在最新快照引擎时间：保证 alpha ∈ [0,1] 纯插值（相邻快照间 0→1 平滑）。
-        // 旧版时钟超前 → alpha 恒被钳 1.2 → 1.2x 前向外推放大快照位置抖动 → 人物原地反复瞬移。
-        // 封顶后新快照到达时 alpha 归 0，但 sa 即旧 snapB，位置连续（无回跳无抽搐）。
-        const clock = PPD.app.interpClock != null ? Math.min(PPD.app.interpClock, snap.t) : snap.t;
-        // alpha 下限 -0.5：首帧/时钟暂落后上一快照时轻微外推过渡；上限 1 由时钟封顶保证
-        const alpha = Math.max(-0.5, Math.min(1, (clock - sa.t) / (snap.t - sa.t)));
-        view = viewModelFromSnapInterp(sa, snap, alpha, PPD.app.side, ex);
-      } else {
-        view = viewModelFromSnap(snap, PPD.app.side, ex);
+    // 快照缓冲跨帧插值：在缓冲内找跨插值时钟的相邻帧对，alpha ∈ [0,1] 纯插值。
+    // 时钟滞后最新帧 1.5 间隔（net.js 锚定）→ 恒有可插值帧对 → 任意广播率平滑，
+    // 无外推放大（旧版 alpha 恒 1 只显示最新帧 → 低广播率步进抽动）、无回退重置。
+    let view;
+    const buf = PPD.app.snapBuf || [];
+    const clock = PPD.app.interpClock != null ? PPD.app.interpClock : (buf.length ? buf[buf.length - 1].t : 0);
+    let s1 = null, s2 = null, alpha = 0;
+    if (buf.length >= 2) {
+      for (let i = 1; i < buf.length; i++) {
+        if (buf[i - 1].t <= clock && clock <= buf[i].t) {
+          s1 = buf[i - 1].s; s2 = buf[i].s;
+          alpha = (clock - buf[i - 1].t) / (buf[i].t - buf[i - 1].t);
+          break;
+        }
       }
+      if (!s1) {
+        // 时钟超出缓冲范围（首帧/追赶瞬态）：钳到最近帧，不外推
+        if (clock < buf[0].t) { s1 = buf[0].s; s2 = buf[1].s; alpha = 0; }
+        else { s1 = buf[buf.length - 2].s; s2 = buf[buf.length - 1].s; alpha = 1; }
+      }
+    }
+    if (s1 && s2 && typeof s1.t === 'number' && s2.t > s1.t) {
+      view = viewModelFromSnapInterp(s1, s2, alpha, PPD.app.side, ex);
+    } else {
+      view = viewModelFromSnap(snap, PPD.app.side, ex);
+    }
     // 本地玩家输入预测：连续积分 + 覆盖自身视图（消除 ~RTT 控制延迟）
     if (PPD.app.pred) {
       const dt = PPD.app.pred.t ? Math.min(0.05, (now - PPD.app.pred.t) / 1000) : 0;
