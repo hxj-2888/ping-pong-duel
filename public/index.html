@@ -288,6 +288,17 @@
           <option value="30">30</option>
         </select>
       </label>
+      <!-- 审计 #8:公网联机服务器地址(设置面板)。手机端(APK file:// 页面无同源后端)战绩默认存本地,
+           填写自建服务器地址后异步同步到该服务器(跨设备共享,兑现 README/使用说明/MainActivity 承诺);
+           格式 ws://IP:8765 或 http://IP:8765(本地联机/战绩同步共用) -->
+      <label class="tune-row">公网联机服务器地址（手机端战绩同步用）
+        <input id="setPublicServerUrl" type="text" placeholder="如 ws://192.168.1.100:8765"
+          style="flex:1;min-width:120px;padding:5px 7px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#e8eefb">
+      </label>
+      <label class="tune-row" style="justify-content:flex-start">
+        <button id="btnSavePublicServerUrl" type="button" style="padding:4px 14px">保存</button>
+        <span id="publicServerUrlStatus" style="font-size:11px;color:#7fd0a8"></span>
+      </label>
       <div class="app-version">版本 <span id="appVersion"></span></div>
       <button id="btnSettingsClose" class="btn primary">完成</button>
     </div>

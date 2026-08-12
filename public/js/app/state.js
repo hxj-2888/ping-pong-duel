@@ -105,6 +105,9 @@
     setNoCrowd: document.getElementById('setNoCrowd'),
     appVersion: document.getElementById('appVersion'),
     frameRate: document.getElementById('frameRate'),
+    setPublicServerUrl: document.getElementById('setPublicServerUrl'), // 审计 #8:公网联机服务器地址(手机端战绩同步)
+    btnSavePublicServerUrl: document.getElementById('btnSavePublicServerUrl'),
+    publicServerUrlStatus: document.getElementById('publicServerUrlStatus'),
     fpsMeter: document.getElementById('fpsMeter'),
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
@@ -205,6 +208,7 @@
     lanInfo: null,        // GET /api/info 返回的局域网联机信息（房主等待面板显示用）
     serverVersion: null,  // 本地服务器版本（心跳 pong 带 ver；用于识别旧服务器）
     serverStaleWarned: false, // 是否已提示过"服务器版本过旧"（只提示一次）
+    publicServerUrl: '',  // 审计 #8:公网联机服务器地址(手机端战绩同步,设置面板填写;ws:// 或 http://)
     engine: null,
     net: null,
     roomCode: '',
@@ -318,6 +322,14 @@
     }
   } catch (e) { /* ignore */ }
   if (ui.frameRate) ui.frameRate.value = String(app.quality.frameRate);
+
+  // ---------- 公网联机服务器地址（审计 #8：手机端战绩跨设备同步；设置面板填写，localStorage 记忆） ----------
+  const PUBLIC_SERVER_URL_KEY = 'ppd_public_server_url';
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(PUBLIC_SERVER_URL_KEY) : null;
+    if (v) app.publicServerUrl = String(v).trim();
+  } catch (e) { /* ignore */ }
+  if (ui.setPublicServerUrl) ui.setPublicServerUrl.value = app.publicServerUrl;
 
   // ---------- 玩家昵称（主菜单 #nameInput）：取名生效 + 本地记忆 ----------
   const NAME_KEY = 'ppd_name';

@@ -13,7 +13,9 @@ import android.widget.ProgressBar;
 
 public class MainActivity extends Activity {
     // 游戏内置在 APK 资产中（assets/www），离线即可玩单机/人机/本地双人；
-    // 联机在游戏内「设置 → 公网联机服务器地址」配置（默认 Cloudflare，可填自建 ECS 低延迟地址）。
+    // 战绩同步（审计 #8）：内置版页面为 file:// 无同源后端，战绩默认存手机本地；
+    // 在游戏内「设置 → 公网联机服务器地址」填写自建服务器地址（如 http://电脑IP:8765）后，
+    // 战绩异步同步到该服务器（跨设备共享，见 app/records.js serverBase）。
     private WebView web;
     private ProgressBar progress;
 
