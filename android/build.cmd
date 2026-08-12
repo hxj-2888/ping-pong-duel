@@ -49,7 +49,7 @@ echo [2/7] link manifest + resources (no -A assets: added by 7-Zip in [5/7])...
 "%BT%\aapt2.exe" link -o "%OUT%\unsigned.apk" -I "%PLAT%" ^
   --manifest "%ROOT%AndroidManifest.xml" -R "%OUT%\res.zip" --auto-add-overlay ^
   --java "%OUT%\gen" --min-sdk-version 24 --target-sdk-version 34 ^
-  --version-code 14 --version-name 1.6.9 || goto :err
+  --version-code 15 --version-name 1.7.0 || goto :err
 
 echo [3/7] compile java...
 javac -encoding UTF-8 -source 1.8 -target 1.8 -classpath "%PLAT%" -d "%OUT%\classes" ^
