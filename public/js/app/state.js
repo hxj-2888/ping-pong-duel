@@ -182,7 +182,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '1.6.8',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '1.6.9',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiLevelA: 1,         // AI 观战：红方 AI 难度
