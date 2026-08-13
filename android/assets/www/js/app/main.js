@@ -389,6 +389,8 @@
   PPD.GameAudio.autoplayMusic();
   // 通关记录：进入主菜单时拉取后端并渲染（失败静默）
   if (PPD.refreshRecords) PPD.refreshRecords();
+  // 养成系统：进入主菜单时刷新积分余额（网页版自动隐藏，v1.8.0）
+  if (PPD.refreshPoints) PPD.refreshPoints();
   // 解锁判定兜底：从持久化记录推导地狱解锁/通关（localStorage 被清也不会上锁）
   if (PPD.syncUnlocksFromRecords) PPD.syncUnlocksFromRecords();
   // 设置面板版本号（与 package.json / AndroidManifest 一致，单一来源 PPD.app.version）

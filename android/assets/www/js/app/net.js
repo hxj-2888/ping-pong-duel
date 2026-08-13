@@ -363,6 +363,8 @@
                 ts: Date.now(),
               });
             }
+            // 养成积分结算（v1.8.0）：联机固定 胜3/负1（训练属性不同步真人，但积分照给）
+            if (PPD.awardPvp) PPD.awardPvp(e.s === PPD.app.side);
             break;
           case 'let': PPD.GameAudio.letSound(); PPD.showPoint('触网 · 重发'); break;
         }

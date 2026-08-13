@@ -254,7 +254,7 @@
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
     // 养成系统(v1.8.0)：对战积分 + 已购/已装备外观 + 能力训练等级（localStorage 持久化,网页版禁用）
     points: 9999,         // 积分余额(ppd_points)；开发者默认 9999 方便测试养成（已有本地数据时以本地为准）
-    cosmetics: { trail: null, paddle: null, splash: false }, // trail:'yellow'|'black'|'red'; paddle:'skinA'|'skinB'|'skinC'; splash=撞击溅射
+    cosmetics: { trail: null, paddle: null, shirt: null, splash: false }, // trail:'yellow'|'black'|'red'; paddle:'skinA'|'skinB'|'skinC'; shirt:'green'|'purple'|'orange'|'cyan'; splash=撞击溅射
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
   };
 

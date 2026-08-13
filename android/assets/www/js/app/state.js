@@ -120,6 +120,14 @@
     btnCareerPrev: document.getElementById('btnCareerPrev'),
     btnCareerNext: document.getElementById('btnCareerNext'),
     btnCareerBack: document.getElementById('btnCareerBack'),
+    // 养成系统（v1.8.0：积分 + 能力训练 + 特效兑换，单开页面）
+    btnTraining: document.getElementById('btnTraining'),
+    trainingPanel: document.getElementById('trainingPanel'),
+    trainingPoints: document.getElementById('trainingPoints'),
+    trainingList: document.getElementById('trainingList'),
+    shopList: document.getElementById('shopList'),
+    btnTrainingBack: document.getElementById('btnTrainingBack'),
+    menuPoints: document.getElementById('menuPoints'),
     touchControls: document.getElementById('touchControls'),
     btnLeft: document.getElementById('btnLeft'),
     btnRight: document.getElementById('btnRight'),
@@ -185,7 +193,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '1.7.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '2.0.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiLevelA: 1,         // AI 观战：红方 AI 难度
@@ -244,6 +252,10 @@
     // frameRate=渲染帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
+    // 养成系统(v1.8.0)：对战积分 + 已购/已装备外观 + 能力训练等级（localStorage 持久化,网页版禁用）
+    points: 9999,         // 积分余额(ppd_points)；开发者默认 9999 方便测试养成（已有本地数据时以本地为准）
+    cosmetics: { trail: null, paddle: null, shirt: null, splash: false }, // trail:'yellow'|'black'|'red'; paddle:'skinA'|'skinB'|'skinC'; shirt:'green'|'purple'|'orange'|'cyan'; splash=撞击溅射
+    training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
   };
 
   // ---------- 工具 ----------
@@ -330,6 +342,33 @@
     if (v) app.publicServerUrl = String(v).trim();
   } catch (e) { /* ignore */ }
   if (ui.setPublicServerUrl) ui.setPublicServerUrl.value = app.publicServerUrl;
+
+  // ---------- 养成系统（v1.8.0：积分/已装备外观/能力等级，localStorage 记忆；网页版禁用） ----------
+  const POINTS_KEY = 'ppd_points';
+  const COSMETICS_KEY = 'ppd_cosmetics';
+  const TRAINING_KEY = 'ppd_training';
+  try {
+    const p = typeof localStorage !== 'undefined' ? parseInt(localStorage.getItem(POINTS_KEY), 10) : 0;
+    if (Number.isFinite(p) && p > 0) app.points = p;
+  } catch (e) { /* ignore */ }
+  try {
+    const c = typeof localStorage !== 'undefined' ? localStorage.getItem(COSMETICS_KEY) : null;
+    if (c) {
+      const obj = JSON.parse(c);
+      if (obj && typeof obj === 'object') app.cosmetics = Object.assign(app.cosmetics, obj);
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TRAINING_KEY) : null;
+    if (t) {
+      const obj = JSON.parse(t);
+      if (obj && typeof obj === 'object') app.training = Object.assign(app.training, obj);
+    }
+  } catch (e) { /* ignore */ }
+  // 养成数据只本机读；写入由 app/training.js 的 savePoints/saveCosmetics/saveTraining 完成
+  function savePoints() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(POINTS_KEY, String(app.points)); } catch (e) { /* ignore */ } }
+  function saveCosmetics() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(COSMETICS_KEY, JSON.stringify(app.cosmetics)); } catch (e) { /* ignore */ } }
+  function saveTraining() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(TRAINING_KEY, JSON.stringify(app.training)); } catch (e) { /* ignore */ } }
 
   // ---------- 玩家昵称（主菜单 #nameInput）：取名生效 + 本地记忆 ----------
   const NAME_KEY = 'ppd_name';
@@ -453,6 +492,7 @@
     isHellCleared, markHellCleared, syncHellOptions,
     setQuality, setFrameRate, setNoCrowd,
     getPlayerName, loadAINames, saveAINames,
+    savePoints, saveCosmetics, saveTraining,
     triggerCheer, updateMusicIntensity,
   };
 })();

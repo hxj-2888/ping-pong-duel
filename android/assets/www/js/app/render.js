@@ -183,6 +183,8 @@
         sb: p.swingBack,
         crouch: p.crouch,  // 蹲下（Ctrl）：渲染层画蹲姿
         run: p.run,        // 跑步（Shift）
+        paddleSkin: p.side === 0 ? (PPD.app.cosmetics.paddle || null) : null, // 养成球拍外观(本机主玩家)
+        shirtSkin: p.side === 0 ? (PPD.app.cosmetics.shirt || null) : null, // 养成上衣换色(本机主玩家)
       })),
       ball: engine.ball.inHand
         ? null
@@ -196,6 +198,7 @@
       fx: PPD.app.fx,
       fan: PPD.app.fan,
       servePath: servePath(engine),
+      trailStyle: PPD.app.cosmetics.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
       density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
@@ -217,6 +220,8 @@
       sb: p.sb,
       crouch: p.cq,  // 蹲下（Ctrl）：渲染层画蹲姿
       run: p.rn,     // 跑步（Shift）
+      paddleSkin: i === side ? (PPD.app.cosmetics.paddle || null) : null, // 养成球拍外观(联机只显示自己装备的)
+      shirtSkin: i === side ? (PPD.app.cosmetics.shirt || null) : null, // 养成上衣换色(联机只显示自己装备的)
     }));
     let ball = null, ballInHand = null;
     if (snap.b) {
@@ -241,6 +246,7 @@
       pointReason: snap.pr,
       fx: PPD.app.fx,
       fan: PPD.app.fan,
+      trailStyle: PPD.app.cosmetics.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
       density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
@@ -274,6 +280,8 @@
         // 蹲下/跑步钳制 0~1：alpha 负外推（时钟略落后于上一快照）时防止状态值越界
         crouch: Math.max(0, Math.min(1, lerp(a.cq != null ? a.cq : 0, p.cq))),
         run: Math.max(0, Math.min(1, lerp(a.rn != null ? a.rn : 0, p.rn))),
+        paddleSkin: i === side ? (PPD.app.cosmetics.paddle || null) : null, // 养成球拍外观(联机只显示自己装备的)
+        shirtSkin: i === side ? (PPD.app.cosmetics.shirt || null) : null, // 养成上衣换色(联机只显示自己装备的)
       };
     });
     let ball = null, ballInHand = null;
@@ -301,6 +309,7 @@
       pointReason: sb.pr,
       fx: PPD.app.fx,
       fan: PPD.app.fan,
+      trailStyle: PPD.app.cosmetics.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
       density: PPD.isTouch ? 0.25 : 0.5, // 手机端观众密度减半（省 DPR3 填充率）
