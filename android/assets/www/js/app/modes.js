@@ -69,6 +69,9 @@
       PPD.app.lastEventKeys.clear();
       PPD.app.lastPhase = -1;
     }
+    // 撞击特效残留修复:新一局清空旧特效与击球者归属(开局不再残留波纹/溅射)
+    PPD.app.lastHitter = -1;
+    PPD.app.fx.length = 0;
   }
 
   function quitGame() {
@@ -107,6 +110,10 @@
     PPD.app.reconnecting = false;
     PPD.app.reconnectAttempt = 0;
     PPD.app.reconnectStartedAt = 0;
+    // 撞击特效残留修复:返回菜单清空特效/击球者归属/对手皮肤
+    PPD.app.lastHitter = -1;
+    PPD.app.fx.length = 0;
+    PPD.app.oppSkin = null;
     PPD.show(PPD.ui.gameScreen, false);
     PPD.show(PPD.ui.menu, true);
     PPD.show(PPD.ui.netPanel, false);
@@ -118,6 +125,8 @@
   function startOnlineGame(side) {
     PPD.app.mode = 'online';
     PPD.app.side = side;
+    PPD.app.lastHitter = -1; // 撞击特效残留修复:新对局复位击球者归属
+    PPD.app.fx.length = 0;   // 清空旧撞击特效,开局不再残留
     PPD.app.paused = false;
     PPD.app.snapA = PPD.app.snapB = null;
     PPD.app.lastPhase = -1;
@@ -140,6 +149,8 @@
   function startLocal() {
     PPD.app.mode = 'local';
     PPD.app.paused = false;
+    PPD.app.lastHitter = -1; // 撞击特效残留修复
+    PPD.app.fx.length = 0;
     PPD.app.engine = PPD.TT.createEngine();
     // 养成能力（v1.8.0）：本地双人给 P1 注入训练等级（P2 保持默认，公平起见不注入；联机完全不注入）
     if (PPD.applyTrainingToPlayer) PPD.applyTrainingToPlayer(PPD.app.engine.players[0]);
@@ -172,6 +183,8 @@
   function startAI() {
     PPD.app.mode = 'ai';
     PPD.app.paused = false;
+    PPD.app.lastHitter = -1; // 撞击特效残留修复
+    PPD.app.fx.length = 0;
     PPD.app.aiLevel = readAiLevel(PPD.ui.aiLevel);
     PPD.app.engine = PPD.TT.createEngine();
     // 养成能力（v1.8.0）：人机模式给玩家(P1)注入训练等级；AI 对手(P2) ability 恒 0，判定不受影响
@@ -203,6 +216,8 @@
   function startAIVsAI() {
     PPD.app.mode = 'aivai';
     PPD.app.paused = false;
+    PPD.app.lastHitter = -1; // 撞击特效残留修复
+    PPD.app.fx.length = 0;
     PPD.app.aiLevelA = readAiLevel(PPD.ui.aiLevelA);
     PPD.app.aiLevelB = readAiLevel(PPD.ui.aiLevelB);
     PPD.app.engine = PPD.TT.createEngine();

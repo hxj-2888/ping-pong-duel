@@ -5,14 +5,6 @@
 (function () {
   'use strict';
 
-  // 左上角：接球碰撞箱显示（数值与引擎 RULES 保持一致）；
-  // 蹲下最低接球说明已移入玩法说明（说明书胶囊），不再显示在虚线面板
-  if (PPD.ui.hitBallVal) {
-    const R = PPD.TT.RULES;
-    PPD.ui.hitBallVal.textContent =
-      `${(R.HITBOX_HX * 2).toFixed(1)}×${(R.HITBOX_HZ * 2).toFixed(1)}×${(R.HITBOX_Y_TOP - R.HITBOX_Y_BOTTOM).toFixed(1)}m`;
-  }
-
   // ---------- 事件 → 音效/提示 ----------
   // 得分方名称（按模式取 PPD.app.names：人机=昵称/电脑，AI 观战=双方 AI 名字，其余=玩家1/2）
   function winnerName(side) {
@@ -37,10 +29,16 @@
           PPD.GameAudio.hit();
           // 追踪最后击球者(联机/本地撞击溅射特效按击球者装备渲染,v2.0)
           PPD.app.lastHitter = e.s;
+          // v2.0:人机模式玩家成功反击(反击扣杀/低平快球,ball.counterSmash===1)→ 电脑头顶短暂感叹号(只读标记,不影响AI操作)
+          if (PPD.app.mode === 'ai' && e.s === 0 && engine.ball.counterSmash === 1 && engine.players[1]) {
+            engine.players[1].exclaimT = 0.8;
+          }
           break;
         case 'bounce':
           PPD.GameAudio.bounce();
-          addFx('bounce', engine.ball.pos.x, engine.ball.pos.y, engine.ball.pos.z, engine.t);
+          // 发球阶段落台特效按发球方归属(修复开局 lastHitter 残留导致的波纹+溅射同屏);对打阶段由 addFx 用 lastHitter
+          addFx('bounce', engine.ball.pos.x, engine.ball.pos.y, engine.ball.pos.z, engine.t,
+            engine.phase === 'serve' ? engine.server : (PPD.app.lastHitter >= 0 ? PPD.app.lastHitter : -1));
           break;
         case 'net': PPD.GameAudio.net(); break;
         case 'serve': PPD.GameAudio.serve(); break;
@@ -111,15 +109,18 @@
     }
   }
 
-  function addFx(type, x, y, z, t0) {
-    // 撞击溅射(v2.0)：按"最后击球者"的装备决定特效类型(击球者装溅射→溅射,否则波纹)，
-    // 联机时双方看到一致；无击球者记录时回退用本机装备
-    let splashOn = !!(PPD.app.equip && PPD.app.equip.splash);
-    const h = PPD.app.lastHitter;
-    if (h === 0 || h === 1) {
-      splashOn = h === PPD.app.side
-        ? !!(PPD.app.equip && PPD.app.equip.splash)
-        : !!(PPD.app.oppSkin && PPD.app.oppSkin.splash);
+  function addFx(type, x, y, z, t0, hitterSide) {
+    // 撞击特效归属(v2.0):
+    // - 本地/人机/观战:装备溅射后不分敌我,双方打出的球落台统一用本机装备特效(修复开局波纹+溅射同屏)
+    // - 联机:发球阶段(bounce 传发球方 side)按发球方装备、对打按 lastHitter,双方看到一致;
+    //   hitterSide 无效(-1)时回退本机装备
+    let splashOn;
+    if (PPD.app.mode === 'online') {
+      if (hitterSide === PPD.app.side) splashOn = !!(PPD.app.equip && PPD.app.equip.splash);
+      else if (hitterSide === 1 - PPD.app.side) splashOn = !!(PPD.app.oppSkin && PPD.app.oppSkin.splash);
+      else splashOn = !!(PPD.app.equip && PPD.app.equip.splash);
+    } else {
+      splashOn = !!(PPD.app.equip && PPD.app.equip.splash);
     }
     const t = (type === 'bounce' && splashOn) ? 'splash' : type;
     PPD.app.fx.push({ type: t, x, y, z, t0 });
@@ -204,18 +205,13 @@
   }
   function updateHitRangeLive() {
     const mode = PPD.app.mode;
-    const elH = PPD.ui.ballHeight, elS = PPD.ui.inBoxStatus, elSm = PPD.ui.smashStatus, elLb = PPD.ui.lobStatus;
-    // 左上角判定面板跟随主页开关：关闭时隐藏全部提示内容（接球箱/球高/进箱）
+    const elH = PPD.ui.ballHeight, elS = PPD.ui.inBoxStatus;
+    // 左上角判定面板跟随主页开关：关闭时隐藏全部提示内容（v2.0 精简：只保留球高/进箱，
+    // 已移除碰撞箱尺寸文字栏与扣杀/高吊提示行，虚线框在场景中绘制）
     const panel = PPD.ui.hitRangeInfo;
     if (panel && panel.style.display !== (PPD.app.showHitRanges ? '' : 'none')) {
       panel.style.display = PPD.app.showHitRanges ? '' : 'none';
     }
-    // AI 观战：实时计算球高/进箱，但**不做**可扣杀/可高吊指示（玩家操作无关）；
-    // 手机端（需求 14）：仅保留 接球箱/配套虚线/球高标识，移除扣杀、高吊对应的虚线指示
-    const isAivai = mode === 'aivai';
-    const hideSmashLob = isAivai || PPD.isTouch;
-    if (PPD.ui.hrSmashRow) PPD.ui.hrSmashRow.style.display = hideSmashLob ? 'none' : '';
-    if (PPD.ui.hrLobRow) PPD.ui.hrLobRow.style.display = hideSmashLob ? 'none' : '';
     if (!elH || !elS || (mode !== 'local' && mode !== 'ai' && mode !== 'online' && mode !== 'aivai')) return;
     // 球位置：本地/人机/观战用引擎，联机用快照（飞行 b / 持球 bh）
     let bv = null;
@@ -264,23 +260,6 @@
       }
     } else {
       lastInBox = {};
-    }
-    // 可扣杀/可高吊指示（节流 0.30s；仅判定虚线开启时求解，虚线关闭时省掉隐藏求解开销；
-    // AI 观战不做这两项指示——与玩家操作无关；手机端已移除（需求 14））
-    if ((elSm || elLb) && PPD.app.showHitRanges && PPD.app.engine && mode !== 'aivai' && !PPD.isTouch) {
-      const now = performance ? performance.now() : Date.now();
-      if (now - lastSmashCheck > 300) {
-        lastSmashCheck = now;
-        const smSides = mode === 'local' ? [0, 1] : (mode === 'ai' ? [0] : [PPD.app.side]);
-        let anySmash = false, anyLob = false;
-        for (const i of smSides) {
-          if (canSmashNow(PPD.app.engine, i)) anySmash = true;
-          if (canLobNow(PPD.app.engine, i)) anyLob = true;
-          if (anySmash && anyLob) break;
-        }
-        if (elSm) { elSm.textContent = anySmash ? '可扣杀 ✓' : '暂不可'; elSm.className = anySmash ? 'on' : 'off'; }
-        if (elLb) { elLb.textContent = anyLob ? '可高吊 ✓' : '暂不可'; elLb.className = anyLob ? 'on' : 'off'; }
-      }
     }
   }
 

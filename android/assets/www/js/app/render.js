@@ -185,6 +185,8 @@
         run: p.run,        // 跑步（Shift）
         paddleSkin: p.side === 0 ? (PPD.app.equip.paddle || null) : null, // 装扮球拍外观(本机主玩家)
         shirtSkin: p.side === 0 ? (PPD.app.equip.shirt || null) : null, // 装扮上衣换色(本机主玩家)
+        warnSmash: p.warnSmash || 0, // v2.0:AI 扣杀/低平预告黄闪(0/1)
+        exclaimT: p.exclaimT || 0,   // v2.0:反击成功感叹号剩余时间
       })),
       ball: engine.ball.inHand
         ? null

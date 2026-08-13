@@ -2,7 +2,7 @@
  * app/dressup.js — 装扮系统页（v2.0）：外观库存/装配卸下/退款 + 装扮方案
  * 通过共享对象 PPD 访问公共状态与接口。能力训练已独立到 app/training.js。
  * - 兑换 → 入持有库存(owned)，不自动装配；玩家在库存中自行「装配/卸下」。
- * - 退款：移除库存退回积分(装配中同时卸下)；refundAllCosmetics 供训练页全部洗点调用。
+ * - 装扮页已移除退款功能(v2.0)；refundAllCosmetics 仅供训练页"全部洗点"调用。
  * - 装扮方案：从 4 类(尾影/球拍/上衣/溅射)各选 1 组合(至少 1 类至多 4 类)，自定义名，最多 8 个。
  * - 网页版禁用（数据只留本地应用端）。
  * ============================================================ */
@@ -88,35 +88,7 @@
     PPD.setStatus('撞击溅射已卸下（恢复波纹）');
   }
 
-  // ---------- 退款(移除库存,装配中同时卸下) ----------
-  function refund(type, id, cost) {
-    const o = PPD.app.owned;
-    if (type === 'trail') o.trail = o.trail.filter((x) => x !== id);
-    else if (type === 'paddle') o.paddle = o.paddle.filter((x) => x !== id);
-    else if (type === 'shirt') o.shirt = o.shirt.filter((x) => x !== id);
-    else return;
-    if (PPD.app.equip[type] === id) PPD.app.equip[type] = null;
-    PPD.app.points += cost;
-    if (PPD.savePoints) PPD.savePoints();
-    if (PPD.saveOwned) PPD.saveOwned();
-    if (PPD.saveEquip) PPD.saveEquip();
-    if (PPD.refreshPoints) PPD.refreshPoints();
-    renderDressup();
-    PPD.setStatus('已退款，退回 ' + cost + ' 积分');
-  }
-  function refundSplash() {
-    if (!PPD.app.owned.splash) return;
-    PPD.app.owned.splash = false;
-    PPD.app.equip.splash = false;
-    PPD.app.points += SPLASH_COST;
-    if (PPD.savePoints) PPD.savePoints();
-    if (PPD.saveOwned) PPD.saveOwned();
-    if (PPD.saveEquip) PPD.saveEquip();
-    if (PPD.refreshPoints) PPD.refreshPoints();
-    renderDressup();
-    PPD.setStatus('已退款，退回 ' + SPLASH_COST + ' 积分');
-  }
-  // 全部外观退款（供训练页"全部洗点"调用）：清空库存与装配，返回退回积分
+  // 全部外观退款（仅供训练页"全部洗点"调用，装扮页已移除退款功能 v2.0）：清空库存与装配，返回退回积分
   function refundAllCosmetics() {
     let back = 0;
     const o = PPD.app.owned;
@@ -163,11 +135,10 @@
   function shopItem(nameHtml, btnHtml) {
     return '<div class="s-item"><div class="t-info">' + nameHtml + '</div><span class="t-btns">' + btnHtml + '</span></div>';
   }
-  function ownedItemBtn(type, id, cost, equipped) {
-    const eqBtn = equipped
+  function ownedItemBtn(type, id, equipped) {
+    return equipped
       ? '<button class="btn small" data-action="unequip" data-type="' + type + '">已装配(卸下)</button>'
       : '<button class="btn small" data-action="equip" data-type="' + type + '" data-id="' + id + '">装配</button>';
-    return eqBtn + '<button class="btn small" data-action="refund" data-type="' + type + '" data-id="' + id + '" data-cost="' + cost + '">退款</button>';
   }
 
   function renderDressup() {
@@ -177,27 +148,26 @@
     const trailHtml = TRAILS.map((x) => {
       const has = (o.trail || []).includes(x.id);
       return has
-        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('trail', x.id, x.cost, eq.trail === x.id))
+        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('trail', x.id, eq.trail === x.id))
         : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="trail" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
     }).join('');
     const paddleHtml = PADDLES.map((x) => {
       const has = (o.paddle || []).includes(x.id);
       return has
-        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('paddle', x.id, x.cost, eq.paddle === x.id))
+        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('paddle', x.id, eq.paddle === x.id))
         : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="paddle" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
     }).join('');
     const shirtHtml = SHIRTS.map((x) => {
       const has = (o.shirt || []).includes(x.id);
       return has
-        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('shirt', x.id, x.cost, eq.shirt === x.id))
+        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('shirt', x.id, eq.shirt === x.id))
         : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="shirt" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
     }).join('');
     const splashHtml = o.splash
       ? shopItem('<b>撞击溅射</b> <span class="t-owned">持有</span>',
-          (eq.splash
+          eq.splash
             ? '<button class="btn small" data-action="splash-unequip">已装配(卸下)</button>'
-            : '<button class="btn small" data-action="splash-equip">装配</button>') +
-          '<button class="btn small" data-action="splash-refund">退款</button>')
+            : '<button class="btn small" data-action="splash-equip">装配</button>')
       : shopItem('<b>撞击溅射</b>', '<button class="btn small" data-action="splash-own">兑换 ' + SPLASH_COST + '</button>');
     if (PPD.ui.dressupList) PPD.ui.dressupList.innerHTML =
       '<h3>尾影特效</h3>' + trailHtml +
@@ -265,8 +235,6 @@
     else if (a === 'unequip') unequip(type);
     else if (a === 'splash-equip') equipSplash();
     else if (a === 'splash-unequip') unequipSplash();
-    else if (a === 'refund') refund(type, id, cost);
-    else if (a === 'splash-refund') refundSplash();
     else if (a === 'plan-apply') applyPlan(parseInt(el.getAttribute('data-idx'), 10) || 0);
     else if (a === 'plan-delete') deletePlan(parseInt(el.getAttribute('data-idx'), 10) || 0);
   }
@@ -279,8 +247,6 @@
   PPD.ownSplash = ownSplash;
   PPD.equipCosmetic = equip;
   PPD.unequipCosmetic = unequip;
-  PPD.refundCosmetic = refund;
-  PPD.refundSplash = refundSplash;
   PPD.refundAllCosmetics = refundAllCosmetics;
   PPD.savePlan = savePlan;
   PPD.applyPlan = applyPlan;

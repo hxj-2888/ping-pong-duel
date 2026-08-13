@@ -329,7 +329,12 @@
           case 'bounce': {
             PPD.GameAudio.bounce();
             const bb = (m.s && m.s.b) || null;
-            if (bb) PPD.addFx('bounce', bb[0], bb[1], bb[2], (m.s.t || PPD.app.snapB.t) / 1000);
+            if (bb) {
+              // 发球阶段(ph=0)落台特效按发球方归属,修复开局 lastHitter 残留导致的波纹+溅射同屏
+              const inServe = m.s.ph === 0;
+              const hitterSide = inServe ? m.s.sv : (PPD.app.lastHitter >= 0 ? PPD.app.lastHitter : -1);
+              PPD.addFx('bounce', bb[0], bb[1], bb[2], (m.s.t || PPD.app.snapB.t) / 1000, hitterSide);
+            }
             break;
           }
           case 'net': PPD.GameAudio.net(); break;
@@ -388,6 +393,9 @@
       PPD.app.snapA = null;
       PPD.app.lastPhase = -1;
       PPD.app.lastEventKeys.clear();
+      // 撞击特效残留修复:rematch 新一局清空旧特效与击球者归属
+      PPD.app.fx.length = 0;
+      PPD.app.lastHitter = -1;
     });
     net.on('error', (e) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)

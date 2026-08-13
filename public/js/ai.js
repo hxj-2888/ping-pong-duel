@@ -234,6 +234,9 @@
     }
     const p = engine.players[side];
     p.speedMul = 1 + speedBonus; // 敏捷>1 移动速度加成（最大 +25%），引擎 step 每帧应用
+    // v2.0:AI 预警闪烁(扣杀/低平预告 warnSmash 0.1s)与反击感叹号(exclaimT)计时衰减
+    if (p.warnT > 0) { p.warnT -= dt; if (p.warnT <= 0) { p.warnT = 0; p.warnSmash = 0; } }
+    if (p.exclaimT > 0) { p.exclaimT -= dt; if (p.exclaimT <= 0) p.exclaimT = 0; }
     const opp = engine.players[1 - side];
     const b = engine.ball;
     const f = p.facing;
@@ -441,6 +444,8 @@
             else if (s.lowThisBall) lp = 1;
             else if (s.lobThisBall) { lb = 1; pu = 1; }
             else pu = 1;
+            // v2.0:AI 决定扣杀/低平快球(含变招低平)时身体黄闪预警 0.1s,提醒玩家准备反击;高吊/普通回球不预警
+            if (sm === 1 || lp === 1) { p.warnSmash = 1; p.warnT = 0.1; }
             // 攻击溢出（概率已满/无基础仍调高）→ 本次回球落点更刁钻（aimBias 放大，对手位置门更难接）
             if (smashOver > 0) p.aimBias *= (1 + smashOver);
           }
