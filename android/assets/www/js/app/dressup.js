@@ -2,7 +2,7 @@
  * app/dressup.js — 装扮系统页（v2.0）：外观库存/装配卸下/退款 + 装扮方案
  * 通过共享对象 PPD 访问公共状态与接口。能力训练已独立到 app/training.js。
  * - 兑换 → 入持有库存(owned)，不自动装配；玩家在库存中自行「装配/卸下」。
- * - 装扮页已移除退款功能(v2.0)；refundAllCosmetics 仅供训练页"全部洗点"调用。
+ * - 装扮页已移除退款功能(v2.0)；训练页"全部洗点"也只退训练积分、不再退外观积分。
  * - 装扮方案：从 4 类(尾影/球拍/上衣/溅射)各选 1 组合(至少 1 类至多 4 类)，自定义名，最多 8 个。
  * - 网页版禁用（数据只留本地应用端）。
  * ============================================================ */
@@ -86,21 +86,6 @@
     if (PPD.saveEquip) PPD.saveEquip();
     renderDressup();
     PPD.setStatus('撞击溅射已卸下（恢复波纹）');
-  }
-
-  // 全部外观退款（仅供训练页"全部洗点"调用，装扮页已移除退款功能 v2.0）：清空库存与装配，返回退回积分
-  function refundAllCosmetics() {
-    let back = 0;
-    const o = PPD.app.owned;
-    for (const id of o.trail || []) back += costOf(TRAILS, id);
-    for (const id of o.paddle || []) back += costOf(PADDLES, id);
-    for (const id of o.shirt || []) back += costOf(SHIRTS, id);
-    if (o.splash) back += SPLASH_COST;
-    PPD.app.owned = { trail: [], paddle: [], shirt: [], splash: false };
-    PPD.app.equip = { trail: null, paddle: null, shirt: null, splash: false };
-    if (PPD.saveOwned) PPD.saveOwned();
-    if (PPD.saveEquip) PPD.saveEquip();
-    return back;
   }
 
   // ---------- 装扮方案 ----------
@@ -247,7 +232,6 @@
   PPD.ownSplash = ownSplash;
   PPD.equipCosmetic = equip;
   PPD.unequipCosmetic = unequip;
-  PPD.refundAllCosmetics = refundAllCosmetics;
   PPD.savePlan = savePlan;
   PPD.applyPlan = applyPlan;
   PPD.deletePlan = deletePlan;
