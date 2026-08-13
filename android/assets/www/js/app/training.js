@@ -108,7 +108,7 @@
     PPD.setStatus(item.name + ' 降级，退回 ' + back + ' 积分');
   }
 
-  // 全部洗点：训练归 0 + 所有已购外观退款（外观退款由 dressup.js 提供成本与清理）
+  // 全部洗点:训练归 0 退回训练积分(装扮/外观积分不在训练页洗点,v2.0 已去掉)
   function resetAll() {
     let back = 0;
     for (const it of TRAINING_ITEMS) {
@@ -116,13 +116,11 @@
       for (let i = 0; i < lv; i++) back += LEVEL_COST[i];
       PPD.app.training[it.key] = 0;
     }
-    if (PPD.refundAllCosmetics) back += PPD.refundAllCosmetics();
-    if (back <= 0) { PPD.setStatus('当前没有可洗点的投入'); return; }
+    if (back <= 0) { PPD.setStatus('当前没有可洗点的训练投入'); return; }
     PPD.app.points += back;
     if (PPD.savePoints) PPD.savePoints();
     if (PPD.saveTraining) PPD.saveTraining();
     refreshPoints();
-    if (PPD.renderDressup) PPD.renderDressup();
     renderTrainingPage();
     PPD.setStatus('全部洗点完成，退回 ' + back + ' 积分');
   }
