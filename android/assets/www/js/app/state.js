@@ -88,6 +88,14 @@
     hud: document.getElementById('hud'),
     hudP1: document.getElementById('hudP1'),
     hudP2: document.getElementById('hudP2'),
+    flagP1: document.getElementById('flagP1'),   // HUD 左侧小旗帜（队伍旗帜标示）
+    flagP2: document.getElementById('flagP2'),   // HUD 右侧小旗帜
+    // 对局开场渲染层（双方旗帜 + 队名 + VS，渲染结束进入对局）
+    teamIntro: document.getElementById('teamIntro'),
+    tiFlagL: document.getElementById('tiFlagL'),
+    tiFlagR: document.getElementById('tiFlagR'),
+    tiNameL: document.getElementById('tiNameL'),
+    tiNameR: document.getElementById('tiNameR'),
     phaseBanner: document.getElementById('phaseBanner'),
     pointToast: document.getElementById('pointToast'),
     hintBar: document.getElementById('hintBar'),
@@ -229,6 +237,8 @@
     publicServerUrl: '',  // 审计 #8:公网联机服务器地址(手机端战绩同步,设置面板填写;ws:// 或 http://)
     engine: null,
     net: null,
+    matchTeams: null,   // 本局双方队伍 [{id,name,color,accent}, ...]（本地/人机/AI 观战；联机不设置）
+    introActive: false, // 对局开场渲染进行中：冻结物理、禁止暂停（见 loop.js / input.js）
     roomCode: '',
     names: ['玩家1', '玩家2'],
     keys: { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 },

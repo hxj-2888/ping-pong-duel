@@ -29,6 +29,14 @@
         <label>你的昵称
           <input id="nameInput" maxlength="12" placeholder="球员名字" value="乒乓球手">
         </label>
+        <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
+        <div class="team-pick">
+          <label class="ai-label">我的队伍
+            <span class="team-flag" id="teamFlagMe"></span>
+            <select id="teamMe"></select>
+          </label>
+          <input id="teamMeName" class="team-name" maxlength="12" placeholder="自定义队名">
+        </div>
         <button id="btnLocal" class="btn primary">本地双人对战（分屏）</button>
         <button id="btnAI" class="btn primary">人机对战（单机）</button>
         <div class="row ai-row">
@@ -40,6 +48,13 @@
               <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
             </select>
           </label>
+        </div>
+        <div class="team-pick">
+          <label class="ai-label">电脑队伍
+            <span class="team-flag" id="teamFlagOpp"></span>
+            <select id="teamOpp"></select>
+          </label>
+          <input id="teamOppName" class="team-name" maxlength="12" placeholder="自定义队名">
         </div>
         <div class="row ai-row">
           <button id="btnAIVsAI" class="btn primary">AI 观战（AI vs AI）</button>
@@ -61,6 +76,21 @@
               <option value="3" disabled>地狱 🔒</option>
             </select>
           </label>
+        </div>
+        <!-- AI 观战：难度下拉旁选择红/蓝双方队伍（系统默认队名可自定义） -->
+        <div class="team-pick">
+          <label class="ai-label">红方队伍
+            <span class="team-flag" id="teamFlagA"></span>
+            <select id="teamA"></select>
+          </label>
+          <input id="teamAName" class="team-name" maxlength="12" placeholder="自定义队名">
+        </div>
+        <div class="team-pick">
+          <label class="ai-label">蓝方队伍
+            <span class="team-flag" id="teamFlagB"></span>
+            <select id="teamB"></select>
+          </label>
+          <input id="teamBName" class="team-name" maxlength="12" placeholder="自定义队名">
         </div>
         <div class="row">
           <button id="btnNetEntry" class="btn primary">🎮 联机对战</button>
@@ -129,6 +159,7 @@
   <div id="gameScreen" style="display:none">
     <div id="hud">
       <div class="player-box">
+        <span class="team-flag hud-flag" id="flagP1"></span>
         <span id="hudP1">玩家1</span>
         <span class="score" id="score1">0</span>
       </div>
@@ -139,6 +170,7 @@
       <div class="player-box right">
         <span class="score" id="score2">0</span>
         <span id="hudP2">玩家2</span>
+        <span class="team-flag hud-flag" id="flagP2"></span>
       </div>
     </div>
     <div id="phaseBanner"></div>
@@ -232,6 +264,21 @@
         <button id="btnResume" class="btn primary">继续游戏</button>
         <button id="btnPauseExit" class="btn">退出比赛（返回主页面）</button>
       </div>
+    </div>
+    <!-- 对局开场渲染：双方旗帜 + 队名 + VS（渲染结束进入对局；本地/人机/AI 观战生效） -->
+    <div id="teamIntro" class="team-intro" style="display:none">
+      <div class="ti-row">
+        <div class="ti-team">
+          <div class="ti-flag" id="tiFlagL"></div>
+          <div class="ti-name" id="tiNameL"></div>
+        </div>
+        <div class="ti-vs">VS</div>
+        <div class="ti-team">
+          <div class="ti-name" id="tiNameR"></div>
+          <div class="ti-flag" id="tiFlagR"></div>
+        </div>
+      </div>
+      <div class="ti-tag">比赛即将开始</div>
     </div>
     <!-- 手机端触控（触屏设备才显示）：摇杆移动 + 蹲下按钮 + 说明书入口；扣球用上滑手势（单击=推球） -->
     <div id="touchControls" class="touch-controls" style="display:none">
@@ -440,6 +487,7 @@
   <script src="js/ai.js"></script>
   <!-- 游戏界面：按功能拆分的独立小模块（app/state.js 提供共享状态） -->
   <script src="js/app/state.js"></script>
+  <script src="js/app/teams.js"></script>
   <script src="js/app/records.js"></script>
   <script src="js/app/training.js"></script>
   <script src="js/app/dressup.js"></script>

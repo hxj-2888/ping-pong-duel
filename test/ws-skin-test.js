@@ -47,12 +47,12 @@ function wsClient() {
     // A 收到加入方 room 广播:skins = [skinA, skinB]
     const roomA = await a.next((m) => m.t === 'room' && m.side === 1);
     check('房主收到 room 广播含双方 skins', !!roomA.skins && roomA.skins[0].trail === 'red' && roomA.skins[1].paddle === 'skinB' && roomA.skins[1].shirt === 'purple');
-    // B 收到 state 广播:skins 正确
-    const stateB = await b.next((m) => m.t === 'state');
+    // B 收到 state 广播:skins 正确（等待双方 skins 齐全的 state——房主加入前广播的早期 state 中 skins[1] 可能为 null）
+    const stateB = await b.next((m) => m.t === 'state' && m.skins && m.skins[0] && m.skins[1]);
     check('加入方收到 state 含双方 skins', !!stateB.skins && stateB.skins[0].paddle === 'skinC' && stateB.skins[0].shirt === 'green' && stateB.skins[1].splash === false);
     check('splash 白名单(只有 A 装 true)', stateB.skins[0].splash === true);
-    // A 也收 state
-    const stateA = await a.next((m) => m.t === 'state');
+    // A 也收 state（同样等待对方 skin 就位）
+    const stateA = await a.next((m) => m.t === 'state' && m.skins && m.skins[1]);
     check('房主收到 state 含对方 skin', !!stateA.skins && stateA.skins[1].paddle === 'skinB');
     a.ws.close(); b.ws.close();
     console.log(failures === 0 ? '\n联机皮肤同步测试通过 ✓' : `\n${failures} 项失败 ✗`);

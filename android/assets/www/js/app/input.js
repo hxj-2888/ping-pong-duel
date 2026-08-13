@@ -294,6 +294,7 @@
   }
 
   function togglePause() {
+    if (PPD.app.introActive) return; // 对局开场渲染期间不可暂停
     if (PPD.app.mode !== 'ai' && PPD.app.mode !== 'local' && PPD.app.mode !== 'aivai') return;
     PPD.app.paused = !PPD.app.paused;
     PPD.show(PPD.ui.pausePanel, PPD.app.paused);

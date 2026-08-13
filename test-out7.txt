@@ -1,0 +1,8 @@
+PASS teamFixed=true：红蓝观众总数与预期一致
+PASS teamFixed=true：两端 viewSide 红蓝数量一致（背景统一红左蓝右）
+PASS teamFixed=true：红方观众在左（x<0 为红）
+PASS 原逻辑：viewSide 0 红蓝与预期一致
+PASS 原逻辑：viewSide 1 红蓝与预期一致
+PASS 原逻辑：两端 viewSide 红蓝互换（分屏差异的根因）
+
+分屏观众队色一致性验证全部通过 ✓
