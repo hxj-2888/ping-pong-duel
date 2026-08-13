@@ -92,8 +92,7 @@ const ELEMENT_IDS = [
   // 说明书（独立全屏页面）：电脑/手机统一在主页设置按钮下方；滑钮滚动
   'manualPanel', 'btnManualMenu', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
-  'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitBallVal', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot',
-  'hrSmashRow', 'hrLobRow', 'smashStatus', 'lobStatus',
+  'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility',
   'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
@@ -272,7 +271,7 @@ async function main() {
     check('菜单启动：模式为空', t.app.mode === null);
     t.click('btnLocal');
     check('本地模式已启动', t.app.mode === 'local' && !!t.app.engine);
-    check('左上角显示接球箱尺寸', t.elements.get('hitBallVal').textContent === `${(TT.RULES.HITBOX_HX * 2).toFixed(1)}×${(TT.RULES.HITBOX_HZ * 2).toFixed(1)}×${(TT.RULES.HITBOX_Y_TOP - TT.RULES.HITBOX_Y_BOTTOM).toFixed(1)}m`);
+    check('接球箱文字栏已移除（判定指示不显示碰撞箱尺寸数字,v2.0）', t.elements.get('hitBallVal') === undefined);
     check('虚线面板不再显示蹲下最低接球（说明已移入玩法说明）', t.elements.get('hitPaddleVal').textContent === '');
     check('判定范围虚线默认关闭', t.app.showHitRanges === false);
     t.runFrames(3);
@@ -853,8 +852,8 @@ async function main() {
     t.app.showHitRanges = true;
     t.runFrames(10);
     check('AI 观战虚线面板：实时球高', t.elements.get('ballHeight').textContent !== '-');
-    check('AI 观战虚线面板：扣杀/高吊行隐藏',
-      t.elements.get('hrSmashRow').style.display === 'none' && t.elements.get('hrLobRow').style.display === 'none');
+    check('AI 观战虚线面板：扣杀/高吊行已移除（v2.0 判定指示只保留球高/进箱）',
+      t.elements.get('hrSmashRow') === undefined && t.elements.get('hrLobRow') === undefined);
     t.app.showHitRanges = false;
     t.runFrames(2);
     // 暂停 → 面板显示双方难度 → 调整红方难度生效

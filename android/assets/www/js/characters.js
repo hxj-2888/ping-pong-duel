@@ -232,7 +232,8 @@
     const dAt = (p) => cam.depth(p);
     const col = STICK[pl.side];
     const skin = (pl.paddleSkin && PADDLE_SKINS[pl.paddleSkin]) || null; // 养成球拍皮肤(v1.8.0)
-    const shirtCol = (pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || col.shirt; // 养成上衣换色(v2.0)
+    const warn = !!pl.warnSmash; // v2.0:AI 扣杀/低平预告 → 上衣临时换黄(轻微闪烁 0.1s)
+    const shirtCol = warn ? '#eab308' : ((pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || col.shirt);
     const lineR = 0.042; // 骨线粗（加粗圆头）
 
     // 腿（髋→膝→脚；站立时接近直腿，蹲下时膝盖前屈）
@@ -284,6 +285,19 @@
 
     parts.sort((a, b) => b.d - a.d);
     for (const p of parts) p.fn();
+
+    // v2.0:反击成功 → 头上感叹号(随头移动,0.8s 淡出;只读标记不影响 AI 操作)
+    if (pl.exclaimT > 0) {
+      const q = cam.project(headCenter);
+      if (q) {
+        const k = Math.max(0, Math.min(1, pl.exclaimT / 0.8));
+        const fs = Math.max(16, 0.30 * q.s);
+        ctx.fillStyle = `rgba(250,204,21,${(0.95 * k).toFixed(3)})`;
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('!', q.x, q.y - 0.38 * q.s);
+      }
+    }
 
     // 球拍：billboard 绘制（始终面向镜头，亮色拍面 + 手柄，确保清晰可见）
     if (pl.paddle && wristR) {
