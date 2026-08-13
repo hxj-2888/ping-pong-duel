@@ -190,6 +190,7 @@
         shirtSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.shirt || null) : null),
         // 问号(扣杀/低平预警)仅在判定指示开启时显示；感叹号(反击成功)始终显示(v2.0)
         warnSmash: PPD.app.showHitRanges ? (p.warnSmash || 0) : 0,
+        warnT: p.warnT || 0,   // 问号剩余时长(渐变消失用)
         exclaimT: p.exclaimT || 0,
       })),
       ball: engine.ball.inHand

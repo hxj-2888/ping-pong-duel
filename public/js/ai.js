@@ -444,8 +444,8 @@
             else if (s.lowThisBall) lp = 1;
             else if (s.lobThisBall) { lb = 1; pu = 1; }
             else pu = 1;
-            // v2.0:AI 决定扣杀/低平快球(含变招低平)时身体黄闪预警 0.1s,提醒玩家准备反击;高吊/普通回球不预警
-            if (sm === 1 || lp === 1) { p.warnSmash = 1; p.warnT = 0.1; }
+            // v2.0:AI 决定扣杀/低平快球(含变招低平)时头部「?」预警 0.2s(提前 0.1s + 渐变消失),提醒玩家准备反击
+            if (sm === 1 || lp === 1) { p.warnSmash = 1; p.warnT = 0.2; }
             // 攻击溢出（概率已满/无基础仍调高）→ 本次回球落点更刁钻（aimBias 放大，对手位置门更难接）
             if (smashOver > 0) p.aimBias *= (1 + smashOver);
           }
