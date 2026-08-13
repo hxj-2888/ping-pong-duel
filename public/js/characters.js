@@ -286,12 +286,14 @@
     parts.sort((a, b) => b.d - a.d);
     for (const p of parts) p.fn();
 
-    // v2.0:AI 扣杀/低平预警 → 头部右上方黄色「?」(0.1s,判定指示开启时由 viewModel 控制是否透传)
+    // v2.0:AI 扣杀/低平预警 → 头部右上方黄色「?」(0.2s:前 0.1s 全显 + 后 0.1s 渐变淡出)
     if (pl.warnSmash) {
       const q = cam.project(headCenter);
       if (q) {
+        // 渐变消失:最后 0.1s(warnT≤0.1)透明度 1→0
+        const fade = Math.max(0, Math.min(1, (pl.warnT || 0) / 0.1));
         const fs = Math.max(16, 0.30 * q.s);
-        ctx.fillStyle = 'rgba(250,204,21,0.95)';
+        ctx.fillStyle = `rgba(250,204,21,${(0.95 * fade).toFixed(3)})`;
         ctx.font = `bold ${fs}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText('?', q.x + 0.30 * q.s, q.y - 0.30 * q.s);
