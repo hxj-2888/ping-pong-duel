@@ -60,13 +60,16 @@
     const p = state.players[pi], b = state.ball, st = p.stroke;
     if (st.validVel) {
       const inCounter = b.hitType === 2 || b.hitType === 3; // 来球是扣杀或低平快球（反击奖励判定用）
+      // v2.0:记录"反击"标记(推球回击扣杀/低平,AI 也记录)——人机/观战感叹号触发依据
+      const isCounterHit = inCounter && st.type !== 2;
+      b.wasCounter = isCounterHit ? 1 : 0;
       // 采用求解器验证过的精确出球（方向+速度+旋转均一致）
       b.vel = { ...st.validVel };
       b.spin = { ...st.validSpin };
       b.hitBy = pi;
       b.hitType = st.type;
       // 操作奖励：人类（非 AI）以推球回击扣杀/低平快球成功 → 该回球视为扣杀（AI 应对概率减半，见 ai.js）
-      b.counterSmash = (inCounter && st.type !== 2 && !state.players[pi].isAI) ? 1 : 0;
+      b.counterSmash = (isCounterHit && !state.players[pi].isAI) ? 1 : 0;
       b.lastBounce = pi;
       b.netTouched = false;
       state.mayHit = [false, false];
@@ -125,10 +128,13 @@
       }
     }
     const inCounter = b.hitType === 2 || b.hitType === 3; // 来球是扣杀或低平快球（反击奖励判定用）
+    // v2.0:记录"反击"标记(推球回击扣杀/低平,AI 也记录)——人机/观战感叹号触发依据
+    const isCounterHit = inCounter && st.type !== 2;
+    b.wasCounter = isCounterHit ? 1 : 0;
     b.hitBy = pi;
     b.hitType = st.type;
     // 操作奖励：人类（非 AI）以推球回击扣杀/低平快球成功 → 该回球视为扣杀（AI 应对概率减半，见 ai.js）
-    b.counterSmash = (inCounter && st.type !== 2 && !state.players[pi].isAI) ? 1 : 0;
+    b.counterSmash = (isCounterHit && !state.players[pi].isAI) ? 1 : 0;
     b.lastBounce = pi;
     b.netTouched = false;
     b.netBlocked = false;

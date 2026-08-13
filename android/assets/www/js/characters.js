@@ -232,8 +232,10 @@
     const dAt = (p) => cam.depth(p);
     const col = STICK[pl.side];
     const skin = (pl.paddleSkin && PADDLE_SKINS[pl.paddleSkin]) || null; // 养成球拍皮肤(v1.8.0)
+    // 队伍旗帜队色（app/teams.js 按本局双方队伍注入）：覆盖默认红/蓝上衣与拍面，观众颜色同步
+    const teamCol = pl.teamColor || col.shirt;
     // v2.0:AI 扣杀/低平预告不再换上衣黄闪,改为头部「?」提示(见下方绘制)
-    const shirtCol = (pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || col.shirt;
+    const shirtCol = (pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || teamCol;
     const lineR = 0.042; // 骨线粗（加粗圆头）
 
     // 腿（髋→膝→脚；站立时接近直腿，蹲下时膝盖前屈）
@@ -319,7 +321,7 @@
         const size = R.BLADE_WID * q.s * 1.15;
         ctx.save();
         ctx.translate(q.x, q.y);
-        ctx.fillStyle = skin ? skin.face : col.paddleFace; // 养成球拍外观：装备后拍面换色
+        ctx.fillStyle = skin ? skin.face : (pl.teamColor || col.paddleFace); // 养成球拍外观：装备后拍面换色；否则用旗帜队色
         ctx.strokeStyle = 'rgba(15,20,30,0.65)';
         ctx.lineWidth = Math.max(1, size * 0.045);
         ctx.beginPath();

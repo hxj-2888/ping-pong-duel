@@ -330,7 +330,8 @@
   // 右侧=敌方观众（蓝色）；得分方欢呼举手、对方摇头
   const CROWD_OUTLINE = 'rgba(15,20,28,0.45)';
   const CROWD_R = 0.028; // 骨线粗
-  const FAN_COL = ['rgba(240,110,92,0.95)', 'rgba(110,160,246,0.95)']; // 红方 / 蓝方
+  // 观众队色（默认红方/蓝方；对局开始前按双方旗帜队色 setCrowdColors 覆盖，颜色与旗帜同步）
+  let FAN_COL = ['rgba(240,110,92,0.95)', 'rgba(110,160,246,0.95)'];
 
   // 画单个观众（供逐帧全量 / 动画层共用）
   // fast：动画层快速绘制——跳过头/肢体描边，肢体不描边（低开销动效；轮廓细节由下方静态层呈现）
@@ -427,6 +428,19 @@
   // 每个 entry 懒创建（先静态层后动画层，保持 createElement 顺序，兼容测试桩 canvas 序号）。
   let crowdCaches = {}; // { [viewSide]: { static:{key,canvas,ctx}, anim:{key,canvas,ctx,active,animT} } }
   function clearCrowdCache() { crowdCaches = {}; }
+  // 按队伍旗帜队色重设观众颜色（hex → rgba，保持 0.95 风格透明度）；
+  // 队色变化强制重建观众缓存（静态层/动画层都按 FAN_COL 取色，重建后自动用新队色）
+  function setCrowdColors(cols) {
+    if (!Array.isArray(cols) || cols.length < 2) return;
+    const toRGBA = (hex) => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+      if (!m) return hex;
+      const n = parseInt(m[1], 16);
+      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},0.95)`;
+    };
+    FAN_COL = [toRGBA(cols[0]), toRGBA(cols[1])];
+    clearCrowdCache();
+  }
   // 仅探测 document.createElement 可用性（不在此创建 canvas——避免每帧分配一个探针画布；getContext 能力在首次建缓存时自然验证）
   function crowdCacheSupported() {
     return typeof document !== 'undefined' && !!document.createElement;
@@ -1065,5 +1079,5 @@
     }
   }
 
-  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache };
+  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache, setCrowdColors };
 });

@@ -20,6 +20,8 @@
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
+    // 对局开场渲染期间（introActive）：冻结物理（不步进），画面照常渲染打底（见下方各分支与 skipRender）
+    const intro = !!PPD.app.introActive;
     // 渲染帧率门控：按所选上限（30/60/无上限，默认无上限自动匹配设备刷新率）控制渲染频率；物理仍 120Hz 步进（时钟不前进时放行，兼容测试；无上限=每帧 RAF 都渲染）
     const frameRate = PPD.app.quality && PPD.app.quality.frameRate ? PPD.app.quality.frameRate : 'unlimited';
     const renderDt = now - lastRender;
@@ -60,7 +62,7 @@
     const renderNow = shouldRender && !skipRender;
 
     if (PPD.app.mode === 'local' && PPD.app.engine) {
-      if (!PPD.app.paused) {
+      if (!PPD.app.paused && !intro) {
         acc += dt;
         const step = 1 / 120;
         let n = 0;
@@ -81,7 +83,7 @@
         PPD.renderLocal();
       }
     } else if (PPD.app.mode === 'ai' && PPD.app.engine) {
-      if (!PPD.app.paused) {
+      if (!PPD.app.paused && !intro) {
         acc += dt;
         const step = 1 / 120;
         let n = 0;
@@ -119,7 +121,7 @@
     } else if (PPD.app.mode === 'aivai' && PPD.app.engine) {
       // AI 观战（AI vs AI）：双方均由 AI 控制，玩家只看不操作；
       // 暂停中可调整双方难度（loop 每帧读 app.aiLevelA/B，改后即时生效）
-      if (!PPD.app.paused) {
+      if (!PPD.app.paused && !intro) {
         acc += dt;
         const step = 1 / 120;
         let n = 0;
@@ -142,7 +144,7 @@
       }
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
       // 设置暂停（需求 10）：暂停期间冻结输入发送（服务端继续推进，恢复时快照自动锚定）
-      if (!PPD.app.paused) {
+      if (!PPD.app.paused && !intro) {
       // 输入发送（50ms 节流 + 按键变化立即补发）：
       // - Cloudflare DO 官方建议"批量 50-100ms、少而大的消息"，大量小消息会压垮单个 DO；
       //   60Hz×2 客户端 = 120 条/秒会拖垮 DO（实测公网部署端广播塌到 ~1Hz）并快速吃满

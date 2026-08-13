@@ -188,6 +188,8 @@
         // 装扮只给本机主玩家(本地/人机)；AI 观战双方 AI 恒默认外观，不受玩家装扮影响
         paddleSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.paddle || null) : null),
         shirtSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.shirt || null) : null),
+        // 队伍旗帜队色（本地/人机/AI 观战按本局队伍注入，随旗帜同步球服颜色；联机无 matchTeams → 默认红蓝）
+        teamColor: (PPD.app.matchTeams && PPD.app.matchTeams[p.side]) ? PPD.app.matchTeams[p.side].color : null,
         // 问号(扣杀/低平预警)仅在判定指示开启时显示；感叹号(反击成功)始终显示(v2.0)
         warnSmash: PPD.app.showHitRanges ? (p.warnSmash || 0) : 0,
         warnT: p.warnT || 0,   // 问号剩余时长(渐变消失用)

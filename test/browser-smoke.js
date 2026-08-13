@@ -14,7 +14,7 @@ const SCRIPTS = [
   'engine/rules.js', 'engine/math.js', 'engine/state.js', 'engine/physics.js',
   'engine/shots.js', 'engine/strokes.js', 'engine.js',
   'render.js', 'characters.js', 'network.js', 'audio.js', 'ai.js',
-  'app/state.js', 'app/records.js', 'app/input.js', 'app/render.js', 'app/hud.js',
+  'app/state.js', 'app/teams.js', 'app/records.js', 'app/input.js', 'app/render.js', 'app/hud.js',
   'app/net.js', 'app/modes.js', 'app/loop.js', 'app/main.js',
 ];
 
@@ -100,6 +100,10 @@ const ELEMENT_IDS = [
   'touchControls', 'joyBase', 'joyKnob', 'btnCrouch', 'btnSmash',
   'gameTools', 'btnPause', 'btnExit', 'fpsMeter',
   'pausePanel', 'btnResume', 'btnPauseExit',
+  // 队伍与旗帜（v2.1）：主菜单队伍选择器 + HUD 小旗帜 + 对局开场渲染层
+  'teamMe', 'teamMeName', 'teamFlagMe', 'teamOpp', 'teamOppName', 'teamFlagOpp',
+  'teamA', 'teamAName', 'teamFlagA', 'teamB', 'teamBName', 'teamFlagB',
+  'flagP1', 'flagP2', 'teamIntro', 'tiFlagL', 'tiFlagR', 'tiNameL', 'tiNameR',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/60/无上限)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
@@ -270,6 +274,7 @@ async function main() {
     const t = await boot();
     check('菜单启动：模式为空', t.app.mode === null);
     t.click('btnLocal');
+    await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）再进入后续用例
     check('本地模式已启动', t.app.mode === 'local' && !!t.app.engine);
     check('接球箱文字栏已移除（判定指示不显示碰撞箱尺寸数字,v2.0）', t.elements.get('hitBallVal') === undefined);
     check('虚线面板不再显示蹲下最低接球（说明已移入玩法说明）', t.elements.get('hitPaddleVal').textContent === '');
@@ -617,6 +622,7 @@ async function main() {
       const t2 = await boot();
       t2.ppd.app.showHitRanges = true; // 本测试聚焦提示音：显式开启判定显示（默认已关闭）
       t2.click('btnLocal');
+      await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
       const eng2 = t2.app.engine;
       TT.resetMatch(eng2);
       const p2 = eng2.players[0];
@@ -748,6 +754,7 @@ async function main() {
   {
     const t = await boot();
     t.click('btnAI');
+    await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     check('AI 模式启动', t.app.mode === 'ai' && !!t.app.engine);
     // 让电脑先发球
     const eng = t.app.engine;
@@ -834,6 +841,7 @@ async function main() {
     t.elements.get('aiLevelA').value = '2';
     t.elements.get('aiLevelB').value = '1';
     t.click('btnAIVsAI');
+    await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     check('AI 观战启动', t.app.mode === 'aivai' && !!t.app.engine);
     check('AI 观战读取双方难度', t.app.aiLevelA === 2 && t.app.aiLevelB === 1);
     t.runFrames(2); // netInfo 在帧循环内刷新
@@ -908,6 +916,7 @@ async function main() {
     check('通关记录：面板显示「暂无」占位', t.elements.get('recordsPanel').innerHTML.indexOf('暂无') !== -1);
     t.elements.get('aiLevel').value = '2'; // 困难
     t.click('btnAI');
+    await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     check('通关记录：困难 AI 模式启动', t.app.mode === 'ai' && t.app.aiLevel === 2);
     const eng = t.app.engine;
     eng.server = 0; eng.startServer = 0;
@@ -978,6 +987,7 @@ async function main() {
   {
     const t = await boot();
     t.click('btnAI');
+    await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     // 未通关地狱：暂停面板不显示调控块
     t.elements.get('btnPause').dispatch('click', {});
     check('未通关地狱：人机暂停无数值调控', t.app.paused === true && t.elements.get('pauseAITune').style.display === 'none');

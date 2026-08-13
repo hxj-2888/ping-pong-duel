@@ -81,6 +81,8 @@
   function backToMenu() {
     hideGameOverNow();
     PPD.app.paused = false;
+    if (PPD.cancelTeamIntro) PPD.cancelTeamIntro(); // 返回主菜单：立即关闭开场渲染（若在对局中）
+    PPD.app.matchTeams = null;
     PPD.app.settingsPause = false; // 设置即暂停：退出对局时复位
     PPD.app.manualPause = false;   // 说明书即暂停：退出对局时复位
     PPD.show(PPD.ui.settingsPanel, false);
@@ -156,6 +158,12 @@
     if (PPD.applyTrainingToPlayer) PPD.applyTrainingToPlayer(PPD.app.engine.players[0]);
     // 取名生效：P1 用主菜单昵称（空回退 玩家1），P2=玩家2
     PPD.app.names = [PPD.getPlayerName() || '玩家1', '玩家2'];
+    // 队伍与旗帜：P1=玩家队（昵称旁选择），P2 恒默认蓝队；观众/球服颜色随旗帜同步
+    const teams = PPD.resolveMatchTeams('local');
+    PPD.app.matchTeams = teams;
+    if (PPD.TTG.setCrowdColors) PPD.TTG.setCrowdColors([teams[0].color, teams[1].color]);
+    PPD.setTeamFlag(PPD.ui.flagP1, teams[0]);
+    PPD.setTeamFlag(PPD.ui.flagP2, teams[1]);
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.show(PPD.ui.menu, false);
@@ -164,6 +172,7 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
+    PPD.showTeamIntro(teams); // 开场渲染：双方旗帜/队名，渲染结束进入对局
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
       'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ,=推球 · .=扣球';
@@ -191,6 +200,12 @@
     if (PPD.applyTrainingToPlayer) PPD.applyTrainingToPlayer(PPD.app.engine.players[0]);
     // 取名生效：比分表/胜负/记录里的「你」→ 昵称（空回退 你）
     PPD.app.names = [PPD.getPlayerName() || '你', '电脑'];
+    // 队伍与旗帜：玩家队（昵称旁）+ 电脑队（难度下拉旁）；观众/球服颜色随旗帜同步
+    const teams = PPD.resolveMatchTeams('ai');
+    PPD.app.matchTeams = teams;
+    if (PPD.TTG.setCrowdColors) PPD.TTG.setCrowdColors([teams[0].color, teams[1].color]);
+    PPD.setTeamFlag(PPD.ui.flagP1, teams[0]);
+    PPD.setTeamFlag(PPD.ui.flagP2, teams[1]);
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.AIC.reset();
@@ -200,6 +215,7 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
+    PPD.showTeamIntro(teams); // 开场渲染：双方旗帜/队名，渲染结束进入对局
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
     PPD.ui.hintBar.innerHTML =
@@ -227,6 +243,12 @@
       (aiNames && aiNames[0]) || '红方 AI',
       (aiNames && aiNames[1]) || '蓝方 AI',
     ];
+    // 队伍与旗帜：红/蓝双方队伍在难度下拉旁选择；观众/AI 球服颜色随旗帜同步
+    const teams = PPD.resolveMatchTeams('aivai');
+    PPD.app.matchTeams = teams;
+    if (PPD.TTG.setCrowdColors) PPD.TTG.setCrowdColors([teams[0].color, teams[1].color]);
+    PPD.setTeamFlag(PPD.ui.flagP1, teams[0]);
+    PPD.setTeamFlag(PPD.ui.flagP2, teams[1]);
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.AIC.reset();
@@ -236,6 +258,7 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
+    PPD.showTeamIntro(teams); // 开场渲染：双方旗帜/队名，渲染结束进入对局
     PPD.updateGameTools();
     const LA = PPD.AIC.LEVELS[PPD.app.aiLevelA], LB = PPD.AIC.LEVELS[PPD.app.aiLevelB];
     PPD.ui.hintBar.innerHTML =
