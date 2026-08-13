@@ -42,6 +42,9 @@
       counterLowBonus: 0,  // 反击低平快球奖励：本次击球是否按"更高球速+刁钻落位"求解（击球前设置、求解后清除）
       isAI: 0,             // 是否 AI 控制（AI 控制时反击奖励不触发，见 ai.js control / strokes.js）
       speedMul: 1,         // 移动速度倍率（敏捷>1 时 AI 加成，最大 1.25；玩家恒为 1）
+      // 养成能力等级（v1.8.0）：{ speed, windup, dur, hitbox } 各 0~5 级。
+      // 仅本地/人机模式在 createEngine 后注入；联机服务器用默认值(恒 0)、不进快照 → 真人对战天然隔离。
+      ability: { speed: 0, windup: 0, dur: 0, hitbox: 0 },
     };
   }
 
