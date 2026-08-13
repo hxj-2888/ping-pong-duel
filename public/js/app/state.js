@@ -127,6 +127,7 @@
     trainingList: document.getElementById('trainingList'),
     shopList: document.getElementById('shopList'),
     btnTrainingBack: document.getElementById('btnTrainingBack'),
+    menuPoints: document.getElementById('menuPoints'),
     touchControls: document.getElementById('touchControls'),
     btnLeft: document.getElementById('btnLeft'),
     btnRight: document.getElementById('btnRight'),
