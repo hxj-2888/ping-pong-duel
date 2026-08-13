@@ -1,10 +1,9 @@
 /* ============================================================
- * app/training.js — 养成系统（v2.0）：对战积分 + 能力训练 + 特效兑换 + 洗点
- * 通过共享对象 PPD 访问公共状态与接口。
+ * app/training.js — 能力训练页（v2.0）：对战积分 + 能力训练 + 全部洗点
+ * 通过共享对象 PPD 访问公共状态与接口。装扮(外观库存/装配/方案)已独立到 app/dressup.js。
  * - 积分：人机按难度(简单1/中等2/困难3/地狱5)+ 胜满负半；本地双人/联机固定 胜3/负1。
  * - 能力训练：移动速度/挥拍延迟/挥拍耗时/碰撞箱，各 5 级；仅本地/人机生效，不同步真人。
- * - 特效兑换：尾影(黄/黑/红)、球拍外观、上衣换色、撞击溅射(替换波纹)，纯本地渲染。
- * - 洗点：训练可逐级降级退回积分；已购外观可退还；支持一键全部洗点。
+ * - 全部洗点：训练归 0 + 所有已购外观退款(调 dressup.refundAllCosmetics)，页面顶部按钮。
  * - 网页版禁用（跟随个人生涯：数据只留本地应用端）。
  * ============================================================ */
 (function () {
@@ -20,28 +19,12 @@
     { key: 'dur', name: '挥拍耗时', per: '-6%', desc: '缩短挥拍总耗时' },
     { key: 'hitbox', name: '碰撞箱', per: '+3%', desc: '扩大接球判定范围' },
   ];
-  const TRAILS = [
-    { id: 'yellow', name: '尾影·黄', cost: 30 },
-    { id: 'black', name: '尾影·黑', cost: 50 },
-    { id: 'red', name: '尾影·红', cost: 80 },
-  ];
-  const PADDLES = [
-    { id: 'skinA', name: '球拍·流光蓝', cost: 20 },
-    { id: 'skinB', name: '球拍·翡翠绿', cost: 40 },
-    { id: 'skinC', name: '球拍·炫彩金', cost: 60 },
-  ];
-  const SHIRTS = [
-    { id: 'green', name: '上衣·翠绿', cost: 20 },
-    { id: 'purple', name: '上衣·紫罗兰', cost: 30 },
-    { id: 'orange', name: '上衣·活力橙', cost: 40 },
-    { id: 'cyan', name: '上衣·海蓝青', cost: 50 },
-  ];
-  const SPLASH_COST = 50;
 
   // ---------- 积分 ----------
   function refreshPoints() {
     const s = '积分：' + (PPD.app.points || 0);
     if (PPD.ui.trainingPoints) PPD.ui.trainingPoints.textContent = s;
+    if (PPD.ui.dressupPoints) PPD.ui.dressupPoints.textContent = s;
     if (PPD.ui.menuPoints) {
       if (PPD.isWebVersion) { PPD.show(PPD.ui.menuPoints, false); } // 网页版禁用养成：不显示积分
       else { PPD.ui.menuPoints.textContent = s; PPD.show(PPD.ui.menuPoints, true); }
@@ -109,67 +92,7 @@
     PPD.setStatus(item.name + ' 降级，退回 ' + back + ' 积分');
   }
 
-  // ---------- 兑换 / 装备 / 退还 ----------
-  function buy(type, id, cost) {
-    if (PPD.app.points < cost) { PPD.setStatus('积分不足，无法兑换'); return; }
-    PPD.app.points -= cost;
-    if (PPD.savePoints) PPD.savePoints();
-    if (type === 'trail') { PPD.app.cosmetics.trail = id; }
-    else if (type === 'paddle') { PPD.app.cosmetics.paddle = id; }
-    else if (type === 'shirt') { PPD.app.cosmetics.shirt = id; }
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
-    refreshPoints();
-    renderTrainingPage();
-    PPD.setStatus('已兑换并装备');
-  }
-  function equip(type, id) {
-    if (type === 'trail') { PPD.app.cosmetics.trail = id; }
-    else if (type === 'paddle') { PPD.app.cosmetics.paddle = id; }
-    else if (type === 'shirt') { PPD.app.cosmetics.shirt = id; }
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
-    renderTrainingPage();
-    PPD.setStatus('已装备');
-  }
-  function buySplash() {
-    if (PPD.app.points < SPLASH_COST) { PPD.setStatus('积分不足，无法兑换'); return; }
-    PPD.app.points -= SPLASH_COST;
-    PPD.app.cosmetics.splash = true;
-    if (PPD.savePoints) PPD.savePoints();
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
-    refreshPoints();
-    renderTrainingPage();
-    PPD.setStatus('已兑换撞击溅射（替换波纹反馈）');
-  }
-  function toggleSplash() {
-    PPD.app.cosmetics.splash = !PPD.app.cosmetics.splash;
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
-    renderTrainingPage();
-    PPD.setStatus(PPD.app.cosmetics.splash ? '撞击溅射：开' : '撞击溅射：关（恢复波纹）');
-  }
-  // 洗点：退还已购外观（移除装备，退回成本）
-  function refund(type, id, cost) {
-    if (type === 'trail' && PPD.app.cosmetics.trail === id) PPD.app.cosmetics.trail = null;
-    else if (type === 'paddle' && PPD.app.cosmetics.paddle === id) PPD.app.cosmetics.paddle = null;
-    else if (type === 'shirt' && PPD.app.cosmetics.shirt === id) PPD.app.cosmetics.shirt = null;
-    else return;
-    PPD.app.points += cost;
-    if (PPD.savePoints) PPD.savePoints();
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
-    refreshPoints();
-    renderTrainingPage();
-    PPD.setStatus('已退还，退回 ' + cost + ' 积分');
-  }
-  function refundSplash() {
-    if (!PPD.app.cosmetics.splash) return;
-    PPD.app.cosmetics.splash = false;
-    PPD.app.points += SPLASH_COST;
-    if (PPD.savePoints) PPD.savePoints();
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
-    refreshPoints();
-    renderTrainingPage();
-    PPD.setStatus('已退还撞击溅射，退回 ' + SPLASH_COST + ' 积分');
-  }
-  // 洗点：一键退还所有训练升级与已购外观
+  // 全部洗点：训练归 0 + 所有已购外观退款（外观退款由 dressup.js 提供成本与清理）
   function resetAll() {
     let back = 0;
     for (const it of TRAINING_ITEMS) {
@@ -177,18 +100,13 @@
       for (let i = 0; i < lv; i++) back += LEVEL_COST[i];
       PPD.app.training[it.key] = 0;
     }
-    const c = PPD.app.cosmetics;
-    const costOf = (list, id) => { const x = list.find((v) => v.id === id); return x ? x.cost : 0; };
-    if (c.trail) { back += costOf(TRAILS, c.trail); c.trail = null; }
-    if (c.paddle) { back += costOf(PADDLES, c.paddle); c.paddle = null; }
-    if (c.shirt) { back += costOf(SHIRTS, c.shirt); c.shirt = null; }
-    if (c.splash) { back += SPLASH_COST; c.splash = false; }
+    if (PPD.refundAllCosmetics) back += PPD.refundAllCosmetics();
     if (back <= 0) { PPD.setStatus('当前没有可洗点的投入'); return; }
     PPD.app.points += back;
     if (PPD.savePoints) PPD.savePoints();
     if (PPD.saveTraining) PPD.saveTraining();
-    if (PPD.saveCosmetics) PPD.saveCosmetics();
     refreshPoints();
+    if (PPD.renderDressup) PPD.renderDressup();
     renderTrainingPage();
     PPD.setStatus('全部洗点完成，退回 ' + back + ' 积分');
   }
@@ -196,19 +114,9 @@
   // ---------- 面板渲染 ----------
   function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-  function shopItem(name, btnHtml) {
-    return '<div class="s-item"><span>' + name + '</span>' + btnHtml + '</div>';
-  }
-  function buyOrRefundBtn(type, id, cost, owned) {
-    return owned
-      ? '<button class="btn small" data-action="refund" data-type="' + type + '" data-id="' + id + '" data-cost="' + cost + '">退还(退' + cost + ')</button>'
-      : '<button class="btn small" data-action="buy" data-type="' + type + '" data-id="' + id + '" data-cost="' + cost + '">兑换 ' + cost + '</button>';
-  }
-
   function renderTrainingPage() {
     if (!PPD.ui.trainingPanel) return;
     refreshPoints();
-    // 能力训练区
     const t = PPD.app.training;
     const trainHtml = TRAINING_ITEMS.map((it) => {
       const lv = t[it.key] || 0;
@@ -227,35 +135,15 @@
         '</div>';
     }).join('');
     if (PPD.ui.trainingList) PPD.ui.trainingList.innerHTML = trainHtml;
-
-    // 特效兑换区
-    const c = PPD.app.cosmetics;
-    const trailHtml = TRAILS.map((x) => shopItem(esc(x.name), buyOrRefundBtn('trail', x.id, x.cost, c.trail === x.id))).join('');
-    const paddleHtml = PADDLES.map((x) => shopItem(esc(x.name), buyOrRefundBtn('paddle', x.id, x.cost, c.paddle === x.id))).join('');
-    const shirtHtml = SHIRTS.map((x) => shopItem(esc(x.name), buyOrRefundBtn('shirt', x.id, x.cost, c.shirt === x.id))).join('');
-    const splashBtn = c.splash
-      ? '<button class="btn small" data-action="splash-toggle">' + (c.splash ? '开关:开' : '开关:关') + '</button>' +
-        '<button class="btn small" data-action="splash-refund">退还(退' + SPLASH_COST + ')</button>'
-      : '<button class="btn small" data-action="splash-buy">兑换 ' + SPLASH_COST + '</button>';
-    const resetRow = '<div class="t-item reset-row"><div class="t-info"><b>全部洗点</b>' +
-      '<div class="t-desc">退回所有训练升级与已购外观的积分</div></div>' +
-      '<button class="btn small" data-action="reset-all">全部洗点</button></div>';
-    if (PPD.ui.shopList) PPD.ui.shopList.innerHTML =
-      '<h3>尾影特效</h3>' + trailHtml +
-      '<h3>球拍外观</h3>' + paddleHtml +
-      '<h3>上衣换色</h3>' + shirtHtml +
-      '<h3>球台撞击特效</h3>' + splashBtn +
-      resetRow;
   }
 
   function openTraining() {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
-    // 网页版禁用：跟随个人生涯，数据只留本地应用端
     if (PPD.isWebVersion) {
       if (PPD.showOverlay) {
-        PPD.showOverlay('养成系统 · 探索中',
-          '养成系统网页版正在探索中，暂不对网页版开放。\n积分、能力训练与特效兑换仅保存在本地应用端（桌面版 / 手机 APK），不会上传到网页版后端。',
+        PPD.showOverlay('能力训练 · 探索中',
+          '能力训练网页版正在探索中，暂不对网页版开放。\n积分、能力训练与装扮仅保存在本地应用端（桌面版 / 手机 APK），不会上传到网页版后端。',
           '知道了', () => {});
       }
       return;
@@ -270,28 +158,24 @@
     refreshPoints();
   }
 
-  // ---------- 事件绑定（入口按钮 + 面板内事件委托） ----------
+  // ---------- 事件绑定 ----------
   if (PPD.ui.btnTraining) {
     PPD.ui.btnTraining.addEventListener('click', () => { if (PPD.GameAudio) PPD.GameAudio.ensure(); openTraining(); });
   }
   if (PPD.ui.btnTrainingBack) {
     PPD.ui.btnTrainingBack.addEventListener('click', () => { if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui(); closeTraining(); });
   }
-  function onPanelClick(e) {
+  if (PPD.ui.btnTrainingReset) {
+    PPD.ui.btnTrainingReset.addEventListener('click', () => { if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui(); resetAll(); });
+  }
+  function onTrainingClick(e) {
     const el = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
     if (!el) return;
     const a = el.getAttribute('data-action');
     if (a === 'upgrade') upgrade(el.getAttribute('data-key'));
     else if (a === 'downgrade') downgrade(el.getAttribute('data-key'));
-    else if (a === 'buy') buy(el.getAttribute('data-type'), el.getAttribute('data-id'), parseInt(el.getAttribute('data-cost'), 10) || 0);
-    else if (a === 'refund') refund(el.getAttribute('data-type'), el.getAttribute('data-id'), parseInt(el.getAttribute('data-cost'), 10) || 0);
-    else if (a === 'splash-buy') buySplash();
-    else if (a === 'splash-toggle') toggleSplash();
-    else if (a === 'splash-refund') refundSplash();
-    else if (a === 'reset-all') resetAll();
   }
-  if (PPD.ui.trainingList) PPD.ui.trainingList.addEventListener('click', onPanelClick);
-  if (PPD.ui.shopList) PPD.ui.shopList.addEventListener('click', onPanelClick);
+  if (PPD.ui.trainingList) PPD.ui.trainingList.addEventListener('click', onTrainingClick);
 
   // ---------- 导出 ----------
   PPD.addPoints = addPoints;
@@ -302,4 +186,5 @@
   PPD.closeTraining = closeTraining;
   PPD.renderTrainingPage = renderTrainingPage;
   PPD.refreshPoints = refreshPoints;
+  PPD.resetAll = resetAll;
 })();

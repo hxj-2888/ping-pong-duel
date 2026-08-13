@@ -33,7 +33,11 @@
         PPD.app.lastEventKeys.delete(first);
       }
       switch (e.c) {
-        case 'hit': PPD.GameAudio.hit(); break;
+        case 'hit':
+          PPD.GameAudio.hit();
+          // 追踪最后击球者(联机/本地撞击溅射特效按击球者装备渲染,v2.0)
+          PPD.app.lastHitter = e.s;
+          break;
         case 'bounce':
           PPD.GameAudio.bounce();
           addFx('bounce', engine.ball.pos.x, engine.ball.pos.y, engine.ball.pos.z, engine.t);
@@ -108,8 +112,16 @@
   }
 
   function addFx(type, x, y, z, t0) {
-    // 养成(v1.8.0)：装备"撞击溅射"后,把落点波纹反馈替换为飞溅粒子
-    const t = (type === 'bounce' && PPD.app.cosmetics && PPD.app.cosmetics.splash) ? 'splash' : type;
+    // 撞击溅射(v2.0)：按"最后击球者"的装备决定特效类型(击球者装溅射→溅射,否则波纹)，
+    // 联机时双方看到一致；无击球者记录时回退用本机装备
+    let splashOn = !!(PPD.app.equip && PPD.app.equip.splash);
+    const h = PPD.app.lastHitter;
+    if (h === 0 || h === 1) {
+      splashOn = h === PPD.app.side
+        ? !!(PPD.app.equip && PPD.app.equip.splash)
+        : !!(PPD.app.oppSkin && PPD.app.oppSkin.splash);
+    }
+    const t = (type === 'bounce' && splashOn) ? 'splash' : type;
     PPD.app.fx.push({ type: t, x, y, z, t0 });
     if (PPD.app.fx.length > 12) PPD.app.fx.shift();
   }

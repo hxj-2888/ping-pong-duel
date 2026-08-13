@@ -131,9 +131,17 @@ input:focus { border-color: var(--blue); }
 .t-desc { color: #7f90ad; font-size: 11.5px; }
 .t-owned { color: #7fd0a8; font-size: 12px; white-space: nowrap; }
 .t-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; } /* 训练项按钮组(降级+升级) */
+/* 能力训练/装扮系统：纯黑实底，打开时不透出主菜单/球场任何内容（覆盖 career-panel 半透明） */
+.pure-panel { background: #04060c; backdrop-filter: none; }
+.training-reset-row { display: flex; justify-content: center; padding: 2px 0 4px; }
+.plan-form { display: flex; gap: 8px; align-items: center; }
+.plan-form input {
+  flex: 1; min-width: 0; padding: 5px 8px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); color: #e8eefb;
+}
 /* 养成系统面板内容较多(训练区+兑换区)可能超过 88vh:允许整卡纵向滚动,
    否则底部的"球台撞击特效/撞击溅射"会被 overflow:hidden 裁剪且无滚动条看不到 */
-#trainingPanel .career-card { overflow-y: auto; }
+#trainingPanel .career-card, #dressupPanel .career-card { overflow-y: auto; }
 
 
 /* 联机框（主页「联机对战」入口打开的全屏面板，等同新开页面；原 room-panel 已并入） */
