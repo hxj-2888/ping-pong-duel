@@ -100,13 +100,11 @@
           } else if (PPD.app.mode === 'local' && PPD.awardPvp) {
             PPD.awardPvp(e.s === 0);
           }
-          // v2.0:首次通关困难/地狱一次性奖励(人机玩家获胜):困难+50/地狱+100
-          if (PPD.app.mode === 'ai' && e.s === 0 && PPD.awardBonus) {
-            PPD.awardBonus(PPD.app.aiLevel);
-          }
-          const overMsg = hellUnlocked
-            ? '🎉 你赢了，已解锁地狱模式！'
-            : `${winnerName(e.s)} 获胜！`;
+          // v2.0:首次击败困难/地狱一次性奖励(人机玩家获胜):困难+50/地狱+100,奖励文本合并到页面中央结算提示
+          const bonusText = (PPD.app.mode === 'ai' && e.s === 0 && PPD.awardBonus) ? PPD.awardBonus(PPD.app.aiLevel) : null;
+          const overMsg = [bonusText,
+            hellUnlocked ? '🎉 你赢了，已解锁地狱模式！' : `${winnerName(e.s)} 获胜！`
+          ].filter(Boolean).join(' · ');
           showPoint(overMsg);
           PPD.showGameOver(PPD.app.mode === 'ai'
             ? (e.s === 0 ? '您赢了' : '您输了')
