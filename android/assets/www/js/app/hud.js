@@ -94,11 +94,15 @@
               ts: Date.now(),
             });
           }
-          // 养成积分结算（v1.8.0）：人机按难度(简单1/中等2/困难3/地狱5)+胜满负半；本地双人固定 胜3/负1
+          // 养成积分结算（v2.0）：人机按难度(简单1/中等2/困难3/地狱5)+胜满负半；本地双人固定 胜2/负1
           if (PPD.app.mode === 'ai' && PPD.awardAi) {
             PPD.awardAi(PPD.app.aiLevel, e.s === 0);
           } else if (PPD.app.mode === 'local' && PPD.awardPvp) {
             PPD.awardPvp(e.s === 0);
+          }
+          // v2.0:首次通关困难/地狱一次性奖励(人机玩家获胜):困难+50/地狱+100
+          if (PPD.app.mode === 'ai' && e.s === 0 && PPD.awardBonus) {
+            PPD.awardBonus(PPD.app.aiLevel);
           }
           const overMsg = hellUnlocked
             ? '🎉 你赢了，已解锁地狱模式！'

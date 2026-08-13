@@ -268,6 +268,7 @@
     equip: { trail: null, paddle: null, shirt: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)
     plans: [],            // 装扮方案(最多 8):[{ name, trail, paddle, shirt, splash }]
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
+    bonus: { hard: false, hell: false }, // 首次通关奖励已领标记(人机击败困难+50/地狱+100,一次性)
     fxShow: { trail: true, splash: true }, // AI 观战暂停面板:尾影/撞击特效显示开关(仅观战生效)
   };
 
@@ -362,6 +363,7 @@
   const EQUIP_KEY = 'ppd_equip';
   const PLANS_KEY = 'ppd_plans';
   const FX_SHOW_KEY = 'ppd_fx_show'; // AI 观战:尾影/撞击特效显示开关
+  const BONUS_KEY = 'ppd_bonus';     // 首次通关困难/地狱奖励已领标记
   const TRAINING_KEY = 'ppd_training';
   const OLD_COSMETICS_KEY = 'ppd_cosmetics'; // v1.8.0 旧格式(兑换即装备),一次性迁移后删除
   try {
@@ -396,6 +398,13 @@
       if (obj && typeof obj === 'object') app.fxShow = Object.assign(app.fxShow, obj);
     }
   } catch (e) { /* ignore */ }
+  try {
+    const b = typeof localStorage !== 'undefined' ? localStorage.getItem(BONUS_KEY) : null;
+    if (b) {
+      const obj = JSON.parse(b);
+      if (obj && typeof obj === 'object') app.bonus = Object.assign(app.bonus, obj);
+    }
+  } catch (e) { /* ignore */ }
   // 迁移 v1.8.0 旧格式 ppd_cosmetics(兑换即装备) → 持有库存 + 当前装配,迁移后删除旧 key
   try {
     const old = typeof localStorage !== 'undefined' ? localStorage.getItem(OLD_COSMETICS_KEY) : null;
@@ -422,6 +431,7 @@
   function saveOwned() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(OWNED_KEY, JSON.stringify(app.owned)); } catch (e) { /* ignore */ } }
   function saveEquip() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(EQUIP_KEY, JSON.stringify(app.equip)); } catch (e) { /* ignore */ } }
   function savePlans() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(PLANS_KEY, JSON.stringify(app.plans.slice(0, 8))); } catch (e) { /* ignore */ } }
+  function saveBonus() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(BONUS_KEY, JSON.stringify(app.bonus)); } catch (e) { /* ignore */ } }
   function saveTraining() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(TRAINING_KEY, JSON.stringify(app.training)); } catch (e) { /* ignore */ } }
 
   // ---------- 玩家昵称（主菜单 #nameInput）：取名生效 + 本地记忆 ----------
@@ -546,7 +556,7 @@
     isHellCleared, markHellCleared, syncHellOptions,
     setQuality, setFrameRate, setNoCrowd,
     getPlayerName, loadAINames, saveAINames,
-    savePoints, saveOwned, saveEquip, savePlans, saveTraining,
+    savePoints, saveOwned, saveEquip, savePlans, saveBonus, saveTraining,
     triggerCheer, updateMusicIntensity,
   };
 })();
