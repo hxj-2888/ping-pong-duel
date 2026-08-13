@@ -148,21 +148,25 @@
     // 视觉挥拍：从球后方挥向球前方（跟随出球方向）
     const start = ctx.vsub(b.pos, ctx.vscale(dir, 0.36));
     const end = ctx.vadd(b.pos, ctx.vscale(dir, 0.36));
-    const dur = type === 2 ? 0.30 : type === 3 ? 0.32 : 0.40;
+    // 养成能力(仅本地/人机注入,联机恒 0)：dur 每级 -6% / windup 每级 -10% / 碰撞箱 hx·hz 每级 +3%
+    const abi = p.ability || {};
+    const durMul = 1 - 0.06 * (abi.dur || 0);
+    const hitboxMul = 1 + 0.03 * (abi.hitbox || 0);
+    const dur = (type === 2 ? 0.30 : type === 3 ? 0.32 : 0.40) * durMul;
     p.stroke = {
       active: true, type, t: 0, dur,
       speed: ctx.vlen(ctx.vsub(end, start)) / dur,
       start, end, dir,
       n: ctx.vnorm(ok ? shot.vel : ctx.vec(0, 0.18, f)),
       hit: false, ct: -1, outSpeed: ok ? shot.outSpeed : 0,
-      windup: 0.08, live: 0.20,
+      windup: 0.08 * (1 - 0.10 * (abi.windup || 0)), live: 0.20,
       // 球员接球碰撞箱（进箱即命中）：球在箱内 + 窗口内按键即判定击中；
-      // 蹲下时箱体下探（可接贴地球）、箱顶略降
+      // 蹲下时箱体下探（可接贴地球）、箱顶略降；hx/hz 随训练等级放大（AI 对手 ability 恒 0，不放大）
       box: {
         x: p.x,
         z: p.z + f * 0.42,
-        hx: ctx.RULES.HITBOX_HX,
-        hz: ctx.RULES.HITBOX_HZ,
+        hx: ctx.RULES.HITBOX_HX * hitboxMul,
+        hz: ctx.RULES.HITBOX_HZ * hitboxMul,
         yTop: ctx.RULES.HITBOX_Y_TOP + (ctx.RULES.CROUCH_HITBOX_Y_TOP - ctx.RULES.HITBOX_Y_TOP) * p.crouch,
         yBottom: ctx.RULES.HITBOX_Y_BOTTOM + (ctx.RULES.CROUCH_HITBOX_Y_BOTTOM - ctx.RULES.HITBOX_Y_BOTTOM) * p.crouch,
       },

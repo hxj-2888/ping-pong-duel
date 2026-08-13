@@ -82,8 +82,10 @@
       // 跑步（Shift）加速 / 蹲下（Ctrl）减速（蹲越久越慢）
       const crouchSpeedMul = ctx.RULES.CROUCH_SPEED_MUL -
         (ctx.RULES.CROUCH_SPEED_MUL - ctx.RULES.CROUCH_MIN_SPEED_MUL) * Math.min(1, p.crouchDur / ctx.RULES.CROUCH_DECAY_TIME);
-      // 移动速度：基础速度 × 敏捷速度加成(speedMul，AI 敏捷>1 时最大 1.25；玩家恒 1) × 跑步/蹲下倍率
-      const moveSpeed = ctx.RULES.PLAYER_SPEED * (p.speedMul || 1) * (inp.run ? ctx.RULES.RUN_SPEED_MUL : (1 + (crouchSpeedMul - 1) * p.crouch));
+      // 移动速度：基础速度 × 敏捷速度加成(speedMul，AI 敏捷>1 时最大 1.25；玩家恒 1) ×
+      // 养成能力加成(ability.speed，仅本地/人机注入，每级 +4%) × 跑步/蹲下倍率
+      const abi = p.ability || {};
+      const moveSpeed = ctx.RULES.PLAYER_SPEED * (p.speedMul || 1) * (1 + 0.04 * (abi.speed || 0)) * (inp.run ? ctx.RULES.RUN_SPEED_MUL : (1 + (crouchSpeedMul - 1) * p.crouch));
       const dir = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
       p.padX = ctx.clamp(p.padX + dir * moveSpeed * dt, -ctx.RULES.MAX_X, ctx.RULES.MAX_X);
       p.vx = ctx.damp(p.vx, dir * moveSpeed, 10, dt);

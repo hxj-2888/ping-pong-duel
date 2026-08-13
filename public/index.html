@@ -65,12 +65,16 @@
         <div class="row">
           <button id="btnNetEntry" class="btn primary">🎮 联机对战</button>
         </div>
+        <div class="row">
+          <button id="btnTraining" class="btn primary">📈 养成系统</button>
+        </div>
       <div id="statusBar" class="status"></div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v171.apk" download="PingPongDuel-v171.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v172.apk" download="PingPongDuel-v172.apk" style="display:none">📱 下载安卓版（直接安装）</a>
         <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
+      <div id="menuPoints" class="menu-points" style="display:none">积分：0</div>
       <div id="recordsPanel" class="records-mini">个人生涯 · 加载中…</div>
     </div>
   </div>
@@ -439,6 +443,21 @@
     </div>
   </div>
 
+  <!-- 养成系统（单开页面：主菜单「养成系统」入口，能力训练 + 特效兑换） -->
+  <div id="trainingPanel" class="career-panel" style="display:none">
+    <div class="career-card">
+      <div class="career-header">
+        <h2>养成系统</h2>
+        <button id="btnTrainingBack" class="btn">← 返回主菜单</button>
+      </div>
+      <div id="trainingPoints" class="career-stats">积分：0</div>
+      <h3 class="training-h">能力训练（仅本地/人机生效，不同步真人对战）</h3>
+      <div id="trainingList" class="training-list"></div>
+      <h3 class="training-h">特效兑换</h3>
+      <div id="shopList" class="training-list"></div>
+    </div>
+  </div>
+
   <!-- 引擎：按依赖顺序加载的独立小模块（engine.js 负责组装） -->
   <script src="js/engine/rules.js"></script>
   <script src="js/engine/math.js"></script>
@@ -455,6 +474,7 @@
   <!-- 游戏界面：按功能拆分的独立小模块（app/state.js 提供共享状态） -->
   <script src="js/app/state.js"></script>
   <script src="js/app/records.js"></script>
+  <script src="js/app/training.js"></script>
   <script src="js/app/input.js"></script>
   <script src="js/app/render.js"></script>
   <script src="js/app/hud.js"></script>
