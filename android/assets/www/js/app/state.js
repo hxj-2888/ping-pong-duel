@@ -135,6 +135,8 @@
     planNameInput: document.getElementById('planNameInput'),
     btnPlanSave: document.getElementById('btnPlanSave'),
     btnDressupBack: document.getElementById('btnDressupBack'),
+    setTrailFx: document.getElementById('setTrailFx'),   // AI 观战暂停:尾影特效开关
+    setSplashFx: document.getElementById('setSplashFx'), // AI 观战暂停:撞击特效开关
     menuPoints: document.getElementById('menuPoints'),
     touchControls: document.getElementById('touchControls'),
     btnLeft: document.getElementById('btnLeft'),
@@ -266,6 +268,7 @@
     equip: { trail: null, paddle: null, shirt: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)
     plans: [],            // 装扮方案(最多 8):[{ name, trail, paddle, shirt, splash }]
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
+    fxShow: { trail: true, splash: true }, // AI 观战暂停面板:尾影/撞击特效显示开关(仅观战生效)
   };
 
   // ---------- 工具 ----------
@@ -358,6 +361,7 @@
   const OWNED_KEY = 'ppd_owned';
   const EQUIP_KEY = 'ppd_equip';
   const PLANS_KEY = 'ppd_plans';
+  const FX_SHOW_KEY = 'ppd_fx_show'; // AI 观战:尾影/撞击特效显示开关
   const TRAINING_KEY = 'ppd_training';
   const OLD_COSMETICS_KEY = 'ppd_cosmetics'; // v1.8.0 旧格式(兑换即装备),一次性迁移后删除
   try {
@@ -383,6 +387,13 @@
     if (pl) {
       const arr = JSON.parse(pl);
       if (Array.isArray(arr)) app.plans = arr.slice(0, 8);
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    const f = typeof localStorage !== 'undefined' ? localStorage.getItem(FX_SHOW_KEY) : null;
+    if (f) {
+      const obj = JSON.parse(f);
+      if (obj && typeof obj === 'object') app.fxShow = Object.assign(app.fxShow, obj);
     }
   } catch (e) { /* ignore */ }
   // 迁移 v1.8.0 旧格式 ppd_cosmetics(兑换即装备) → 持有库存 + 当前装配,迁移后删除旧 key

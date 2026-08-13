@@ -232,8 +232,8 @@
     const dAt = (p) => cam.depth(p);
     const col = STICK[pl.side];
     const skin = (pl.paddleSkin && PADDLE_SKINS[pl.paddleSkin]) || null; // 养成球拍皮肤(v1.8.0)
-    const warn = !!pl.warnSmash; // v2.0:AI 扣杀/低平预告 → 上衣临时换黄(轻微闪烁 0.1s)
-    const shirtCol = warn ? '#eab308' : ((pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || col.shirt);
+    // v2.0:AI 扣杀/低平预告不再换上衣黄闪,改为头部「?」提示(见下方绘制)
+    const shirtCol = (pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || col.shirt;
     const lineR = 0.042; // 骨线粗（加粗圆头）
 
     // 腿（髋→膝→脚；站立时接近直腿，蹲下时膝盖前屈）
@@ -286,6 +286,17 @@
     parts.sort((a, b) => b.d - a.d);
     for (const p of parts) p.fn();
 
+    // v2.0:AI 扣杀/低平预警 → 头部右上方黄色「?」(0.1s,判定指示开启时由 viewModel 控制是否透传)
+    if (pl.warnSmash) {
+      const q = cam.project(headCenter);
+      if (q) {
+        const fs = Math.max(16, 0.30 * q.s);
+        ctx.fillStyle = 'rgba(250,204,21,0.95)';
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('?', q.x + 0.30 * q.s, q.y - 0.30 * q.s);
+      }
+    }
     // v2.0:反击成功 → 头上感叹号(随头移动,0.8s 淡出;只读标记不影响 AI 操作)
     if (pl.exclaimT > 0) {
       const q = cam.project(headCenter);

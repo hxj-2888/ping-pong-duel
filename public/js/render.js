@@ -1021,7 +1021,7 @@
     drawEffects(ctx, cam, view.fx, time);
     // 发球预测轨迹与对抗尾影画在球台之上、角色/球之下（避免被不透明台面遮挡）
     if (view.servePath) drawServePath(ctx, cam, view.servePath);
-    if (view.trail && view.trail.length > 1 && !low) drawTrail(ctx, cam, view.trail, time, view.trailStyle);
+    if (view.trail && view.trail.length > 1 && !low && !view.trailHidden) drawTrail(ctx, cam, view.trail, time, view.trailStyle);
     // 判定范围虚线（首页开关控制）：与实际判定一致——接球碰撞箱（进箱即命中，
     // 以球员为中心、向网前偏移 0.42m；蹲下时箱体下探可接贴地球）
     if (view.showHitRanges) {
