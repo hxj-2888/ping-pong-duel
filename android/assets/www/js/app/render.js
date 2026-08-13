@@ -174,6 +174,8 @@
 
   // ---------- 渲染数据归一化 ----------
   function viewModelFromEngine(engine, side) {
+    const isAivai = PPD.app.mode === 'aivai';
+    const fxShow = PPD.app.fxShow || {};
     return {
       side,
       players: engine.players.map((p) => ({
@@ -183,10 +185,12 @@
         sb: p.swingBack,
         crouch: p.crouch,  // 蹲下（Ctrl）：渲染层画蹲姿
         run: p.run,        // 跑步（Shift）
-        paddleSkin: p.side === 0 ? (PPD.app.equip.paddle || null) : null, // 装扮球拍外观(本机主玩家)
-        shirtSkin: p.side === 0 ? (PPD.app.equip.shirt || null) : null, // 装扮上衣换色(本机主玩家)
-        warnSmash: p.warnSmash || 0, // v2.0:AI 扣杀/低平预告黄闪(0/1)
-        exclaimT: p.exclaimT || 0,   // v2.0:反击成功感叹号剩余时间
+        // 装扮只给本机主玩家(本地/人机)；AI 观战双方 AI 恒默认外观，不受玩家装扮影响
+        paddleSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.paddle || null) : null),
+        shirtSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.shirt || null) : null),
+        // 问号(扣杀/低平预警)仅在判定指示开启时显示；感叹号(反击成功)始终显示(v2.0)
+        warnSmash: PPD.app.showHitRanges ? (p.warnSmash || 0) : 0,
+        exclaimT: p.exclaimT || 0,
       })),
       ball: engine.ball.inHand
         ? null
@@ -197,10 +201,13 @@
       score: engine.score,
       server: engine.server,
       pointReason: engine.pointReason,
-      fx: PPD.app.fx,
+      // 撞击特效:AI 观战可被暂停面板开关关闭;其他模式用玩家装备特效照常
+      fx: (isAivai && !fxShow.splash) ? [] : PPD.app.fx,
       fan: PPD.app.fan,
       servePath: servePath(engine),
-      trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
+      // 尾影:AI 观战不受玩家装扮(默认色)且可被暂停面板开关隐藏
+      trailStyle: isAivai ? null : (PPD.app.equip.trail || null),
+      trailHidden: isAivai && !fxShow.trail,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
       density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）

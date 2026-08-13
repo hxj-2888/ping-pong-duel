@@ -29,9 +29,13 @@
           PPD.GameAudio.hit();
           // 追踪最后击球者(联机/本地撞击溅射特效按击球者装备渲染,v2.0)
           PPD.app.lastHitter = e.s;
-          // v2.0:人机模式玩家成功反击(反击扣杀/低平快球,ball.counterSmash===1)→ 电脑头顶短暂感叹号(只读标记,不影响AI操作)
-          if (PPD.app.mode === 'ai' && e.s === 0 && engine.ball.counterSmash === 1 && engine.players[1]) {
-            engine.players[1].exclaimT = 0.8;
+          // v2.0:反击成功 → 对方头顶短暂感叹号(只读标记,不影响 AI 操作):
+          // 人机模式玩家(e.s=0)反击扣杀/低平(counterSmash===1)→ 电脑;
+          // 观战(aivai)任一 AI 反击扣杀/低平(来球 hitType 2/3)→ 对方 AI
+          if (PPD.app.mode === 'ai' && e.s === 0 && engine.ball.counterSmash === 1) {
+            if (engine.players[1]) engine.players[1].exclaimT = 0.8;
+          } else if (PPD.app.mode === 'aivai' && (engine.ball.hitType === 2 || engine.ball.hitType === 3)) {
+            if (engine.players[1 - e.s]) engine.players[1 - e.s].exclaimT = 0.8;
           }
           break;
         case 'bounce':

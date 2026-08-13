@@ -279,6 +279,20 @@
     });
   }
 
+  // v2.0:AI 观战暂停特效开关(尾影/撞击特效显示,仅观战生效;localStorage 记忆)
+  if (PPD.ui.setTrailFx) {
+    PPD.ui.setTrailFx.addEventListener('change', () => {
+      PPD.app.fxShow.trail = PPD.ui.setTrailFx.checked;
+      try { localStorage.setItem('ppd_fx_show', JSON.stringify(PPD.app.fxShow)); } catch (e) { /* ignore */ }
+    });
+  }
+  if (PPD.ui.setSplashFx) {
+    PPD.ui.setSplashFx.addEventListener('change', () => {
+      PPD.app.fxShow.splash = PPD.ui.setSplashFx.checked;
+      try { localStorage.setItem('ppd_fx_show', JSON.stringify(PPD.app.fxShow)); } catch (e) { /* ignore */ }
+    });
+  }
+
   function togglePause() {
     if (PPD.app.mode !== 'ai' && PPD.app.mode !== 'local' && PPD.app.mode !== 'aivai') return;
     PPD.app.paused = !PPD.app.paused;
@@ -293,6 +307,9 @@
       if (PPD.ui.pauseAiNameA) PPD.ui.pauseAiNameA.value = PPD.app.names[0] || '红方 AI';
       if (PPD.ui.pauseAiNameB) PPD.ui.pauseAiNameB.value = PPD.app.names[1] || '蓝方 AI';
       syncTuneSliders();
+      // v2.0:AI 观战暂停同步尾影/撞击特效开关(仅观战生效,AI 不受玩家装扮影响)
+      if (PPD.ui.setTrailFx) PPD.ui.setTrailFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.trail);
+      if (PPD.ui.setSplashFx) PPD.ui.setSplashFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.splash);
     } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.isHellCleared()) {
       // 人机 + 地狱已通关：暂停面板变为「电脑 AI 数值调控」（滑杆即时生效）
       PPD.show(PPD.ui.pauseAIVsAI, false);
