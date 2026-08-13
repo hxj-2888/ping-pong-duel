@@ -120,13 +120,21 @@
     btnCareerPrev: document.getElementById('btnCareerPrev'),
     btnCareerNext: document.getElementById('btnCareerNext'),
     btnCareerBack: document.getElementById('btnCareerBack'),
-    // 养成系统（v1.8.0：积分 + 能力训练 + 特效兑换，单开页面）
+    // 养成系统（v2.0：能力训练页 + 装扮系统页，单开页面）
     btnTraining: document.getElementById('btnTraining'),
     trainingPanel: document.getElementById('trainingPanel'),
     trainingPoints: document.getElementById('trainingPoints'),
     trainingList: document.getElementById('trainingList'),
-    shopList: document.getElementById('shopList'),
     btnTrainingBack: document.getElementById('btnTrainingBack'),
+    btnTrainingReset: document.getElementById('btnTrainingReset'),
+    btnDressup: document.getElementById('btnDressup'),
+    dressupPanel: document.getElementById('dressupPanel'),
+    dressupPoints: document.getElementById('dressupPoints'),
+    dressupList: document.getElementById('dressupList'),
+    planList: document.getElementById('planList'),
+    planNameInput: document.getElementById('planNameInput'),
+    btnPlanSave: document.getElementById('btnPlanSave'),
+    btnDressupBack: document.getElementById('btnDressupBack'),
     menuPoints: document.getElementById('menuPoints'),
     touchControls: document.getElementById('touchControls'),
     btnLeft: document.getElementById('btnLeft'),
@@ -252,9 +260,11 @@
     // frameRate=渲染帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
-    // 养成系统(v1.8.0)：对战积分 + 已购/已装备外观 + 能力训练等级（localStorage 持久化,网页版禁用）
+    // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 装扮方案 + 能力训练等级（localStorage 持久化,网页版禁用）
     points: 9999,         // 积分余额(ppd_points)；开发者默认 9999 方便测试养成（已有本地数据时以本地为准）
-    cosmetics: { trail: null, paddle: null, shirt: null, splash: false }, // trail:'yellow'|'black'|'red'; paddle:'skinA'|'skinB'|'skinC'; shirt:'green'|'purple'|'orange'|'cyan'; splash=撞击溅射
+    owned: { trail: [], paddle: [], shirt: [], splash: false }, // 持有库存(兑换入库存,不自动装配)
+    equip: { trail: null, paddle: null, shirt: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)
+    plans: [],            // 装扮方案(最多 8):[{ name, trail, paddle, shirt, splash }]
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
   };
 
@@ -343,19 +353,50 @@
   } catch (e) { /* ignore */ }
   if (ui.setPublicServerUrl) ui.setPublicServerUrl.value = app.publicServerUrl;
 
-  // ---------- 养成系统（v1.8.0：积分/已装备外观/能力等级，localStorage 记忆；网页版禁用） ----------
+  // ---------- 养成系统（v2.0：积分/持有库存/当前装配/装扮方案/能力等级，localStorage 记忆；网页版禁用） ----------
   const POINTS_KEY = 'ppd_points';
-  const COSMETICS_KEY = 'ppd_cosmetics';
+  const OWNED_KEY = 'ppd_owned';
+  const EQUIP_KEY = 'ppd_equip';
+  const PLANS_KEY = 'ppd_plans';
   const TRAINING_KEY = 'ppd_training';
+  const OLD_COSMETICS_KEY = 'ppd_cosmetics'; // v1.8.0 旧格式(兑换即装备),一次性迁移后删除
   try {
     const p = typeof localStorage !== 'undefined' ? parseInt(localStorage.getItem(POINTS_KEY), 10) : 0;
     if (Number.isFinite(p) && p > 0) app.points = p;
   } catch (e) { /* ignore */ }
   try {
-    const c = typeof localStorage !== 'undefined' ? localStorage.getItem(COSMETICS_KEY) : null;
-    if (c) {
-      const obj = JSON.parse(c);
-      if (obj && typeof obj === 'object') app.cosmetics = Object.assign(app.cosmetics, obj);
+    const o = typeof localStorage !== 'undefined' ? localStorage.getItem(OWNED_KEY) : null;
+    if (o) {
+      const obj = JSON.parse(o);
+      if (obj && typeof obj === 'object') app.owned = Object.assign(app.owned, obj);
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    const eq = typeof localStorage !== 'undefined' ? localStorage.getItem(EQUIP_KEY) : null;
+    if (eq) {
+      const obj = JSON.parse(eq);
+      if (obj && typeof obj === 'object') app.equip = Object.assign(app.equip, obj);
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    const pl = typeof localStorage !== 'undefined' ? localStorage.getItem(PLANS_KEY) : null;
+    if (pl) {
+      const arr = JSON.parse(pl);
+      if (Array.isArray(arr)) app.plans = arr.slice(0, 8);
+    }
+  } catch (e) { /* ignore */ }
+  // 迁移 v1.8.0 旧格式 ppd_cosmetics(兑换即装备) → 持有库存 + 当前装配,迁移后删除旧 key
+  try {
+    const old = typeof localStorage !== 'undefined' ? localStorage.getItem(OLD_COSMETICS_KEY) : null;
+    if (old) {
+      const c = JSON.parse(old);
+      if (c && typeof c === 'object') {
+        if (c.trail) { if (!app.owned.trail.includes(c.trail)) app.owned.trail.push(c.trail); app.equip.trail = c.trail; }
+        if (c.paddle) { if (!app.owned.paddle.includes(c.paddle)) app.owned.paddle.push(c.paddle); app.equip.paddle = c.paddle; }
+        if (c.shirt) { if (!app.owned.shirt.includes(c.shirt)) app.owned.shirt.push(c.shirt); app.equip.shirt = c.shirt; }
+        if (c.splash) { app.owned.splash = true; app.equip.splash = true; }
+        if (typeof localStorage !== 'undefined') localStorage.removeItem(OLD_COSMETICS_KEY);
+      }
     }
   } catch (e) { /* ignore */ }
   try {
@@ -365,9 +406,11 @@
       if (obj && typeof obj === 'object') app.training = Object.assign(app.training, obj);
     }
   } catch (e) { /* ignore */ }
-  // 养成数据只本机读；写入由 app/training.js 的 savePoints/saveCosmetics/saveTraining 完成
+  // 养成数据只本机读；写入由 app/training.js / app/dressup.js 调用
   function savePoints() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(POINTS_KEY, String(app.points)); } catch (e) { /* ignore */ } }
-  function saveCosmetics() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(COSMETICS_KEY, JSON.stringify(app.cosmetics)); } catch (e) { /* ignore */ } }
+  function saveOwned() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(OWNED_KEY, JSON.stringify(app.owned)); } catch (e) { /* ignore */ } }
+  function saveEquip() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(EQUIP_KEY, JSON.stringify(app.equip)); } catch (e) { /* ignore */ } }
+  function savePlans() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(PLANS_KEY, JSON.stringify(app.plans.slice(0, 8))); } catch (e) { /* ignore */ } }
   function saveTraining() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(TRAINING_KEY, JSON.stringify(app.training)); } catch (e) { /* ignore */ } }
 
   // ---------- 玩家昵称（主菜单 #nameInput）：取名生效 + 本地记忆 ----------
@@ -492,7 +535,7 @@
     isHellCleared, markHellCleared, syncHellOptions,
     setQuality, setFrameRate, setNoCrowd,
     getPlayerName, loadAINames, saveAINames,
-    savePoints, saveCosmetics, saveTraining,
+    savePoints, saveOwned, saveEquip, savePlans, saveTraining,
     triggerCheer, updateMusicIntensity,
   };
 })();

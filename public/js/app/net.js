@@ -135,24 +135,26 @@
         PPD.app.heartbeatTimer = setInterval(() => { if (PPD.app.net && PPD.app.net.connected) PPD.app.net.send({ t: 'ping' }); }, 5000);
       }
       if (hostMode && !PPD.app.roomCode) {
-        // 首次建房：尚无房间码，创建
-        net.send({ t: 'create', name: PPD.app.names[0] });
+        // 首次建房：尚无房间码，创建（带当前装配皮肤,服务器广播给对手,联机互见 v2.0）
+        net.send({ t: 'create', name: PPD.app.names[0], skin: PPD.app.equip });
         scheduleJoinRetry();
       } else if (PPD.app.reconnectAttempt > 0 && PPD.app.roomCode) {
         // 断线自动重连：重新加入原房间（带 side 提示，服务端据此夺回原席位）。
         // 审计 #11:用会话保存的本名(不能用 names[0]——加入方会被房主名覆盖导致槽位改名)
-        net.send({ t: 'join', room: PPD.app.roomCode, name: PPD.app.sessionName, side: PPD.app.side });
+        net.send({ t: 'join', room: PPD.app.roomCode, name: PPD.app.sessionName, side: PPD.app.side, skin: PPD.app.equip });
       } else if (hostMode) {
-        net.send({ t: 'create', name: PPD.app.names[0] });
+        net.send({ t: 'create', name: PPD.app.names[0], skin: PPD.app.equip });
         scheduleJoinRetry();
       } else {
-        net.send({ t: 'join', room: PPD.ui.joinInput.value.trim(), name: PPD.app.names[0] });
+        net.send({ t: 'join', room: PPD.ui.joinInput.value.trim(), name: PPD.app.names[0], skin: PPD.app.equip });
         scheduleJoinRetry();
       }
     });
     net.on('room', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       clearJoinTimer();
+      // 联机皮肤同步(v2.0):服务器广播双方装配,存对手皮肤供渲染(球拍/上衣;尾影保持本地)
+      if (m.skins) PPD.app.oppSkin = m.skins[1 - m.side] || null;
       PPD.GameAudio.ensure();
       PPD.app.roomCode = m.code;
       PPD.app.names[0] = m.name;
@@ -211,6 +213,8 @@
     });
     net.on('state', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换:退出后迟到的快照不得再执行(审计 #5)
+      // 联机皮肤同步(v2.0):服务器广播双方装配,存对手皮肤供渲染(球拍/上衣;尾影保持本地)
+      if (m.skins) PPD.app.oppSkin = m.skins[1 - PPD.app.side] || null;
       PPD.app.lastStateAt = Date.now(); // 看门狗基线：服务端 Alarm 保证 ≥2Hz
       const wasReconnecting = PPD.app.reconnecting; // 先记录：下方会清除重连标记
       // 数据流恢复（重连后首帧到达）：结束重连状态
@@ -317,7 +321,11 @@
         PPD.app.lastEventKeys.add(key);
         if (PPD.app.lastEventKeys.size > 24) PPD.app.lastEventKeys.delete(PPD.app.lastEventKeys.values().next().value);
         switch (e.c) {
-          case 'hit': PPD.GameAudio.hit(); break;
+          case 'hit':
+            PPD.GameAudio.hit();
+            // 追踪最后击球者(联机撞击溅射特效按击球者装备渲染,v2.0)
+            PPD.app.lastHitter = e.s;
+            break;
           case 'bounce': {
             PPD.GameAudio.bounce();
             const bb = (m.s && m.s.b) || null;

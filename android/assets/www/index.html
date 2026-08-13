@@ -66,7 +66,8 @@
           <button id="btnNetEntry" class="btn primary">🎮 联机对战</button>
         </div>
         <div class="row">
-          <button id="btnTraining" class="btn primary">📈 养成系统</button>
+          <button id="btnTraining" class="btn primary">📈 能力训练</button>
+          <button id="btnDressup" class="btn primary">🎨 装扮系统</button>
         </div>
       <div id="statusBar" class="status"></div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
@@ -443,18 +444,36 @@
     </div>
   </div>
 
-  <!-- 养成系统（单开页面：主菜单「养成系统」入口，能力训练 + 特效兑换） -->
-  <div id="trainingPanel" class="career-panel" style="display:none">
+  <!-- 能力训练（单开页面：主菜单「能力训练」入口，积分 + 训练升级/降级 + 顶部全部洗点） -->
+  <div id="trainingPanel" class="career-panel pure-panel" style="display:none">
     <div class="career-card">
       <div class="career-header">
-        <h2>养成系统</h2>
+        <h2>能力训练</h2>
         <button id="btnTrainingBack" class="btn">← 返回主菜单</button>
       </div>
       <div id="trainingPoints" class="career-stats">积分：0</div>
-      <h3 class="training-h">能力训练（仅本地/人机生效，不同步真人对战）</h3>
+      <div class="training-reset-row">
+        <button id="btnTrainingReset" class="btn small">全部洗点（退还训练与外观积分）</button>
+      </div>
       <div id="trainingList" class="training-list"></div>
-      <h3 class="training-h">特效兑换</h3>
-      <div id="shopList" class="training-list"></div>
+    </div>
+  </div>
+
+  <!-- 装扮系统（单开页面：主菜单「装扮系统」入口，外观库存/装配卸下/退款 + 装扮方案） -->
+  <div id="dressupPanel" class="career-panel pure-panel" style="display:none">
+    <div class="career-card">
+      <div class="career-header">
+        <h2>装扮系统</h2>
+        <button id="btnDressupBack" class="btn">← 返回主菜单</button>
+      </div>
+      <div id="dressupPoints" class="career-stats">积分：0</div>
+      <div id="dressupList" class="training-list"></div>
+      <h3 class="training-h">装扮方案（每类选一组合，至多 8 个）</h3>
+      <div class="plan-form">
+        <input id="planNameInput" type="text" maxlength="12" placeholder="方案名（如：火焰橙）">
+        <button id="btnPlanSave" class="btn small">保存当前装扮为方案</button>
+      </div>
+      <div id="planList" class="training-list"></div>
     </div>
   </div>
 
@@ -475,6 +494,7 @@
   <script src="js/app/state.js"></script>
   <script src="js/app/records.js"></script>
   <script src="js/app/training.js"></script>
+  <script src="js/app/dressup.js"></script>
   <script src="js/app/input.js"></script>
   <script src="js/app/render.js"></script>
   <script src="js/app/hud.js"></script>

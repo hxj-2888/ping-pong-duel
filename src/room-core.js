@@ -19,6 +19,17 @@ const BROADCAST_HZ = 20; // 快照广播速率：物理仍 60Hz 内部步进，�
 const BROADCAST_MS = 1000 / BROADCAST_HZ; // 100ms：相邻快照间隔，客户端据此插值平滑
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混 I/L/O/0/1
 
+// 校验并规整客户端上报的装扮(联机皮肤同步 v2.0):只接受白名单 id,防注入
+function sanitizeSkin(s) {
+  if (!s || typeof s !== 'object') return null;
+  const ok = { trail: null, paddle: null, shirt: null, splash: false };
+  if (typeof s.trail === 'string' && /^(yellow|black|red)$/.test(s.trail)) ok.trail = s.trail;
+  if (typeof s.paddle === 'string' && /^(skinA|skinB|skinC)$/.test(s.paddle)) ok.paddle = s.paddle;
+  if (typeof s.shirt === 'string' && /^(green|purple|orange|cyan)$/.test(s.shirt)) ok.shirt = s.shirt;
+  ok.splash = !!s.splash;
+  return ok;
+}
+
 export class RoomCore {
   constructor() {
     this.rooms = new Map(); // code -> { engine, clients:[ws|null,ws|null], names:[,], lastSnap, lastStep }
@@ -133,14 +144,16 @@ export class RoomCore {
       lastStep: 0, // 初始为 0：首次 stepRoom 的 dt 被 clamp 到 0.05，保证首帧即步进
       lastSeen: [Date.now(), Date.now()], // 每席位最近消息时刻（Alarm 断线清扫依据）
       lastBroadcastAt: 0, // 最近广播时刻（Alarm 兜底广播依据，保证 ≥2Hz 数据流）
+      skins: [null, null], // 联机皮肤同步(v2.0):双方装配的装扮,随 room/state 广播给对手
     };
     room.slots[0] = true;
     room.clients[0] = ws;
     room.names[0] = String(msg.name || '玩家1').slice(0, 12);
     room.lastSeen[0] = this._now();
+    room.skins[0] = sanitizeSkin(msg.skin);
     this.setAtt(ws, { room: code, side: 0, name: room.names[0] });
     this.rooms.set(code, room);
-    this.broadcast(room, { t: 'room', code, side: 0, name: room.names[0], wait: true });
+    this.broadcast(room, { t: 'room', code, side: 0, name: room.names[0], wait: true, skins: room.skins });
     this.stepRoom(room);
   }
 
@@ -175,11 +188,12 @@ export class RoomCore {
     room.clients[side] = ws;
     room.names[side] = name;
     room.lastSeen[side] = now;
+    room.skins[side] = sanitizeSkin(msg.skin); // 联机皮肤同步(v2.0)
     this.setAtt(ws, { room: code, side, name });
     // 仅 1 人在房时为等待态（wait:true）——覆盖"房主重连到空房/对手离开后只剩一人"，
     // 让该客户端回到等待面板而不是孤身进入对局
     const waiting = !(room.slots[0] && room.slots[1]);
-    this.broadcast(room, { t: 'room', code, side, name, wait: waiting });
+    this.broadcast(room, { t: 'room', code, side, name, wait: waiting, skins: room.skins });
     this.stepRoom(room);
   }
 
@@ -223,7 +237,7 @@ export class RoomCore {
     // 空闲期（Alarm 每 100ms 调用本函数）广播降到 10Hz 地板，仍够看门狗判定与等待面板刷新。
     if (now - room.lastBroadcastAt >= BROADCAST_MS) {
       const snap = TT.snapshot(room.engine);
-      const data = JSON.stringify({ t: 'state', s: snap, n: room.names, my: -1 });
+      const data = JSON.stringify({ t: 'state', s: snap, n: room.names, my: -1, skins: room.skins });
       room.lastSnap = data;
       room.lastBroadcastAt = now;
       for (const c of room.clients) if (c) this.send(c, data);

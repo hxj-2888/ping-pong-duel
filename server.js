@@ -87,8 +87,7 @@ function sanitizeRecord(b) {
   if (!b || typeof b !== 'object') return null;
   // 审计 #3:名字存储型 XSS——20 字符内可含 <svg onload=...> 等 HTML 载荷,
   // 服务端先剔除 < > 字符(前端渲染另有转义兜底,双保险)
-  const name = String(b.name || '玩家').replace(/[<>]/g, '').slice(0, 20);
-  const mode = b.mode === 'ai' || b.mode === 'local' || b.mode === 'online' ? b.mode : 'other';
+  const name = String(b.name || '玩家').replace(/[<>]/g, '').slice(0, 20);  const mode = b.mode === 'ai' || b.mode === 'local' || b.mode === 'online' ? b.mode : 'other';
   const winner = b.winner === 0 ? 0 : 1;
   const sc = Array.isArray(b.score)
     ? b.score.slice(0, 2).map((v) => Math.max(0, Math.min(99, Math.round(Number(v) || 0))))
@@ -96,6 +95,17 @@ function sanitizeRecord(b) {
   const difficulty = [0, 1, 2, 3].includes(Number(b.difficulty)) ? Number(b.difficulty) : 1;
   const ts = Number(b.ts) || Date.now();
   return { id: ts + '_' + Math.random().toString(36).slice(2, 8), name, mode, winner, score: sc, difficulty, ts };
+}
+
+// 校验并规整客户端上报的装扮(联机皮肤同步 v2.0):只接受白名单 id,防注入
+function sanitizeSkin(s) {
+  if (!s || typeof s !== 'object') return null;
+  const ok = { trail: null, paddle: null, shirt: null, splash: false };
+  if (typeof s.trail === 'string' && /^(yellow|black|red)$/.test(s.trail)) ok.trail = s.trail;
+  if (typeof s.paddle === 'string' && /^(skinA|skinB|skinC)$/.test(s.paddle)) ok.paddle = s.paddle;
+  if (typeof s.shirt === 'string' && /^(green|purple|orange|cyan)$/.test(s.shirt)) ok.shirt = s.shirt;
+  ok.splash = !!s.splash;
+  return ok;
 }
 
 function loadRecords() {
@@ -439,12 +449,14 @@ function handleClientMessage(client, msg) {
       clients: [null, null],
       lastSnap: '',
       lastSeen: [Date.now(), Date.now()], // 每席位最近活跃/断线时刻(审计 #6:断线宽限与僵尸清扫依据)
+      skins: [null, null], // 联机皮肤同步(v2.0):双方装配的装扮,随 room/state 广播给对手
     };
     rooms.set(code, room);
     client.room = room; client.side = 0; client.name = String(msg.name || '玩家1').slice(0, 12);
     room.clients[0] = client;
     room.lastSeen[0] = Date.now();
-    broadcast(room, { t: 'room', code, side: 0, name: client.name, wait: true });
+    room.skins[0] = sanitizeSkin(msg.skin);
+    broadcast(room, { t: 'room', code, side: 0, name: client.name, wait: true, skins: room.skins });
     return;
   }
   if (msg.t === 'join') {
@@ -478,7 +490,8 @@ function handleClientMessage(client, msg) {
     client.side = (wantSide >= 0 && !room.clients[wantSide]) ? wantSide : (room.clients[0] ? 1 : 0);
     room.clients[client.side] = client;
     room.lastSeen[client.side] = Date.now();
-    broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: false });
+    room.skins[client.side] = sanitizeSkin(msg.skin); // 联机皮肤同步(v2.0)
+    broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: false, skins: room.skins });
     return;
   }
   if (client.room) {
@@ -553,7 +566,7 @@ setInterval(() => {
     }
     TT.step(room.engine, 1 / TICK_HZ);
     const snap = TT.snapshot(room.engine);
-    const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1 });
+    const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1, skins: room.skins });
     // 保底广播：内容变化即发，或距上次发送 ≥50ms 也发一次——发球待发等静默相位保持
     // ≥20Hz 插值锚点，避免客户端插值时钟断档后跳变/回溯（画面平滑的锚点连续性保证）
     if (data !== room.lastSnap || nowTick - (room.lastSentAt || 0) >= 50) {
