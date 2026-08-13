@@ -49,19 +49,20 @@
     addPoints(playerWin ? 2 : 1);
   }
 
-  // 首次通关困难/地狱一次性奖励(人机模式玩家获胜):困难 +50 / 地狱 +100,仅发一次
+  // 首次击败困难/地狱一次性奖励(人机模式玩家获胜):困难 +50 / 地狱 +100,仅发一次。
+  // 返回奖励文本供 hud.js 合并到页面中央结算提示;未触发返回 null
   const FIRST_CLEAR_BONUS = { 2: 50, 3: 100 };
   function awardBonus(aiLevel) {
     const bonus = FIRST_CLEAR_BONUS[aiLevel];
-    if (!bonus) return;
+    if (!bonus) return null;
     const key = aiLevel === 2 ? 'hard' : 'hell';
     const b = PPD.app.bonus || {};
-    if (b[key]) return; // 已领过
+    if (b[key]) return null; // 已领过
     b[key] = true;
     PPD.app.bonus = b;
     if (PPD.saveBonus) PPD.saveBonus();
     addPoints(bonus);
-    PPD.setStatus(aiLevel === 2 ? '🎉 首次通关困难!奖励 50 积分' : '🎉 首次通关地狱!奖励 100 积分');
+    return aiLevel === 2 ? '🎉 首次击败困难!奖励 50 积分' : '🎉 首次击败地狱!奖励 100 积分';
   }
 
   // ---------- 能力训练（写进引擎玩家对象；仅本地/人机调用） ----------
