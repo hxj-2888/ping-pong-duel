@@ -88,6 +88,12 @@
               ts: Date.now(),
             });
           }
+          // 养成积分结算（v1.8.0）：人机按难度(简单1/中等2/困难3/地狱5)+胜满负半；本地双人固定 胜3/负1
+          if (PPD.app.mode === 'ai' && PPD.awardAi) {
+            PPD.awardAi(PPD.app.aiLevel, e.s === 0);
+          } else if (PPD.app.mode === 'local' && PPD.awardPvp) {
+            PPD.awardPvp(e.s === 0);
+          }
           const overMsg = hellUnlocked
             ? '🎉 你赢了，已解锁地狱模式！'
             : `${winnerName(e.s)} 获胜！`;
@@ -102,7 +108,9 @@
   }
 
   function addFx(type, x, y, z, t0) {
-    PPD.app.fx.push({ type, x, y, z, t0 });
+    // 养成(v1.8.0)：装备"撞击溅射"后,把落点波纹反馈替换为飞溅粒子
+    const t = (type === 'bounce' && PPD.app.cosmetics && PPD.app.cosmetics.splash) ? 'splash' : type;
+    PPD.app.fx.push({ type: t, x, y, z, t0 });
     if (PPD.app.fx.length > 12) PPD.app.fx.shift();
   }
 

@@ -184,6 +184,7 @@
         crouch: p.crouch,  // 蹲下（Ctrl）：渲染层画蹲姿
         run: p.run,        // 跑步（Shift）
         paddleSkin: p.side === 0 ? (PPD.app.cosmetics.paddle || null) : null, // 养成球拍外观(本机主玩家)
+        shirtSkin: p.side === 0 ? (PPD.app.cosmetics.shirt || null) : null, // 养成上衣换色(本机主玩家)
       })),
       ball: engine.ball.inHand
         ? null
@@ -220,6 +221,7 @@
       crouch: p.cq,  // 蹲下（Ctrl）：渲染层画蹲姿
       run: p.rn,     // 跑步（Shift）
       paddleSkin: i === side ? (PPD.app.cosmetics.paddle || null) : null, // 养成球拍外观(联机只显示自己装备的)
+      shirtSkin: i === side ? (PPD.app.cosmetics.shirt || null) : null, // 养成上衣换色(联机只显示自己装备的)
     }));
     let ball = null, ballInHand = null;
     if (snap.b) {
@@ -279,6 +281,7 @@
         crouch: Math.max(0, Math.min(1, lerp(a.cq != null ? a.cq : 0, p.cq))),
         run: Math.max(0, Math.min(1, lerp(a.rn != null ? a.rn : 0, p.rn))),
         paddleSkin: i === side ? (PPD.app.cosmetics.paddle || null) : null, // 养成球拍外观(联机只显示自己装备的)
+        shirtSkin: i === side ? (PPD.app.cosmetics.shirt || null) : null, // 养成上衣换色(联机只显示自己装备的)
       };
     });
     let ball = null, ballInHand = null;

@@ -33,6 +33,21 @@
     { body: '#000000', joint: '#000000', head: '#000000', shirt: '#2563eb', paddleFace: '#2563eb', paddleBack: '#24272e' },
   ];
 
+  // 养成球拍外观(v1.8.0)：已装备的球拍皮肤(拍面/拍背)。未装备用队色 STICK。
+  const PADDLE_SKINS = {
+    skinA: { face: '#3b82f6', back: '#1e3a8a' }, // 流光蓝
+    skinB: { face: '#10b981', back: '#065f46' }, // 翡翠绿
+    skinC: { face: '#f59e0b', back: '#92400e' }, // 炫彩金
+  };
+
+  // 养成上衣换色(v2.0)：已装备的衣服颜色(覆盖队色上衣)。红/蓝为默认队色不参与兑换。
+  const SHIRT_COLORS = {
+    green: '#16a34a',
+    purple: '#9333ea',
+    orange: '#ea580c',
+    cyan: '#0891b2',
+  };
+
   // 关节圆点（按投影缩放）
   function joint(ctx, cam, p, r, fill, stroke) {
     const q = cam.project(p);
@@ -216,6 +231,8 @@
     const add = (d, fn) => parts.push({ d, fn });
     const dAt = (p) => cam.depth(p);
     const col = STICK[pl.side];
+    const skin = (pl.paddleSkin && PADDLE_SKINS[pl.paddleSkin]) || null; // 养成球拍皮肤(v1.8.0)
+    const shirtCol = (pl.shirtSkin && SHIRT_COLORS[pl.shirtSkin]) || col.shirt; // 养成上衣换色(v2.0)
     const lineR = 0.042; // 骨线粗（加粗圆头）
 
     // 腿（髋→膝→脚；站立时接近直腿，蹲下时膝盖前屈）
@@ -232,13 +249,13 @@
 
     // 上衣（髋→肩）：队色加粗圆头线条，不覆盖手臂（手臂仍为黑色骨线）
     if (!selfHidden) add(dAt(shoulderMid), () => {
-      limb(ctx, cam, hips, shoulderMid, lineR * 1.6, col.shirt, 'rgba(15,20,28,0.55)');
+      limb(ctx, cam, hips, shoulderMid, lineR * 1.6, shirtCol, 'rgba(15,20,28,0.55)');
       limb(ctx, cam, shoulderMid, vadd(shoulderMid, vscale(torsoUp, B.neckLen * 0.75)), lineR * 0.9, col.body, 'rgba(15,20,28,0.5)');
     });
 
     // 肩线（队色上衣的肩部）+ 肩关节（手臂的起点，确保手明确接在肩上）
     if (!selfHidden) add(dAt(shoulderMid), () => {
-      limb(ctx, cam, shoulderL, shoulderR, lineR * 1.25, col.shirt, 'rgba(15,20,28,0.5)');
+      limb(ctx, cam, shoulderL, shoulderR, lineR * 1.25, shirtCol, 'rgba(15,20,28,0.5)');
       joint(ctx, cam, shoulderL, 0.048, col.joint, null);
       joint(ctx, cam, shoulderR, 0.048, col.joint, null);
     });
@@ -275,7 +292,7 @@
         const size = R.BLADE_WID * q.s * 1.15;
         ctx.save();
         ctx.translate(q.x, q.y);
-        ctx.fillStyle = col.paddleFace;
+        ctx.fillStyle = skin ? skin.face : col.paddleFace; // 养成球拍外观：装备后拍面换色
         ctx.strokeStyle = 'rgba(15,20,30,0.65)';
         ctx.lineWidth = Math.max(1, size * 0.045);
         ctx.beginPath();

@@ -158,6 +158,14 @@
     ball: '#ffffff',
   };
 
+  // 养成尾影配色(v1.8.0)：已装备的尾影特效颜色(rgba 前缀,后拼 alpha)；
+  // 未装备时用默认浅蓝。黄/黑/红在 drawTrail 里附带粒子效果。
+  const TRAIL_COLORS = {
+    yellow: 'rgba(255,215,80,',
+    black: 'rgba(42,46,56,',
+    red: 'rgba(255,72,48,',
+  };
+
   // ---------- 观众席（坐姿火柴人，与球员同一画风：圆头 + 骨线骨架） ----------
   // 场地两端 + 两侧共四个方向的观众席，一次性生成固定站位（确定性伪随机）
   let crowdList = null;
@@ -757,7 +765,7 @@
     }
   }
 
-  // 球台撞击特效：以落点为中心的扩散红圈 + 中心闪光
+  // 球台撞击特效：默认扩散红圈+中心闪光；装备"撞击溅射"时(type='splash')改为飞溅粒子
   function drawEffects(ctx, cam, fx, time) {
     for (const f of fx || []) {
       const age = time - f.t0;
@@ -765,6 +773,10 @@
       const k = age / 0.45;
       const p = cam.project(v3(f.x, R.TABLE_HEIGHT + 0.006, f.z));
       if (!p) continue;
+      if (f.type === 'splash') {
+        drawSplash(ctx, p, k);
+        continue;
+      }
       const r = (0.045 + k * 0.40) * p.s;
       const alpha = (1 - k) * 0.85;
       ctx.strokeStyle = `rgba(208,50,30,${alpha.toFixed(3)})`;
@@ -779,9 +791,42 @@
     }
   }
 
-  // 对抗尾影：球飞行路径的渐隐残影（点含时间戳，按年龄淡出）
-  function drawTrail(ctx, cam, trail, time) {
+  // 撞击溅射粒子(增强 v2.0)：中心冲击闪光 + 双层粒子(亮火花 + 暗尾粒) + 白→橙→红渐变
+  function drawSplash(ctx, p, k) {
+    // 中心冲击闪光：短促的白亮圈(仅前 40% 生命周期,随后被飞溅粒子覆盖)
+    if (k < 0.45) {
+      const flash = 1 - k / 0.45;
+      const fr = (0.02 + k * 0.12) * p.s;
+      ctx.fillStyle = `rgba(255,236,190,${(flash * 0.6).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, fr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const n = 14;
+    for (let i = 0; i < n; i++) {
+      const seed = (i * 0.618 + p.x * 0.0371) % 1;
+      const a = seed * Math.PI * 2 + (i % 3) * 0.35;
+      const speed = 0.5 + ((i * 0.382) % 1);          // 飞溅速度(外扩速率,粒子间差异)
+      const dist = (0.02 + 0.14 * k * speed) * p.s;
+      const px = p.x + Math.cos(a) * dist;
+      const py = p.y + Math.sin(a) * dist * 0.55;
+      const big = i % 3 !== 2;                        // 2/3 亮火花 + 1/3 暗尾粒
+      const r = Math.max(big ? 1.1 : 0.7, 0.024 * p.s * (1 - k) * (big ? (0.6 + ((i * 0.37) % 1) * 0.8) : 0.45));
+      const alpha = (1 - k) * (big ? 0.95 : 0.6);
+      const hue = big ? (15 + ((i * 9) % 20)) : (30 + ((i * 11) % 20)); // 橙红渐变
+      const light = big ? (58 + ((i * 7) % 22)) : (48 + ((i * 9) % 15));
+      ctx.fillStyle = `hsla(${hue},100%,${light}%,${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 对抗尾影：球飞行路径的渐隐残影（点含时间戳，按年龄淡出）。
+  // trailStyle=已装备尾影(yellow/black/red)时换色并附带粒子；未装备用默认浅蓝。
+  function drawTrail(ctx, cam, trail, time, trailStyle) {
     if (!trail || trail.length < 2) return;
+    const color = TRAIL_COLORS[trailStyle] || 'rgba(150,210,255,';
     for (let i = 1; i < trail.length; i++) {
       const a = trail[i - 1], b = trail[i];
       const age = time - b.t;
@@ -792,9 +837,32 @@
       if (!pa || !pb) continue;
       const w = Math.max(1.2, 0.022 * Math.min(pa.s, pb.s) * (0.35 + 0.65 * k));
       ctx.lineCap = 'round';
-      ctx.strokeStyle = `rgba(150,210,255,${(0.5 * k).toFixed(3)})`;
+      ctx.strokeStyle = `${color}${(0.5 * k).toFixed(3)})`;
       ctx.lineWidth = w;
       ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    }
+    // 装备的尾影附带粒子：沿残影线抖动的光点（确定性伪随机，不额外维护粒子数组）
+    if (TRAIL_COLORS[trailStyle]) drawTrailParticles(ctx, cam, trail, time, color);
+  }
+
+  function drawTrailParticles(ctx, cam, trail, time, color) {
+    for (let i = 1; i < trail.length; i += 2) {
+      const b = trail[i];
+      const age = time - b.t;
+      if (age < 0 || age > 0.4) continue;
+      const k = 1 - age / 0.4;
+      const p = cam.project({ x: b.x, y: b.y, z: b.z });
+      if (!p) continue;
+      const seed = (i * 13.7 + b.t * 41.3) % 1;
+      const ang = seed * Math.PI * 2;
+      const d = (0.5 + (i % 3) * 0.6) * k * 0.014 * p.s;
+      const px = p.x + Math.cos(ang) * d;
+      const py = p.y + Math.sin(ang) * d;
+      const r = Math.max(0.8, 0.010 * p.s * k * (0.7 + (i % 4) * 0.3));
+      ctx.fillStyle = `${color}${(0.7 * k).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -953,7 +1021,7 @@
     drawEffects(ctx, cam, view.fx, time);
     // 发球预测轨迹与对抗尾影画在球台之上、角色/球之下（避免被不透明台面遮挡）
     if (view.servePath) drawServePath(ctx, cam, view.servePath);
-    if (view.trail && view.trail.length > 1 && !low) drawTrail(ctx, cam, view.trail, time);
+    if (view.trail && view.trail.length > 1 && !low) drawTrail(ctx, cam, view.trail, time, view.trailStyle);
     // 判定范围虚线（首页开关控制）：与实际判定一致——接球碰撞箱（进箱即命中，
     // 以球员为中心、向网前偏移 0.42m；蹲下时箱体下探可接贴地球）
     if (view.showHitRanges) {

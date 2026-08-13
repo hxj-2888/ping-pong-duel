@@ -791,18 +791,31 @@
     }
   }
 
-  // 撞击溅射粒子：从落点向外飞溅的橙红粒子（确定性：以投影坐标做伪随机种子，随 k 外扩淡出）
+  // 撞击溅射粒子(增强 v2.0)：中心冲击闪光 + 双层粒子(亮火花 + 暗尾粒) + 白→橙→红渐变
   function drawSplash(ctx, p, k) {
-    const n = 7;
+    // 中心冲击闪光：短促的白亮圈(仅前 40% 生命周期,随后被飞溅粒子覆盖)
+    if (k < 0.45) {
+      const flash = 1 - k / 0.45;
+      const fr = (0.02 + k * 0.12) * p.s;
+      ctx.fillStyle = `rgba(255,236,190,${(flash * 0.6).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, fr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const n = 14;
     for (let i = 0; i < n; i++) {
       const seed = (i * 0.618 + p.x * 0.0371) % 1;
-      const a = seed * Math.PI * 2;
-      const dist = (0.02 + 0.11 * k) * p.s * (0.55 + ((i * 0.382) % 1) * 0.9);
+      const a = seed * Math.PI * 2 + (i % 3) * 0.35;
+      const speed = 0.5 + ((i * 0.382) % 1);          // 飞溅速度(外扩速率,粒子间差异)
+      const dist = (0.02 + 0.14 * k * speed) * p.s;
       const px = p.x + Math.cos(a) * dist;
       const py = p.y + Math.sin(a) * dist * 0.55;
-      const r = Math.max(0.9, 0.020 * p.s * (1 - k) * (0.6 + ((i * 0.37) % 1) * 0.9));
-      const alpha = (1 - k) * 0.9;
-      ctx.fillStyle = `rgba(255,${(150 + ((i * 29) % 90))},${(60 + ((i * 17) % 50))},${alpha.toFixed(3)})`;
+      const big = i % 3 !== 2;                        // 2/3 亮火花 + 1/3 暗尾粒
+      const r = Math.max(big ? 1.1 : 0.7, 0.024 * p.s * (1 - k) * (big ? (0.6 + ((i * 0.37) % 1) * 0.8) : 0.45));
+      const alpha = (1 - k) * (big ? 0.95 : 0.6);
+      const hue = big ? (15 + ((i * 9) % 20)) : (30 + ((i * 11) % 20)); // 橙红渐变
+      const light = big ? (58 + ((i * 7) % 22)) : (48 + ((i * 9) % 15));
+      ctx.fillStyle = `hsla(${hue},100%,${light}%,${alpha.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();

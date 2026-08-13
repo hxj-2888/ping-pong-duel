@@ -141,6 +141,8 @@
     PPD.app.mode = 'local';
     PPD.app.paused = false;
     PPD.app.engine = PPD.TT.createEngine();
+    // 养成能力（v1.8.0）：本地双人给 P1 注入训练等级（P2 保持默认，公平起见不注入；联机完全不注入）
+    if (PPD.applyTrainingToPlayer) PPD.applyTrainingToPlayer(PPD.app.engine.players[0]);
     // 取名生效：P1 用主菜单昵称（空回退 玩家1），P2=玩家2
     PPD.app.names = [PPD.getPlayerName() || '玩家1', '玩家2'];
     PPD.app.lastPhase = -1;
@@ -172,6 +174,8 @@
     PPD.app.paused = false;
     PPD.app.aiLevel = readAiLevel(PPD.ui.aiLevel);
     PPD.app.engine = PPD.TT.createEngine();
+    // 养成能力（v1.8.0）：人机模式给玩家(P1)注入训练等级；AI 对手(P2) ability 恒 0，判定不受影响
+    if (PPD.applyTrainingToPlayer) PPD.applyTrainingToPlayer(PPD.app.engine.players[0]);
     // 取名生效：比分表/胜负/记录里的「你」→ 昵称（空回退 你）
     PPD.app.names = [PPD.getPlayerName() || '你', '电脑'];
     PPD.app.lastPhase = -1;
