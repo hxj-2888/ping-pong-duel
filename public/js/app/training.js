@@ -244,7 +244,7 @@
       '<h3>尾影特效</h3>' + trailHtml +
       '<h3>球拍外观</h3>' + paddleHtml +
       '<h3>上衣换色</h3>' + shirtHtml +
-      '<h3>球台撞击特效</h3>' + splashHtml +
+      '<h3>球台撞击特效</h3>' + splashBtn +
       resetRow;
   }
 
