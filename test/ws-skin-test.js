@@ -37,8 +37,9 @@ function wsClient() {
   let failures = 0;
   const check = (n, c) => { console.log((c ? 'PASS' : 'FAIL') + ' ' + n); if (!c) failures++; };
   try {
-    const skinA = { trail: 'red', paddle: 'skinC', shirt: 'green', splash: true };
-    const skinB = { paddle: 'skinB', shirt: 'purple' };
+    // v2.1 特效分离：装扮仅 尾影/溅射（球拍/上衣已删除）
+    const skinA = { trail: 'red', splash: true };
+    const skinB = { trail: 'black' };
     const a = await wsClient();
     a.send({ t: 'create', name: '房主', skin: skinA });
     const roomMsg = await a.next((m) => m.t === 'room' && m.side === 0);
@@ -46,14 +47,14 @@ function wsClient() {
     b.send({ t: 'join', room: roomMsg.code, name: '对手', skin: skinB });
     // A 收到加入方 room 广播:skins = [skinA, skinB]
     const roomA = await a.next((m) => m.t === 'room' && m.side === 1);
-    check('房主收到 room 广播含双方 skins', !!roomA.skins && roomA.skins[0].trail === 'red' && roomA.skins[1].paddle === 'skinB' && roomA.skins[1].shirt === 'purple');
+    check('房主收到 room 广播含双方特效皮肤', !!roomA.skins && roomA.skins[0].trail === 'red' && roomA.skins[0].splash === true && roomA.skins[1].trail === 'black' && roomA.skins[1].splash === false);
     // B 收到 state 广播:skins 正确（等待双方 skins 齐全的 state——房主加入前广播的早期 state 中 skins[1] 可能为 null）
     const stateB = await b.next((m) => m.t === 'state' && m.skins && m.skins[0] && m.skins[1]);
-    check('加入方收到 state 含双方 skins', !!stateB.skins && stateB.skins[0].paddle === 'skinC' && stateB.skins[0].shirt === 'green' && stateB.skins[1].splash === false);
-    check('splash 白名单(只有 A 装 true)', stateB.skins[0].splash === true);
+    check('加入方收到 state 含双方特效皮肤', !!stateB.skins && stateB.skins[0].trail === 'red' && stateB.skins[0].splash === true && stateB.skins[1].trail === 'black' && stateB.skins[1].splash === false);
+    check('splash 白名单(只有 A 装 true)', stateB.skins[0].splash === true && stateB.skins[1].splash === false);
     // A 也收 state（同样等待对方 skin 就位）
     const stateA = await a.next((m) => m.t === 'state' && m.skins && m.skins[1]);
-    check('房主收到 state 含对方 skin', !!stateA.skins && stateA.skins[1].paddle === 'skinB');
+    check('房主收到 state 含对方特效皮肤', !!stateA.skins && stateA.skins[1].trail === 'black');
     a.ws.close(); b.ws.close();
     console.log(failures === 0 ? '\n联机皮肤同步测试通过 ✓' : `\n${failures} 项失败 ✗`);
     process.exitCode = failures === 0 ? 0 : 1;

@@ -20,7 +20,11 @@
     nameInput: document.getElementById('nameInput'),
     btnLocal: document.getElementById('btnLocal'),
     btnAI: document.getElementById('btnAI'),
+    btnEndless: document.getElementById('btnEndless'),
     aiLevel: document.getElementById('aiLevel'),
+    endlessPanel: document.getElementById('endlessPanel'),
+    endlessList: document.getElementById('endlessList'),
+    btnEndlessBack: document.getElementById('btnEndlessBack'),
     btnAIVsAI: document.getElementById('btnAIVsAI'),
     aiLevelA: document.getElementById('aiLevelA'),
     aiLevelB: document.getElementById('aiLevelB'),
@@ -97,18 +101,13 @@
     tiNameL: document.getElementById('tiNameL'),
     tiNameR: document.getElementById('tiNameR'),
     phaseBanner: document.getElementById('phaseBanner'),
+    serveTimer: document.getElementById('serveTimer'),
     pointToast: document.getElementById('pointToast'),
     hintBar: document.getElementById('hintBar'),
     netInfo: document.getElementById('netInfo'),
     hitRangeInfo: document.getElementById('hitRangeInfo'),
-    hitBallVal: document.getElementById('hitBallVal'),
-    hitPaddleVal: document.getElementById('hitPaddleVal'),
     ballHeight: document.getElementById('ballHeight'),
     inBoxStatus: document.getElementById('inBoxStatus'),
-    smashStatus: document.getElementById('smashStatus'),
-    lobStatus: document.getElementById('lobStatus'),
-    hrSmashRow: document.getElementById('hrSmashRow'), // 可扣杀行（AI 观战隐藏）
-    hrLobRow: document.getElementById('hrLobRow'),     // 可高吊行（AI 观战隐藏）
     quality: document.getElementById('quality'),
     setNoCrowd: document.getElementById('setNoCrowd'),
     appVersion: document.getElementById('appVersion'),
@@ -120,7 +119,7 @@
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
     recordsPanel: document.getElementById('recordsPanel'),
-    // 个人生涯单开页（主菜单小方框点击展开，分页）
+    // 个人生涯合并页（主菜单蓝块点击展开：战绩记录 + 历史回放 标签，v2.2）
     careerPanel: document.getElementById('careerPanel'),
     careerStats: document.getElementById('careerStats'),
     careerList: document.getElementById('careerList'),
@@ -128,6 +127,9 @@
     btnCareerPrev: document.getElementById('btnCareerPrev'),
     btnCareerNext: document.getElementById('btnCareerNext'),
     btnCareerBack: document.getElementById('btnCareerBack'),
+    careerTab: document.getElementById('careerTab'),             // 战绩记录标签体
+    btnCareerTab: document.getElementById('btnCareerTab'),       // 标签按钮：战绩记录
+    btnHistoryTab: document.getElementById('btnHistoryTab'),     // 标签按钮：历史回放
     // 养成系统（v2.0：能力训练页 + 装扮系统页，单开页面）
     btnTraining: document.getElementById('btnTraining'),
     trainingPanel: document.getElementById('trainingPanel'),
@@ -168,6 +170,26 @@
     manualScroll: document.getElementById('manualScroll'),           // 说明书内容滚动区
     manualScrollbar: document.getElementById('manualScrollbar'),     // 说明书滑钮滑轨（手机端）
     manualScrollThumb: document.getElementById('manualScrollThumb'), // 说明书滑钮
+    // 赛后回放（replay.js）：主菜单「查看历史比赛」+ 结算页「查看回放/保存回放」+ 回放播放器 + 历史列表
+    btnHistory: document.getElementById('btnHistory'),
+    historyPanel: document.getElementById('historyPanel'),
+    historyList: document.getElementById('historyList'),
+    btnHistoryBack: document.getElementById('btnHistoryBack'),
+    btnHistoryDelete: document.getElementById('btnHistoryDelete'),
+    historyDeleteBar: document.getElementById('historyDeleteBar'),
+    historyDeleteHint: document.getElementById('historyDeleteHint'),
+    btnHistoryDeleteConfirm: document.getElementById('btnHistoryDeleteConfirm'),
+    btnReplay: document.getElementById('btnReplay'),
+    btnSaveReplay: document.getElementById('btnSaveReplay'),
+    replayPanel: document.getElementById('replayPanel'),
+    replayTitle: document.getElementById('replayTitle'),
+    btnReplayBack: document.getElementById('btnReplayBack'),
+    btnReplayPlay: document.getElementById('btnReplayPlay'),
+    btnReplaySpeed: document.getElementById('btnReplaySpeed'),
+    btnReplaySave: document.getElementById('btnReplaySave'),
+    replayProgress: document.getElementById('replayProgress'),
+    replayTimeLabel: document.getElementById('replayTimeLabel'),
+    replayStatus: document.getElementById('replayStatus'),
   };
 
   // 联机服务器选择：
@@ -211,9 +233,11 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '2.0.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '2.4.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
+    aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
+    endlessLevel: 1,      // 当前挑战/记录的无尽关卡号（从 1 开始）
     aiLevelA: 1,         // AI 观战：红方 AI 难度
     aiLevelB: 1,         // AI 观战：蓝方 AI 难度
     // AI 观战：在难度基准上的参数微调倍率（暂停面板滑杆，默认 ×1 = 基准）
@@ -274,9 +298,9 @@
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
     // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 装扮方案 + 能力训练等级（localStorage 持久化,网页版禁用）
     points: 9999,         // 积分余额(ppd_points)；开发者默认 9999 方便测试养成（已有本地数据时以本地为准）
-    owned: { trail: [], paddle: [], shirt: [], splash: false }, // 持有库存(兑换入库存,不自动装配)
-    equip: { trail: null, paddle: null, shirt: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)
-    plans: [],            // 装扮方案(最多 8):[{ name, trail, paddle, shirt, splash }]
+    owned: { trail: [], splash: false }, // 持有库存(兑换入库存,不自动装配)；v2.1 特效分离:仅尾影/溅射
+    equip: { trail: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)；球衣/拍面恒=队服(旗帜队色)
+    plans: [],            // 装扮方案(最多 8):[{ name, trail, splash }]
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
     bonus: { hard: false, hell: false }, // 首次通关奖励已领标记(人机击败困难+50/地狱+100,一次性)
     fxShow: { trail: true, splash: true }, // AI 观战暂停面板:尾影/撞击特效显示开关(仅观战生效)
@@ -299,7 +323,8 @@
     let cap = 0;
     if (m === 'low') cap = isTouch ? 400 / rw : Math.min(1920 / rw, 1080 / rh); // 低：手机 400p / 电脑 1080p
     else if (m === 'medium') cap = isTouch ? 750 / rw : 1920 / rh;               // 中：手机 750p / 电脑 1920p（高）
-    const dpr = cap > 0 ? Math.min(window.devicePixelRatio || 1, cap) : (window.devicePixelRatio || 1); // 高：不封顶
+    else if (isTouch) cap = 2;                                                   // v2.4：手机端高画质 DPR 封顶 2（释放填充率，改善锁帧）
+    const dpr = cap > 0 ? Math.min(window.devicePixelRatio || 1, cap) : (window.devicePixelRatio || 1); // 桌面高画质仍不封顶
     app.dpr = dpr;
     canvas.width = Math.max(1, Math.round(app.resizeW * dpr));
     canvas.height = Math.max(1, Math.round(app.resizeH * dpr));
@@ -319,11 +344,16 @@
 
   function isHellUnlocked() { return hellUnlockedMem; }
 
-  // 判定范围虚线开关（设置面板，localStorage 持久化；默认关闭）
+  // 判定范围虚线开关（设置面板，localStorage 持久化；默认关闭）。
+  // v2.4：通关困难模式解锁——未解锁时强制关闭并写回，避免"虚线仍显示但勾选框禁用"的不一致
   let showHitRanges = false;
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(HIT_RANGE_KEY) : null;
     showHitRanges = v === null ? false : v === '1';
+    if (showHitRanges && !hellUnlockedMem) {
+      showHitRanges = false;
+      if (typeof localStorage !== 'undefined') localStorage.setItem(HIT_RANGE_KEY, '0');
+    }
   } catch (e) { /* ignore */ }
   app.showHitRanges = showHitRanges;
 
@@ -415,15 +445,14 @@
       if (obj && typeof obj === 'object') app.bonus = Object.assign(app.bonus, obj);
     }
   } catch (e) { /* ignore */ }
-  // 迁移 v1.8.0 旧格式 ppd_cosmetics(兑换即装备) → 持有库存 + 当前装配,迁移后删除旧 key
+  // 迁移 v1.8.0 旧格式 ppd_cosmetics(兑换即装备) → 持有库存 + 当前装配,迁移后删除旧 key。
+  // v2.1 特效分离:球拍/上衣装扮已删除,旧迁移不再写入 paddle/shirt。
   try {
     const old = typeof localStorage !== 'undefined' ? localStorage.getItem(OLD_COSMETICS_KEY) : null;
     if (old) {
       const c = JSON.parse(old);
       if (c && typeof c === 'object') {
         if (c.trail) { if (!app.owned.trail.includes(c.trail)) app.owned.trail.push(c.trail); app.equip.trail = c.trail; }
-        if (c.paddle) { if (!app.owned.paddle.includes(c.paddle)) app.owned.paddle.push(c.paddle); app.equip.paddle = c.paddle; }
-        if (c.shirt) { if (!app.owned.shirt.includes(c.shirt)) app.owned.shirt.push(c.shirt); app.equip.shirt = c.shirt; }
         if (c.splash) { app.owned.splash = true; app.equip.splash = true; }
         if (typeof localStorage !== 'undefined') localStorage.removeItem(OLD_COSMETICS_KEY);
       }
@@ -443,6 +472,35 @@
   function savePlans() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(PLANS_KEY, JSON.stringify(app.plans.slice(0, 8))); } catch (e) { /* ignore */ } }
   function saveBonus() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(BONUS_KEY, JSON.stringify(app.bonus)); } catch (e) { /* ignore */ } }
   function saveTraining() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(TRAINING_KEY, JSON.stringify(app.training)); } catch (e) { /* ignore */ } }
+
+  // v2.1 特效分离：剥离旧版球拍/上衣装扮字段（直接清除不退款），写回一次使存储干净。
+  // 只保留 尾影/溅射；球衣与拍面主色恒=队服(旗帜队色)，不再有球拍皮肤/上衣换色。
+  try {
+    let changed = false;
+    if (app.owned && ('paddle' in app.owned || 'shirt' in app.owned)) {
+      delete app.owned.paddle;
+      delete app.owned.shirt;
+      changed = true;
+    }
+    if (app.equip && ('paddle' in app.equip || 'shirt' in app.equip)) {
+      delete app.equip.paddle;
+      delete app.equip.shirt;
+      changed = true;
+    }
+    const stripped = (app.plans || []).map((p) => {
+      if (p && ('paddle' in p || 'shirt' in p)) {
+        changed = true;
+        return { name: p.name, trail: p.trail, splash: !!p.splash };
+      }
+      return p;
+    });
+    if (changed) {
+      app.plans = stripped;
+      saveOwned();
+      saveEquip();
+      savePlans();
+    }
+  } catch (e) { /* ignore */ }
 
   // ---------- 玩家昵称（主菜单 #nameInput）：取名生效 + 本地记忆 ----------
   const NAME_KEY = 'ppd_name';
@@ -517,6 +575,14 @@
     hellUnlockedMem = true;
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(HELL_KEY, '1'); } catch (e) { /* ignore */ }
     syncHellOptions();
+    syncHitRangeToggle(); // v2.4：通关困难 → 同时解锁判定范围虚线
+  }
+
+  // v2.4：判定范围虚线需通关困难解锁（与地狱解锁同条件）——同步设置面板勾选框禁用态
+  function syncHitRangeToggle() {
+    const el = PPD.ui.setShowHitRanges;
+    if (!el) return;
+    el.disabled = !isHellUnlocked();
   }
 
   // ---------- 地狱通关（人机击败地狱难度，localStorage 持久化） ----------
@@ -532,6 +598,46 @@
     if (hellClearedMem) return;
     hellClearedMem = true;
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(HELL_CLEARED_KEY, '1'); } catch (e) { /* ignore */ }
+    if (PPD && PPD.refreshAIEntries) PPD.refreshAIEntries();
+    if (PPD && PPD.syncEndlessAIOptions) PPD.syncEndlessAIOptions();
+  }
+
+  // ---------- 无尽人机进度（localStorage 持久化） ----------
+  // endlessHighest = 当前挑战进度（可挑战 1..endlessHighest+1）。
+  // endlessUnlocked = 永久已解锁的无尽 AI 关卡（落败不清除，AI 观战选项始终保留）。
+  // 落败时仅重置 endlessHighest 到 0（主页回到无尽-1），不影响已解锁的 AI 观战选项。
+  const ENDLESS_KEY = 'ppd_endless_highest';
+  const ENDLESS_UNLOCKED_KEY = 'ppd_endless_unlocked';
+  let endlessHighest = 0;
+  try {
+    const v = typeof localStorage !== 'undefined' ? parseInt(localStorage.getItem(ENDLESS_KEY), 10) : 0;
+    if (Number.isFinite(v) && v > 0) endlessHighest = v;
+  } catch (e) { /* ignore */ }
+  let endlessUnlocked = 0;
+  try {
+    const v = typeof localStorage !== 'undefined' ? parseInt(localStorage.getItem(ENDLESS_UNLOCKED_KEY), 10) : 0;
+    if (Number.isFinite(v) && v > 0) endlessUnlocked = v;
+  } catch (e) { /* ignore */ }
+  if (endlessUnlocked < endlessHighest) endlessUnlocked = endlessHighest;
+
+  function getEndlessHighest() { return endlessHighest; }
+  function getEndlessUnlocked() { return endlessUnlocked; }
+  function setEndlessHighest(n) {
+    endlessHighest = Math.max(0, parseInt(n, 10) || 0);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(ENDLESS_KEY, String(endlessHighest)); } catch (e) { /* ignore */ }
+  }
+  function setEndlessUnlocked(n) {
+    endlessUnlocked = Math.max(0, parseInt(n, 10) || 0);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(ENDLESS_UNLOCKED_KEY, String(endlessUnlocked)); } catch (e) { /* ignore */ }
+    if (PPD && PPD.syncEndlessAIOptions) PPD.syncEndlessAIOptions();
+  }
+  function advanceEndless(level) {
+    if (level > endlessUnlocked) setEndlessUnlocked(level);
+    if (level > endlessHighest) setEndlessHighest(level);
+  }
+  function resetEndless() {
+    setEndlessHighest(0);
+    app.endlessLevel = 1;
   }
 
   // 得分后触发观众反应：得分方（winner 0=红 1=蓝）欢呼，对方观众摇头
@@ -562,8 +668,9 @@
     TT, TTG, GameAudio, NetClient, AIC,
     $id, show, resize,
     wsUrl, isLocalHost, isHttps, isWebVersion, isTouch,
-    isHellUnlocked, unlockHell, syncHellOptions,
+    isHellUnlocked, unlockHell, syncHellOptions, syncHitRangeToggle,
     isHellCleared, markHellCleared, syncHellOptions,
+    getEndlessHighest, getEndlessUnlocked, setEndlessHighest, setEndlessUnlocked, advanceEndless, resetEndless,
     setQuality, setFrameRate, setNoCrowd,
     getPlayerName, loadAINames, saveAINames,
     savePoints, saveOwned, saveEquip, savePlans, saveBonus, saveTraining,

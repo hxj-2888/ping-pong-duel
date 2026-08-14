@@ -1,31 +1,22 @@
 /* ============================================================
- * app/dressup.js — 装扮系统页（v2.0）：外观库存/装配卸下/退款 + 装扮方案
+ * app/dressup.js — 装扮系统页（v2.0）：外观库存/装配卸下 + 装扮方案
  * 通过共享对象 PPD 访问公共状态与接口。能力训练已独立到 app/training.js。
  * - 兑换 → 入持有库存(owned)，不自动装配；玩家在库存中自行「装配/卸下」。
  * - 装扮页已移除退款功能(v2.0)；训练页"全部洗点"也只退训练积分、不再退外观积分。
- * - 装扮方案：从 4 类(尾影/球拍/上衣/溅射)各选 1 组合(至少 1 类至多 4 类)，自定义名，最多 8 个。
+ * - 特效分离(v2.1)：装扮只保留 尾影/撞击溅射 特效类；球衣与拍面主色恒=队服(旗帜队色)，
+ *   球拍皮肤与上衣换色已删除，装扮不再覆盖队服颜色。
+ * - 装扮方案：从 2 类(尾影/溅射)各选 1 组合(至少 1 类至多 2 类)，自定义名，最多 8 个。
  * - 网页版禁用（数据只留本地应用端）。
  * ============================================================ */
 (function () {
   'use strict';
 
   const TRAILS = [
-    { id: 'yellow', name: '尾影·黄', cost: 30 },
-    { id: 'black', name: '尾影·黑', cost: 50 },
-    { id: 'red', name: '尾影·红', cost: 80 },
+    { id: 'yellow', name: '尾影·黄', cost: 60 },
+    { id: 'black', name: '尾影·黑', cost: 100 },
+    { id: 'red', name: '尾影·红', cost: 160 },
   ];
-  const PADDLES = [
-    { id: 'skinA', name: '球拍·流光蓝', cost: 20 },
-    { id: 'skinB', name: '球拍·翡翠绿', cost: 40 },
-    { id: 'skinC', name: '球拍·炫彩金', cost: 60 },
-  ];
-  const SHIRTS = [
-    { id: 'green', name: '上衣·翠绿', cost: 20 },
-    { id: 'purple', name: '上衣·紫罗兰', cost: 30 },
-    { id: 'orange', name: '上衣·活力橙', cost: 40 },
-    { id: 'cyan', name: '上衣·海蓝青', cost: 50 },
-  ];
-  const SPLASH_COST = 50;
+  const SPLASH_COST = 100;
   const MAX_PLANS = 8;
 
   function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -34,12 +25,10 @@
 
   // ---------- 兑换(入库存) ----------
   function own(type, id, cost) {
+    if (type !== 'trail') return; // v2.1：装扮仅尾影/溅射两类
     if (PPD.app.points < cost) { PPD.setStatus('积分不足，无法兑换'); return; }
     const o = PPD.app.owned;
-    if (type === 'trail') { if (!o.trail.includes(id)) o.trail.push(id); }
-    else if (type === 'paddle') { if (!o.paddle.includes(id)) o.paddle.push(id); }
-    else if (type === 'shirt') { if (!o.shirt.includes(id)) o.shirt.push(id); }
-    else return;
+    if (!o.trail.includes(id)) o.trail.push(id);
     PPD.app.points -= cost;
     if (PPD.savePoints) PPD.savePoints();
     if (PPD.saveOwned) PPD.saveOwned();
@@ -88,14 +77,14 @@
     PPD.setStatus('撞击溅射已卸下（恢复波纹）');
   }
 
-  // ---------- 装扮方案 ----------
+  // ---------- 装扮方案（v2.1：仅 尾影/溅射 两类） ----------
   function savePlan() {
     const name = (PPD.ui.planNameInput && PPD.ui.planNameInput.value.trim()) || '';
     if (!name) { PPD.setStatus('请先输入方案名'); return; }
     const eq = PPD.app.equip;
-    if (!(eq.trail || eq.paddle || eq.shirt || eq.splash)) { PPD.setStatus('请先装配至少一项外观'); return; }
+    if (!(eq.trail || eq.splash)) { PPD.setStatus('请先装配至少一项外观'); return; }
     if (PPD.app.plans.length >= MAX_PLANS) { PPD.setStatus('方案已达上限（' + MAX_PLANS + ' 个），请先删除'); return; }
-    PPD.app.plans.push({ name: name.slice(0, 12), trail: eq.trail, paddle: eq.paddle, shirt: eq.shirt, splash: !!eq.splash });
+    PPD.app.plans.push({ name: name.slice(0, 12), trail: eq.trail, splash: !!eq.splash });
     if (PPD.savePlans) PPD.savePlans();
     if (PPD.ui.planNameInput) PPD.ui.planNameInput.value = '';
     renderDressup();
@@ -104,7 +93,7 @@
   function applyPlan(idx) {
     const p = PPD.app.plans[idx];
     if (!p) return;
-    PPD.app.equip = { trail: p.trail, paddle: p.paddle, shirt: p.shirt, splash: !!p.splash };
+    PPD.app.equip = { trail: p.trail || null, splash: !!p.splash };
     if (PPD.saveEquip) PPD.saveEquip();
     renderDressup();
     PPD.setStatus('已应用方案：' + (p.name || ''));
@@ -136,18 +125,6 @@
         ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('trail', x.id, eq.trail === x.id))
         : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="trail" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
     }).join('');
-    const paddleHtml = PADDLES.map((x) => {
-      const has = (o.paddle || []).includes(x.id);
-      return has
-        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('paddle', x.id, eq.paddle === x.id))
-        : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="paddle" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
-    }).join('');
-    const shirtHtml = SHIRTS.map((x) => {
-      const has = (o.shirt || []).includes(x.id);
-      return has
-        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('shirt', x.id, eq.shirt === x.id))
-        : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="shirt" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
-    }).join('');
     const splashHtml = o.splash
       ? shopItem('<b>撞击溅射</b> <span class="t-owned">持有</span>',
           eq.splash
@@ -156,16 +133,12 @@
       : shopItem('<b>撞击溅射</b>', '<button class="btn small" data-action="splash-own">兑换 ' + SPLASH_COST + '</button>');
     if (PPD.ui.dressupList) PPD.ui.dressupList.innerHTML =
       '<h3>尾影特效</h3>' + trailHtml +
-      '<h3>球拍外观</h3>' + paddleHtml +
-      '<h3>上衣换色</h3>' + shirtHtml +
       '<h3>球台撞击特效</h3>' + splashHtml;
 
     // 装扮方案列表
     const plansHtml = PPD.app.plans.map((p, i) => {
       const parts = [];
       if (p.trail) { const n = nameOf(TRAILS, p.trail); if (n) parts.push(n); }
-      if (p.paddle) { const n = nameOf(PADDLES, p.paddle); if (n) parts.push(n); }
-      if (p.shirt) { const n = nameOf(SHIRTS, p.shirt); if (n) parts.push(n); }
       if (p.splash) parts.push('撞击溅射');
       return '<div class="s-item"><div class="t-info"><b>' + esc(p.name || '未命名') + '</b>' +
         '<div class="t-desc">' + esc(parts.join(' + ') || '(空)') + '</div></div>' +
@@ -227,7 +200,7 @@
   if (PPD.ui.planList) PPD.ui.planList.addEventListener('click', onDressupClick);
 
   // ---------- 导出 ----------
-  PPD.COSMETIC_ITEMS = { TRAILS, PADDLES, SHIRTS, SPLASH_COST, MAX_PLANS };
+  PPD.COSMETIC_ITEMS = { TRAILS, SPLASH_COST, MAX_PLANS };
   PPD.ownCosmetic = own;
   PPD.ownSplash = ownSplash;
   PPD.equipCosmetic = equip;

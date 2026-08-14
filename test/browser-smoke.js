@@ -14,7 +14,7 @@ const SCRIPTS = [
   'engine/rules.js', 'engine/math.js', 'engine/state.js', 'engine/physics.js',
   'engine/shots.js', 'engine/strokes.js', 'engine.js',
   'render.js', 'characters.js', 'network.js', 'audio.js', 'ai.js',
-  'app/state.js', 'app/teams.js', 'app/records.js', 'app/input.js', 'app/render.js', 'app/hud.js',
+  'app/state.js', 'app/teams.js', 'app/records.js', 'app/replay.js', 'app/input.js', 'app/render.js', 'app/hud.js',
   'app/net.js', 'app/modes.js', 'app/loop.js', 'app/main.js',
 ];
 
@@ -92,7 +92,7 @@ const ELEMENT_IDS = [
   // 说明书（独立全屏页面）：电脑/手机统一在主页设置按钮下方；滑钮滚动
   'manualPanel', 'btnManualMenu', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
-  'phaseBanner', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'hitPaddleVal', 'ballHeight', 'inBoxStatus', 'serveDot',
+  'phaseBanner', 'serveTimer', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'ballHeight', 'inBoxStatus', 'serveDot',
   'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility',
   'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
@@ -107,8 +107,15 @@ const ELEMENT_IDS = [
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/60/无上限)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
-  'recordsPanel', // 个人生涯小方框（records.js 渲染摘要，点击展开整页）
-  'careerPanel', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', 'btnCareerBack', // 个人生涯单开页（分页）
+  'recordsPanel', // 个人生涯蓝块（records.js 渲染摘要，点击展开合并页）
+  'careerPanel', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', 'btnCareerBack', // 个人生涯合并页
+  'careerTab', 'btnCareerTab', 'btnHistoryTab', // 合并页标签（战绩记录 / 历史回放）
+  'historyPanel', 'historyList', // 历史回放标签体（并入生涯页）
+  'btnHistoryDelete', 'historyDeleteBar', 'historyDeleteHint', 'btnHistoryDeleteConfirm',
+  'btnEndless', 'endlessPanel', 'endlessList', 'btnEndlessBack',
+  'btnReplay', 'btnSaveReplay',
+  'replayPanel', 'replayTitle', 'btnReplayBack', 'btnReplayPlay', 'btnReplaySpeed',
+  'btnReplaySave', 'replayProgress', 'replayTimeLabel', 'replayStatus',
 ];
 
 function boot(opts) {
@@ -276,12 +283,13 @@ async function main() {
     t.click('btnLocal');
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）再进入后续用例
     check('本地模式已启动', t.app.mode === 'local' && !!t.app.engine);
-    check('接球箱文字栏已移除（判定指示不显示碰撞箱尺寸数字,v2.0）', t.elements.get('hitBallVal') === undefined);
-    check('虚线面板不再显示蹲下最低接球（说明已移入玩法说明）', t.elements.get('hitPaddleVal').textContent === '');
     check('判定范围虚线默认关闭', t.app.showHitRanges === false);
+    check('虚线未解锁（未击败困难）：设置勾选框禁用', t.elements.get('setShowHitRanges').disabled === true);
     t.runFrames(3);
     check('默认关闭：左上角判定面板隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
-    // 设置面板：打开 → 开启虚线 → 立即生效；再关闭
+    // 设置面板：通关困难解锁虚线后 → 开启 → 立即生效；再关闭
+    t.ppd.unlockHell(); // 击败困难 → 解锁地狱与判定范围虚线
+    check('虚线解锁后：设置勾选框可用', t.elements.get('setShowHitRanges').disabled === false);
     t.elements.get('btnSettings').dispatch('click', {});
     check('设置面板打开', t.elements.get('settingsPanel').style.display !== 'none');
     t.elements.get('setShowHitRanges').checked = true;
@@ -754,6 +762,13 @@ async function main() {
   {
     const t = await boot();
     t.click('btnAI');
+    t.runFrames(2);
+    check('发球倒计时显示 6s', t.elements.get('serveTimer').style.display !== 'none' &&
+      t.elements.get('serveTimer').textContent.indexOf('6s') !== -1);
+    t.app.engine.phaseT = 4.0;
+    t.runFrames(1);
+    check('发球剩余 2 秒时显示警示', t.elements.get('serveTimer').classList.contains('warning') &&
+      t.elements.get('serveTimer').textContent.indexOf('2s') !== -1);
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     check('AI 模式启动', t.app.mode === 'ai' && !!t.app.engine);
     // 让电脑先发球
@@ -795,6 +810,11 @@ async function main() {
       check('?desktop=1 强制桌面端：无摇杆', hC.indexOf('摇杆') === -1 && hC.indexOf('左键') !== -1 && hC.indexOf('推球') !== -1);
       const hD = enterAI(await boot({ width: 390, height: 844, touch: true })); // 手机尺寸+触屏 → 手机端
       check('手机尺寸+触屏：显示手机端说明', hD.indexOf('摇杆') !== -1);
+      const mobileServe = await boot({ touch: true, search: '?touch=1' });
+      mobileServe.click('btnAI');
+      mobileServe.runFrames(2);
+      check('手机端同步显示发球倒计时', mobileServe.elements.get('serveTimer').style.display !== 'none' &&
+        mobileServe.elements.get('serveTimer').textContent.indexOf('6s') !== -1);
       // 回归：触屏笔记本/Windows 触摸设备（有触摸能力但主指针是鼠标 pointer:fine）+ 窄窗口
       // 不得出现手机端按钮与触屏提示（曾因 maxTouchPoints>0 误判为手机）
       const tE = await boot({
@@ -833,19 +853,19 @@ async function main() {
     check('返回主界面：回到菜单', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
   }
 
-  // ---------- 2.5 AI 观战（AI vs AI） ----------
+  // ---------- 2.5 模拟推演（AI vs AI） ----------
   {
     const t = await boot();
-    check('主页出现 AI 观战入口', !!t.elements.get('btnAIVsAI'));
-    // 设定红=困难(2)、蓝=中等(1) 后开始
+    check('主页出现模拟推演入口', !!t.elements.get('btnAIVsAI'));
+    // 设定甲=困难(2)、乙=中等(1) 后开始
     t.elements.get('aiLevelA').value = '2';
     t.elements.get('aiLevelB').value = '1';
     t.click('btnAIVsAI');
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
-    check('AI 观战启动', t.app.mode === 'aivai' && !!t.app.engine);
-    check('AI 观战读取双方难度', t.app.aiLevelA === 2 && t.app.aiLevelB === 1);
+    check('模拟推演启动', t.app.mode === 'aivai' && !!t.app.engine);
+    check('模拟推演读取双方难度', t.app.aiLevelA === 2 && t.app.aiLevelB === 1);
     t.runFrames(2); // netInfo 在帧循环内刷新
-    check('AI 观战 netInfo 显示', t.elements.get('netInfo').textContent.indexOf('AI 观战') === 0);
+    check('模拟推演 netInfo 显示', t.elements.get('netInfo').textContent.indexOf('模拟推演') === 0);
     // 双方 AI 自动对打：跑到出现对打阶段的击球
     const eng = t.app.engine;
     let played = false;
@@ -853,26 +873,24 @@ async function main() {
       t.runFrames(1);
       if (eng.phase === 'play' && eng.rallyCount > 0) played = true;
     }
-    check('AI 观战：双方 AI 自动对打', played);
+    check('模拟推演：双方 AI 自动对打', played);
     t.runFrames(300);
-    check('AI 观战渲染 300 帧无异常', true);
-    // AI 观战虚线面板：实时计算球高，但不做可扣杀/可高吊指示（两行隐藏）
+    check('模拟推演渲染 300 帧无异常', true);
+    // 模拟推演虚线面板：实时计算球高（v2.4 已移除碰撞箱数字与扣杀/高吊行）
     t.app.showHitRanges = true;
     t.runFrames(10);
-    check('AI 观战虚线面板：实时球高', t.elements.get('ballHeight').textContent !== '-');
-    check('AI 观战虚线面板：扣杀/高吊行已移除（v2.0 判定指示只保留球高/进箱）',
-      t.elements.get('hrSmashRow') === undefined && t.elements.get('hrLobRow') === undefined);
+    check('模拟推演虚线面板：实时球高', t.elements.get('ballHeight').textContent !== '-');
     t.app.showHitRanges = false;
     t.runFrames(2);
-    // 暂停 → 面板显示双方难度 → 调整红方难度生效
+    // 暂停 → 面板显示双方难度 → 调整甲难度生效
     t.elements.get('btnPause').dispatch('click', {});
     check('暂停：面板与双方难度显示', t.app.paused === true &&
       t.elements.get('pausePanel').style.display !== 'none' &&
       t.elements.get('pauseAIVsAI').style.display !== 'none');
     t.elements.get('pauseAiLevelA').value = '0';
     t.elements.get('pauseAiLevelA').dispatch('change', {});
-    check('暂停中调整红方难度生效', t.app.aiLevelA === 0);
-    // 参数微调：把红方「反应」拉到 ×1.2、「接球率」拉到 ×0.5 → 写回 aiTuneA
+    check('暂停中调整甲难度生效', t.app.aiLevelA === 0);
+    // 参数微调：把甲「反应」拉到 ×1.2、「接球率」拉到 ×0.5 → 写回 aiTuneA
     t.elements.get('tuneAReact').value = '120';
     t.elements.get('tuneAReact').dispatch('change', {});
     t.elements.get('tuneACatch').value = '50';
@@ -884,7 +902,7 @@ async function main() {
     check('微调后 netInfo 显示 ⚙ 标记', t.elements.get('netInfo').textContent.indexOf('⚙') !== -1);
     // 返回主页面
     t.elements.get('btnExit').dispatch('click', {});
-    check('AI 观战退出返回主页面', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
+    check('模拟推演退出返回主页面', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
   }
 
   // ---------- 2.6 地狱解锁：全量同步 5 个难度下拉 ----------
@@ -954,12 +972,14 @@ async function main() {
       }),
     });
     check('启动：localStorage 被清（初始未解锁）', t.ppd.isHellUnlocked() === false && t.ppd.isHellCleared() === false);
+    check('解锁前：虚线勾选框禁用', t.elements.get('setShowHitRanges').disabled === true);
     await sleep(10); // 等待 syncUnlocksFromRecords 异步完成
     check('记录含困难获胜 → 地狱解锁', t.ppd.isHellUnlocked() === true);
     check('记录含地狱获胜 → 地狱通关', t.ppd.isHellCleared() === true);
     const opts = ['aiLevel', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB']
       .map((id) => t.elements.get(id).querySelector('option[value="3"]'));
     check('解锁后：5 个难度下拉全部可用', opts.every((o) => o.disabled === false));
+    check('解锁后：虚线勾选框可用（击败困难同步解锁）', t.elements.get('setShowHitRanges').disabled === false);
   }
 
   // ---------- 2.76 手机端（file:// 安卓版）个人生涯：本地优先存 localStorage，无需后端 ----------
@@ -995,6 +1015,15 @@ async function main() {
     // 模拟通关地狱（人机击败地狱难度）→ 再暂停：调控块出现
     t.ppd.markHellCleared();
     check('通关地狱标记生效', t.ppd.isHellCleared());
+    check('地狱通关后拆分常规单机与无尽人机', t.elements.get('btnAI').textContent === '常规单机' &&
+      t.elements.get('btnEndless').style.display !== 'none');
+    check('无尽进度初始为 0（可挑战无尽-1）', t.ppd.getEndlessHighest() === 0);
+    t.ppd.advanceEndless(1);
+    check('通关无尽-1 解锁无尽-2', t.ppd.getEndlessHighest() === 1);
+    check('已解锁无尽 AI 记录为 1', t.ppd.getEndlessUnlocked() === 1);
+    t.ppd.resetEndless();
+    check('无尽落败回退到无尽-1', t.ppd.getEndlessHighest() === 0);
+    check('无尽落败不清除已解锁的无尽 AI', t.ppd.getEndlessUnlocked() === 1);
     t.elements.get('btnPause').dispatch('click', {});
     check('通关地狱后：人机暂停显示数值调控', t.elements.get('pauseAITune').style.display !== 'none');
     // 滑杆写入 aiTuneB（对手=蓝方）并即时生效
@@ -1008,6 +1037,90 @@ async function main() {
     check('调控后暂停中渲染无异常', true);
     t.elements.get('btnResume').dispatch('click', {});
     check('调控后继续：暂停面板关闭', t.app.paused === false && t.elements.get('pausePanel').style.display === 'none');
+  }
+
+  // ---------- 2.9 赛后回放（v2.2 并入个人生涯页「历史回放」标签） ----------
+  {
+    const t = await boot();
+    check('主页无独立「查看历史比赛」按钮（已并入个人生涯）', !t.elements.get('btnHistory'));
+    // 点个人生涯蓝块 → 合并页打开，默认「战绩记录」标签
+    t.elements.get('recordsPanel').dispatch('click', {});
+    await sleep(10);
+    check('合并页打开且默认战绩标签可见', t.elements.get('careerPanel').style.display !== 'none' &&
+      t.elements.get('careerTab').style.display !== 'none' &&
+      t.elements.get('historyPanel').style.display === 'none');
+    check('战绩标签按钮激活高亮', t.elements.get('btnCareerTab').classList.contains('active'));
+    // 切到「历史回放」标签
+    t.elements.get('btnHistoryTab').dispatch('click', {});
+    await sleep(10);
+    check('切到历史回放标签：回放体可见、战绩体隐藏', t.elements.get('historyPanel').style.display !== 'none' &&
+      t.elements.get('careerTab').style.display === 'none' &&
+      t.elements.get('btnHistoryTab').classList.contains('active'));
+    check('历史回放空态提示', t.elements.get('historyList').innerHTML.indexOf('暂无历史回放') !== -1);
+    // 切回战绩标签 → 返回主菜单
+    t.elements.get('btnCareerTab').dispatch('click', {});
+    check('切回战绩记录标签', t.elements.get('careerTab').style.display !== 'none' &&
+      t.elements.get('historyPanel').style.display === 'none');
+    t.elements.get('btnCareerBack').dispatch('click', {});
+    check('合并页关闭返回主菜单', t.elements.get('careerPanel').style.display === 'none' &&
+      t.elements.get('menu').style.display !== 'none');
+    // 人机一局强制结束 → 回放自动保存
+    t.click('btnAI');
+    await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
+    t.runFrames(120);
+    const engR = t.app.engine;
+    engR.server = 0; engR.startServer = 0;
+    engR.score = [10, 9];
+    engR.phase = 'point'; engR.pointWinner = 0; engR.phaseT = 2.0;
+    t.runFrames(1);
+    t.runFrames(3);
+    check('结算页出现回放按钮且已启用', t.elements.get('gameOver').style.display !== 'none' &&
+      t.elements.get('btnReplay').disabled === false && t.elements.get('btnSaveReplay').disabled === false);
+    const replayList1 = await t.ppd.Replay.list();
+    check('回放已保存（1 条，人机模式）', Array.isArray(replayList1) && replayList1.length === 1 &&
+      replayList1[0].mode === 'ai' && replayList1[0].score[0] === 11 && replayList1[0].score[1] === 9);
+    t.elements.get('btnReplay').dispatch('click', {});
+    await sleep(10);
+    check('回放播放器打开', t.elements.get('replayPanel').style.display !== 'none');
+    t.runFrames(5);
+    check('回放播放：HUD 显示终局比分 11:9', t.elements.get('score1').textContent === '11' &&
+      t.elements.get('score2').textContent === '9');
+    t.elements.get('btnReplayPlay').dispatch('click', {});
+    t.runFrames(30);
+    check('回放播放中：按钮变为暂停', t.elements.get('btnReplayPlay').textContent === '⏸ 暂停');
+    t.elements.get('btnReplayBack').dispatch('click', {});
+    check('回放播放器关闭返回结算页', t.elements.get('replayPanel').style.display === 'none' &&
+      t.elements.get('gameOver').style.display !== 'none');
+    t.elements.get('btnSaveReplay').dispatch('click', {});
+    await sleep(10);
+    check('保存回放（无录屏支持）兜底不崩溃', true);
+    t.elements.get('btnMenu').dispatch('click', {});
+    // 回菜单 → 打开合并页 → 切回放标签 → 列表渲染回放条目
+    t.elements.get('recordsPanel').dispatch('click', {});
+    await sleep(10);
+    t.elements.get('btnHistoryTab').dispatch('click', {});
+    await sleep(10);
+    check('历史回放标签渲染回放条目（人机/比分）', t.elements.get('historyList').innerHTML.indexOf('人机') !== -1 &&
+      t.elements.get('historyList').innerHTML.indexOf('11:9') !== -1);
+    await t.ppd.Replay.openById(replayList1[0].id, 'career');
+    check('从生涯页回放标签打开回放播放器', t.elements.get('replayPanel').style.display !== 'none');
+    t.elements.get('btnReplayBack').dispatch('click', {});
+    check('回放关闭后返回个人生涯页回放标签', t.elements.get('replayPanel').style.display === 'none' &&
+      t.elements.get('careerPanel').style.display !== 'none' &&
+      t.elements.get('historyPanel').style.display !== 'none');
+    // 删除流程（仍在回放标签内）
+    t.elements.get('btnHistoryDelete').dispatch('click', {});
+    check('回放标签显示删除确认条', t.elements.get('historyDeleteBar').style.display !== 'none');
+    t.elements.get('historyList').dispatch('click', {
+      target: { closest: () => ({ dataset: { id: replayList1[0].id } }) },
+    });
+    check('选中回放后删除按钮启用', t.elements.get('btnHistoryDeleteConfirm').disabled === false &&
+      t.elements.get('btnHistoryDeleteConfirm').textContent.indexOf('1') !== -1);
+    t.elements.get('btnHistoryDeleteConfirm').dispatch('click', {});
+    await sleep(10);
+    const replayListAfterDelete = await t.ppd.Replay.list();
+    check('删除回放后列表为空', Array.isArray(replayListAfterDelete) && replayListAfterDelete.length === 0);
+    check('删除后回放标签回到空态', t.elements.get('historyList').innerHTML.indexOf('暂无历史回放') !== -1);
   }
 
   // ---------- 3. 联机建房（side 0） ----------

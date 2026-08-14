@@ -29,68 +29,59 @@
         <label>你的昵称
           <input id="nameInput" maxlength="12" placeholder="球员名字" value="乒乓球手">
         </label>
-        <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
+        <!-- 个人生涯：昵称下方蓝色独立方块（点击展开整页；内容渲染见 records.js） -->
+        <div id="recordsPanel" class="records-block">个人生涯 · 加载中…</div>
+        <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（旗帜以颜色命名，系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
         <div class="team-pick">
           <label class="ai-label">我的队伍
             <span class="team-flag" id="teamFlagMe"></span>
             <select id="teamMe"></select>
           </label>
-          <input id="teamMeName" class="team-name" maxlength="12" placeholder="自定义队名">
+          <input id="teamMeName" class="team-name" maxlength="6" placeholder="队名">
         </div>
         <button id="btnLocal" class="btn primary">本地双人对战（分屏）</button>
         <button id="btnAI" class="btn primary">人机对战（单机）</button>
-        <div class="row ai-row">
-          <label class="ai-label">难度
-            <select id="aiLevel">
-              <option value="0">简单</option>
-              <option value="1" selected>中等</option>
-              <option value="2">困难</option>
-              <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
-            </select>
-          </label>
-        </div>
-        <div class="team-pick">
-          <label class="ai-label">电脑队伍
-            <span class="team-flag" id="teamFlagOpp"></span>
-            <select id="teamOpp"></select>
-          </label>
-          <input id="teamOppName" class="team-name" maxlength="12" placeholder="自定义队名">
+        <button id="btnEndless" class="btn primary" style="display:none">♾ 无尽人机</button>
+        <!-- 人机电脑：难度 + 旗帜 + 队名 合并同一栏（电脑对手配置） -->
+        <div class="pick-row">
+          <span class="pick-tag">电脑</span>
+          <select id="aiLevel" class="pick-diff">
+            <option value="0">简单</option>
+            <option value="1" selected>中等</option>
+            <option value="2">困难</option>
+            <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
+          </select>
+          <span class="team-flag" id="teamFlagOpp"></span>
+          <select id="teamOpp" class="pick-team"></select>
+          <input id="teamOppName" class="team-name" maxlength="6" placeholder="队名">
         </div>
         <div class="row ai-row">
-          <button id="btnAIVsAI" class="btn primary">AI 观战（AI vs AI）</button>
+          <button id="btnAIVsAI" class="btn primary">模拟推演（AI vs AI）</button>
         </div>
-        <div class="row aivai-row">
-          <label class="ai-label">红方
-            <select id="aiLevelA">
-              <option value="0">简单</option>
-              <option value="1" selected>中等</option>
-              <option value="2">困难</option>
-              <option value="3" disabled>地狱 🔒</option>
-            </select>
-          </label>
-          <label class="ai-label">蓝方
-            <select id="aiLevelB">
-              <option value="0">简单</option>
-              <option value="1" selected>中等</option>
-              <option value="2">困难</option>
-              <option value="3" disabled>地狱 🔒</option>
-            </select>
-          </label>
+        <!-- 模拟推演：甲/乙双方 难度 + 旗帜 + 队名 合并同一栏 -->
+        <div class="pick-row">
+          <span class="pick-tag">甲</span>
+          <select id="aiLevelA" class="pick-diff">
+            <option value="0">简单</option>
+            <option value="1" selected>中等</option>
+            <option value="2">困难</option>
+            <option value="3" disabled>地狱 🔒</option>
+          </select>
+          <span class="team-flag" id="teamFlagA"></span>
+          <select id="teamA" class="pick-team"></select>
+          <input id="teamAName" class="team-name" maxlength="6" placeholder="队名">
         </div>
-        <!-- AI 观战：难度下拉旁选择红/蓝双方队伍（系统默认队名可自定义） -->
-        <div class="team-pick">
-          <label class="ai-label">红方队伍
-            <span class="team-flag" id="teamFlagA"></span>
-            <select id="teamA"></select>
-          </label>
-          <input id="teamAName" class="team-name" maxlength="12" placeholder="自定义队名">
-        </div>
-        <div class="team-pick">
-          <label class="ai-label">蓝方队伍
-            <span class="team-flag" id="teamFlagB"></span>
-            <select id="teamB"></select>
-          </label>
-          <input id="teamBName" class="team-name" maxlength="12" placeholder="自定义队名">
+        <div class="pick-row">
+          <span class="pick-tag">乙</span>
+          <select id="aiLevelB" class="pick-diff">
+            <option value="0">简单</option>
+            <option value="1" selected>中等</option>
+            <option value="2">困难</option>
+            <option value="3" disabled>地狱 🔒</option>
+          </select>
+          <span class="team-flag" id="teamFlagB"></span>
+          <select id="teamB" class="pick-team"></select>
+          <input id="teamBName" class="team-name" maxlength="6" placeholder="队名">
         </div>
         <div class="row">
           <button id="btnNetEntry" class="btn primary">🎮 联机对战</button>
@@ -99,14 +90,11 @@
           <button id="btnTraining" class="btn primary">📈 能力训练</button>
           <button id="btnDressup" class="btn primary">🎨 装扮系统</button>
         </div>
-      <div id="statusBar" class="status"></div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v172.apk" download="PingPongDuel-v172.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v240.apk" download="PingPongDuel-v240.apk" style="display:none">📱 下载安卓版（直接安装）</a>
         <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
-      <div id="menuPoints" class="menu-points" style="display:none">积分：0</div>
-      <div id="recordsPanel" class="records-mini">个人生涯 · 加载中…</div>
     </div>
   </div>
   </div>
@@ -174,10 +162,11 @@
       </div>
     </div>
     <div id="phaseBanner"></div>
+    <div id="serveTimer" class="serve-timer" style="display:none"></div>
     <div id="pointToast"></div>
     <div id="hintBar"></div>
     <div id="netInfo"></div>
-    <!-- 左上角：判定指示（v2.0 精简：不显示碰撞箱尺寸文字，只保留球高/进箱；虚线框在场景中绘制） -->
+    <!-- 左上角：判定指示（v2.4 精简：只保留 球高/进箱；碰撞箱数字、扣杀/高吊指示已移除；虚线框在场景中绘制） -->
     <div id="hitRangeInfo">
       <div class="hr-title">接球判定（进箱即命中）</div>
       <div class="hr-row"><span class="hr-dot ball"></span><span>球高 <b id="ballHeight">-</b></span></div>
@@ -188,19 +177,19 @@
       <button id="btnSettingsGame" class="tool-btn" title="设置">⚙</button>
       <button id="btnPause" class="tool-btn">暂停</button>
       <button id="btnExit" class="tool-btn">退出</button>
-      <span id="fpsMeter" class="fps-meter" title="估测帧数（30/60 档封顶 60；无上限档显示真实帧率，自动匹配设备刷新率）">60</span>
+      <span id="fpsMeter" class="fps-meter" title="估测帧数（v2.4 显示真实渲染帧率，受浏览器/系统刷新率限制）">60</span>
     </div>
     <!-- 暂停面板 -->
     <div id="pausePanel" class="pause-panel" style="display:none">
       <div class="pause-card">
         <h2>已暂停</h2>
-        <!-- AI 观战：暂停中调整双方 AI 难度与参数（即时生效） -->
+        <!-- 模拟推演：暂停中调整甲/乙双方 AI 难度与参数（即时生效） -->
         <div id="pauseAIVsAI" class="pause-aivai" style="display:none">
           <div class="tune-side">
-            <label class="ai-label">红方 AI 名字
-              <input id="pauseAiNameA" maxlength="12" placeholder="红方 AI">
+            <label class="ai-label">甲 AI 名字
+              <input id="pauseAiNameA" maxlength="12" placeholder="甲 AI">
             </label>
-            <label class="ai-label">红方 AI
+            <label class="ai-label">甲 AI
               <select id="pauseAiLevelA">
                 <option value="0">简单</option>
                 <option value="1" selected>中等</option>
@@ -217,10 +206,10 @@
             <button id="tuneResetA" class="tune-reset" type="button">重置 ×1</button>
           </div>
           <div class="tune-side">
-            <label class="ai-label">蓝方 AI 名字
-              <input id="pauseAiNameB" maxlength="12" placeholder="蓝方 AI">
+            <label class="ai-label">乙 AI 名字
+              <input id="pauseAiNameB" maxlength="12" placeholder="乙 AI">
             </label>
-            <label class="ai-label">蓝方 AI
+            <label class="ai-label">乙 AI
               <select id="pauseAiLevelB">
                 <option value="0">简单</option>
                 <option value="1" selected>中等</option>
@@ -237,7 +226,7 @@
             <button id="tuneResetB" class="tune-reset" type="button">重置 ×1</button>
           </div>
           <div class="tune-side" style="max-width:460px;margin:0 auto;">
-            <label class="ai-label">观战特效（仅观战生效，AI 不受玩家装扮影响）</label>
+            <label class="ai-label">推演特效（仅模拟推演生效，AI 不受玩家装扮影响）</label>
             <label class="toggle-label">
               <input type="checkbox" id="setTrailFx" checked>
               尾影特效
@@ -265,7 +254,7 @@
         <button id="btnPauseExit" class="btn">退出比赛（返回主页面）</button>
       </div>
     </div>
-    <!-- 对局开场渲染：双方旗帜 + 队名 + VS（渲染结束进入对局；本地/人机/AI 观战生效） -->
+    <!-- 对局开场渲染：双方旗帜 + 队名 + VS（渲染结束进入对局；本地/人机/模拟推演生效） -->
     <div id="teamIntro" class="team-intro" style="display:none">
       <div class="ti-row">
         <div class="ti-team">
@@ -306,6 +295,8 @@
   <div id="gameOver" class="game-over-screen" style="display:none">
     <h1 id="gameOverTitle">您赢了</h1>
     <div class="game-over-btns">
+      <button id="btnReplay" class="btn primary" disabled>▶ 查看回放</button>
+      <button id="btnSaveReplay" class="btn" disabled>💾 保存回放</button>
       <button id="btnAgain" class="btn primary">再来一局</button>
       <button id="btnMenu" class="btn">返回主界面</button>
       <button id="btnQuit" class="btn">退出游戏</button>
@@ -317,8 +308,8 @@
     <div class="settings-card">
       <h2>设置</h2>
       <label class="toggle-label">
-        <input type="checkbox" id="setShowHitRanges">
-        判定范围虚线（接球箱 / 球高 / 进箱提示）
+        <input type="checkbox" id="setShowHitRanges" disabled>
+        判定范围虚线（球高 / 进箱提示 · 击败困难解锁）
       </label>
       <label class="toggle-label">
         <input type="checkbox" id="setMusic" checked>
@@ -348,6 +339,8 @@
           <option value="30">30</option>
         </select>
       </label>
+      <!-- v2.4：帧率说明——无上限档显示真实渲染帧率；实际帧率受浏览器/系统刷新率限制（部分手机浏览器/WebView 固定 60Hz） -->
+      <div class="settings-note">帧率显示真实渲染值；实际受浏览器/系统刷新率限制（部分手机浏览器固定 60Hz），手机高画质已自动限幅 DPR 以释放性能</div>
       <!-- 审计 #8:公网联机服务器地址(设置面板)。手机端(APK file:// 页面无同源后端)战绩默认存本地,
            填写自建服务器地址后异步同步到该服务器(跨设备共享,兑现 README/使用说明/MainActivity 承诺);
            格式 ws://IP:8765 或 http://IP:8765(本地联机/战绩同步共用) -->
@@ -407,7 +400,7 @@
         <details class="manual-capsule" data-platform="both">
           <summary>模式与提示</summary>
           <div class="manual-capsule-body">
-            <p>模式：人机对战（简单/中等/困难/地狱）· AI 观战 · 本地双人（电脑）· 联机（4 位房间码）</p>
+            <p>模式：人机对战（简单/中等/困难/地狱）· 模拟推演（AI vs AI）· 本地双人（电脑）· 联机（4 位房间码）</p>
             <p>关键招数：推球（左键/单击）；扣球（右键/上滑，球高≥约 1.0m 可扣，不够高直接撞网判负）；高吊（蹲下+推球，喂高球逼对方扣杀）；反击扣杀（扣杀来球预判起拍+推球即可接回，站立即可，贴地低扣需蹲下）；蹲下（贴地接任何低球，但会降低移动速度）</p>
             <p>AI 对战：四档难度由弱到强（简单只推球 → 地狱全面拉满）；困难/地狱会打低平快球（蹲下接最稳）与放高吊；成功反击扣杀/低平快球时该回球视为扣杀、电脑应对概率减半</p>
             <p>瞄准位置解不出合法发球时，轨迹线消失且发不出球，调整鼠标/手指位置即可</p>
@@ -423,18 +416,38 @@
   </div>
 
   <!-- 个人生涯（单开页面：主菜单小方框点击展开，分页展示战绩记录） -->
+  <!-- 个人生涯（合并页：主菜单蓝块点击展开；战绩记录 + 历史回放 两个标签） -->
   <div id="careerPanel" class="career-panel" style="display:none">
     <div class="career-card">
       <div class="career-header">
         <h2>个人生涯</h2>
         <button id="btnCareerBack" class="btn">← 返回主菜单</button>
       </div>
-      <div id="careerStats" class="career-stats"></div>
-      <div id="careerList" class="career-list"></div>
-      <div class="career-pager">
-        <button id="btnCareerPrev" class="btn small">上一页</button>
-        <span id="careerPageLabel" class="career-page-label">第 1 / 1 页</span>
-        <button id="btnCareerNext" class="btn small">下一页</button>
+      <div class="career-tabs">
+        <button id="btnCareerTab" class="career-tab-btn active" type="button">战绩记录</button>
+        <button id="btnHistoryTab" class="career-tab-btn" type="button">历史回放</button>
+      </div>
+      <!-- 战绩记录标签体（原生涯列表） -->
+      <div id="careerTab" class="career-tab-body">
+        <div id="careerStats" class="career-stats"></div>
+        <div id="careerList" class="career-list"></div>
+        <div class="career-pager">
+          <button id="btnCareerPrev" class="btn small">上一页</button>
+          <span id="careerPageLabel" class="career-page-label">第 1 / 1 页</span>
+          <button id="btnCareerNext" class="btn small">下一页</button>
+        </div>
+      </div>
+      <!-- 历史回放标签体（并入生涯页；id=historyPanel 保留供 replay.js/state.js 复用） -->
+      <div id="historyPanel" class="career-tab-body" style="display:none">
+        <div class="history-header-actions">
+          <button id="btnHistoryDelete" class="btn danger">🗑 删除回放</button>
+        </div>
+        <div id="historyDeleteBar" class="history-delete-bar" style="display:none">
+          <span id="historyDeleteHint" class="history-delete-hint">点击条目选择要删除的回放</span>
+          <button id="btnHistoryDeleteConfirm" class="btn danger small" disabled>删除所选</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+        <div class="history-note">按时间倒序排列（最新在前）· 回放仅保存在本设备</div>
       </div>
     </div>
   </div>
@@ -472,6 +485,32 @@
     </div>
   </div>
 
+  <!-- 无尽人机关卡选择页：地狱通关后开启，从无尽-1 开始，通关逐级解锁 -->
+  <div id="endlessPanel" class="endless-panel" style="display:none">
+    <div class="endless-card">
+      <div class="career-header">
+        <h2>♾ 无尽人机</h2>
+        <button id="btnEndlessBack" class="btn">← 返回主菜单</button>
+      </div>
+      <div class="endless-tip">从无尽-1 开始挑战，通关一级解锁下一级。落败会回到无尽-1。</div>
+      <div id="endlessList" class="endless-list"></div>
+    </div>
+  </div>
+
+  <!-- 赛后回放播放器（结算页「查看回放」/历史页条目打开；画面画在 game canvas，控制条在底部） -->
+  <div id="replayPanel" class="replay-panel" style="display:none">
+    <div id="replayTitle" class="replay-title"></div>
+    <div class="replay-controls">
+      <button id="btnReplayBack" class="btn small">← 返回</button>
+      <button id="btnReplayPlay" class="btn">▶ 播放</button>
+      <input id="replayProgress" type="range" min="0" max="1000" value="0" step="1">
+      <span id="replayTimeLabel" class="replay-time">0:00 / 0:00</span>
+      <button id="btnReplaySpeed" class="btn small">1.0×</button>
+      <button id="btnReplaySave" class="btn primary">💾 保存视频</button>
+    </div>
+    <div id="replayStatus" class="replay-status"></div>
+  </div>
+
   <!-- 引擎：按依赖顺序加载的独立小模块（engine.js 负责组装） -->
   <script src="js/engine/rules.js"></script>
   <script src="js/engine/math.js"></script>
@@ -489,6 +528,7 @@
   <script src="js/app/state.js"></script>
   <script src="js/app/teams.js"></script>
   <script src="js/app/records.js"></script>
+  <script src="js/app/replay.js"></script>
   <script src="js/app/training.js"></script>
   <script src="js/app/dressup.js"></script>
   <script src="js/app/input.js"></script>

@@ -50,6 +50,12 @@
       return;
     }
 
+    // 发球时限：所有模式统一 6 秒。发球方仍未出手时判对方得分，
+    // 后续 startNextServe 会正常增加 serveNum，即消耗本次发球机会。
+    if (state.phase === 'serve' && state.ball.inHand && state.phaseT >= ctx.RULES.SERVE_TIME_LIMIT) {
+      ctx.endPoint(state, 1 - state.server, 'serve-timeout');
+    }
+
     const prevBall = { ...state.ball.pos };
     for (let i = 0; i < 2; i++) {
       if (state.players[i].stroke.active) {
@@ -185,6 +191,16 @@
 
   function stepBall(state, dt) {
     const wasPlay = state.phase === 'play';
+    // 得分间隙里，球一旦飞出球场边界（进入两侧/端线观众席或场外）就立即隐藏并停止，
+    // 不再继续向观众席里滚动。正常对打阶段不做此判断，避免把合法出界轨迹提前判掉。
+    if (!state.ball.inHand && state.phase === 'point' &&
+        (Math.abs(state.ball.pos.x) > ctx.RULES.ARENA_HALF_X ||
+         Math.abs(state.ball.pos.z) > ctx.RULES.ARENA_HALF_Z)) {
+      state.ball.vis = false;
+      state.ball.vel = ctx.vec(0, 0, 0);
+      state.ball.spin = ctx.vec(0, 0, 0);
+      return;
+    }
     ctx.physicsStep(state.ball, dt, (ev) => {
       if (!wasPlay) return;
       if (ev.type === 'bounce') ctx.onBallBounce(state);
@@ -225,12 +241,12 @@
         cq: pl.crouch,  // 蹲下状态（渲染层画蹲姿）
         rn: pl.run,     // 跑步状态
       })),
-      b: state.ball.inHand
-        ? null
-        : [state.ball.pos.x, state.ball.pos.y, state.ball.pos.z,
+      b: !state.ball.inHand && state.ball.vis !== false
+        ? [state.ball.pos.x, state.ball.pos.y, state.ball.pos.z,
            state.ball.vel.x, state.ball.vel.y, state.ball.vel.z,
-           state.ball.spin.x, state.ball.spin.y, state.ball.spin.z],
-      bh: state.ball.inHand
+           state.ball.spin.x, state.ball.spin.y, state.ball.spin.z]
+        : null,
+      bh: state.ball.inHand && state.ball.vis !== false
         ? [state.ball.pos.x, state.ball.pos.y, state.ball.pos.z]
         : null,
       // 发球方案（发球待发/挥拍期间持拍手已生成）：客户端据此画精确发球预测轨迹
