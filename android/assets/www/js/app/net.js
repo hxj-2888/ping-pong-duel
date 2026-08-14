@@ -493,6 +493,10 @@
           PPD.show(el, true);
           return;
         }
+        // 防火墙提示用真实端口（自定义 PORT 时不再误导写死 8765）
+        if (PPD.ui.lanFirewallPort) {
+          PPD.ui.lanFirewallPort.textContent = info.port || 8765;
+        }
         const proto = location.protocol === 'https:' ? 'https' : 'http';
         // 优先用带网卡名的 ifaces（WLAN / 以太网 / Radmin VPN），缺失时回退纯 ips
         const ifaces = Array.isArray(info.ifaces) && info.ifaces.length ? info.ifaces : null;

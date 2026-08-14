@@ -56,6 +56,7 @@
     lanTargetRow: document.getElementById('lanTargetRow'),     // 本地联机：对方设备地址输入行（联机框内）
     lanTargetInput: document.getElementById('lanTargetInput'),
     lanFirewallNote: document.getElementById('lanFirewallNote'), // 房主面板：手动放行防火墙提醒
+    lanFirewallPort: document.getElementById('lanFirewallPort'), // 防火墙提示中的端口号（用实际 PORT，自定义端口时显示真实值）
     // 联机框（主页「联机对战」入口打开的全屏面板，等同新开页面；原 roomPanel 合并为内部等待区）
     netPanel: document.getElementById('netPanel'),
     btnNetEntry: document.getElementById('btnNetEntry'),

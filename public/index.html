@@ -146,7 +146,7 @@
         <!-- 房主开联机时的解禁提醒：仅文字提示，绝不自动修改防火墙 -->
         <div id="lanFirewallNote" class="lan-firewall-note" style="display:none">
           <div class="lan-fw-title">⚠ 请手动放行防火墙（游戏不会自动修改）</div>
-          <p>首次联机：以管理员身份运行一次 <b>tools\局域网放行.cmd</b>，或在「控制面板 → Windows Defender 防火墙 → 允许应用」中放行 TCP 8765，否则对方连不上（症状：一直"连接中"/超时）。</p>
+          <p>首次联机：以管理员身份运行一次 <b>tools\局域网放行.cmd</b>，或在「控制面板 → Windows Defender 防火墙 → 允许应用」中放行 TCP <span id="lanFirewallPort">8765</span>，否则对方连不上（症状：一直"连接中"/超时）。</p>
           <p>地址有多个 = 电脑有多个网卡（WLAN / 以太网 / Radmin VPN），把<b>与对方同一网络</b>的那个地址连同 4 位房间码发给对方。</p>
         </div>
         <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
