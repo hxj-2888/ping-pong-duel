@@ -92,7 +92,7 @@
         </div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v240.apk" download="PingPongDuel-v240.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v250.apk" download="PingPongDuel-v250.apk" style="display:none">📱 下载安卓版（直接安装）</a>
         <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
     </div>
@@ -114,6 +114,18 @@
         <button id="btnNetWarn" class="btn small net-warn" style="display:none" title="说明">⚠</button>
       </div>
       <div id="netWarnNote" class="net-warn-note" style="display:none">⚠ 玩家量过大将导致服务器负载卡顿</div>
+      <!-- v2.5：联机服务器线路选择（公网模式生效）——线路一 Cloudflare（全球边缘）/
+           线路二 ECS（国内低延迟自建）；自动=跟随页面（ECS 站走 ECS、Cloudflare 站走 Cloudflare） -->
+      <div class="row net-line-row" style="justify-content:center;gap:8px;margin:2px 0 4px">
+        <label style="font-size:13px;color:#cfe0ff;display:flex;align-items:center;gap:8px">联机线路
+          <select id="setServerLine"
+            style="padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(0,0,0,0.3);color:#eef2f8;font-size:13px">
+            <option value="auto">自动</option>
+            <option value="cloudflare">线路一 · Cloudflare</option>
+            <option value="ecs">线路二 · ECS</option>
+          </select>
+        </label>
+      </div>
       <div class="row">
         <button id="btnHost" class="btn primary">创建联机房间</button>
         <button id="btnJoin" class="btn">加入房间</button>

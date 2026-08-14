@@ -35,6 +35,8 @@
       PPD.GameAudio.ui();
       PPD.show(PPD.ui.netPanel, true);
       refreshNetModeBtn(); // 打开时同步 本地/公网 按钮、⚠ 与 IP 输入行状态
+      // v2.5:打开联机框时同步线路选择（线路一 Cloudflare / 线路二 ECS）
+      if (PPD.ui.serverLine) PPD.ui.serverLine.value = PPD.app.serverLine || 'auto';
     });
   }
   function closeNetPanel() {
@@ -273,6 +275,8 @@
     syncVolSlider(PPD.ui.setSfxVol, PPD.GameAudio.getSfxVol());
     // 审计 #8:打开设置时预填已保存的公网联机服务器地址
     if (PPD.ui.setPublicServerUrl) PPD.ui.setPublicServerUrl.value = PPD.app.publicServerUrl || '';
+    // v2.5:打开设置时同步联机线路选择（与联机对战面板共用）
+    if (PPD.ui.serverLine) PPD.ui.serverLine.value = PPD.app.serverLine || 'auto';
     // 对局中（mode 非空）：设置面板即暂停界面，不叠加暂停面板
     if (PPD.app.mode) {
       PPD.app.settingsPause = true;
@@ -294,6 +298,17 @@
         PPD.ui.publicServerUrlStatus.textContent = v ? '已保存：' + v : '已清除（战绩仅存手机本地）';
       }
       PPD.setStatus(v ? '服务器地址已保存' : '已清除服务器地址');
+    });
+  }
+  // v2.5:联机服务器线路切换（联机对战面板/设置面板内选择，localStorage 记忆；下次建房/加入生效）
+  if (PPD.ui.serverLine) {
+    PPD.ui.serverLine.addEventListener('change', () => {
+      PPD.GameAudio.ui();
+      PPD.app.serverLine = PPD.ui.serverLine.value;
+      try { localStorage.setItem('ppd_server_line', PPD.app.serverLine); } catch (e) { /* ignore */ }
+      const lineName = PPD.app.serverLine === 'ecs' ? '线路二 · ECS' :
+        PPD.app.serverLine === 'cloudflare' ? '线路一 · Cloudflare' : '自动';
+      PPD.setStatus('联机线路：' + lineName + '（下次创建/加入房间生效）');
     });
   }
   function closeSettings() {
