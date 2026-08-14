@@ -488,5 +488,59 @@ const DT = 1 / 120;
   check('整身不压台：极限站位（含最大步幅）脚不上桌', !footBad);
 }
 
+// ---------- 11. 得分后飞出球场：进入观众席/场外立即消失并停止滚动 ----------
+{
+  const e = TT.createEngine();
+  e.phase = 'point';
+  e.phaseT = 0;
+  e.pointWinner = 0;
+  e.ball.inHand = false;
+  e.ball.vis = true;
+  e.ball.pos = { x: R.ARENA_HALF_X + 0.1, y: 0.02, z: 0 };
+  e.ball.vel = { x: 4, y: 0, z: 0 };
+  e.ball.spin = { x: 0, y: 0, z: 0 };
+  TT.step(e, DT);
+  const s = TT.snapshot(e);
+  check('得分后飞出球场：球立即隐藏并停止', e.ball.vis === false &&
+    e.ball.vel.x === 0 && e.ball.vel.z === 0 && s.b === null && s.bh === null);
+
+  const e2 = TT.createEngine();
+  e2.phase = 'point';
+  e2.phaseT = 0;
+  e2.pointWinner = 0;
+  e2.ball.inHand = false;
+  e2.ball.vis = true;
+  e2.ball.pos = { x: R.ARENA_HALF_X - 0.1, y: 0.02, z: 0 };
+  e2.ball.vel = { x: 1, y: 0, z: 0 };
+  e2.ball.spin = { x: 0, y: 0, z: 0 };
+  TT.step(e2, DT);
+  check('得分后仍在球场内：球不提前隐藏', e2.ball.vis !== false);
+}
+
+// ---------- 12. 发球 6 秒时限：超时判对方得分并消耗一次发球机会 ----------
+{
+  const e = TT.createEngine();
+  e.server = 0;
+  e.startServer = 0;
+  e.serveNum = 0;
+  e.phase = 'serve';
+  e.phaseT = R.SERVE_TIME_LIMIT;
+  e.ball.inHand = true;
+  e.ball.vis = true;
+  TT.step(e, DT);
+  check('发球 6 秒未出手：判对方得分（发球超时）', e.pointWinner === 1 && e.pointReason === 'serve-timeout');
+  for (let i = 0; i < 220; i++) TT.step(e, DT);
+  check('超时后进入下一轮发球并消耗一次发球机会', e.serveNum === 1 && e.phase === 'serve' && e.pointWinner === -1);
+
+  const e2 = TT.createEngine();
+  e2.server = 0;
+  e2.startServer = 0;
+  e2.phase = 'serve';
+  e2.phaseT = R.SERVE_TIME_LIMIT - 0.1;
+  e2.ball.inHand = true;
+  TT.step(e2, DT);
+  check('发球未满 6 秒：不提前判超时', e2.pointWinner === -1 && e2.phase === 'serve');
+}
+
 console.log(failures === 0 ? '\n物理边界测试全部通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);

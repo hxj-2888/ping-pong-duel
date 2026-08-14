@@ -2,8 +2,8 @@
 # robocopy 复制项目根（排除目录/文件）到暂存 → Compress-Archive 合成标准 zip（Deflate, UTF-8 文件名）。
 $ErrorActionPreference = 'Stop'
 $ROOT = Split-Path -Parent $PSScriptRoot
-$stage = Join-Path $env:TEMP 'ppd_src_stage_v171'
-$name = '乒乓对决_项目文件_v1.7.1.zip'
+$stage = Join-Path $env:TEMP 'ppd_src_stage_v21'
+$name = '乒乓对决_项目文件_v2.1.zip'
 $out1 = Join-Path $ROOT $name
 $out2 = Join-Path ([Environment]::GetFolderPath('Desktop')) $name
 

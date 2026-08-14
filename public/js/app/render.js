@@ -7,13 +7,15 @@
 
   // ---------- 对抗尾影（跨帧累积球位置） ----------
   const TRAIL_LIFE = 0.4; // 尾影持续时间（秒）
+  const TRAIL_MAX = 64;   // 尾影点数上限（桌面）；手机端减半（v2.4 预算）
   let trailCache = [];
 
   // 记录当前球位到尾影缓存；返回裁剪后的点数组（拷贝值，避免引用引擎对象）
   function updateTrail(view) {
     if (view.ball && view.phase === 'play') {
       trailCache.push({ x: view.ball.pos.x, y: view.ball.pos.y, z: view.ball.pos.z, t: view.time });
-      if (trailCache.length > 64) trailCache.shift();
+      const max = (typeof PPD !== 'undefined' && PPD && PPD.isTouch) ? TRAIL_MAX / 2 : TRAIL_MAX;
+      while (trailCache.length > max) trailCache.shift();
     }
     while (trailCache.length && view.time - trailCache[0].t > TRAIL_LIFE) trailCache.shift();
     view.trail = trailCache;
@@ -185,9 +187,7 @@
         sb: p.swingBack,
         crouch: p.crouch,  // 蹲下（Ctrl）：渲染层画蹲姿
         run: p.run,        // 跑步（Shift）
-        // 装扮只给本机主玩家(本地/人机)；AI 观战双方 AI 恒默认外观，不受玩家装扮影响
-        paddleSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.paddle || null) : null),
-        shirtSkin: isAivai ? null : (p.side === 0 ? (PPD.app.equip.shirt || null) : null),
+        // v2.1 特效分离：装扮仅尾影/溅射特效，球衣与拍面主色恒=队服（旗帜队色），不再注入 paddleSkin/shirtSkin
         // 队伍旗帜队色（本地/人机/AI 观战按本局队伍注入，随旗帜同步球服颜色；联机无 matchTeams → 默认红蓝）
         teamColor: (PPD.app.matchTeams && PPD.app.matchTeams[p.side]) ? PPD.app.matchTeams[p.side].color : null,
         // 问号(扣杀/低平预警)仅在判定指示开启时显示；感叹号(反击成功)始终显示(v2.0)
@@ -195,10 +195,10 @@
         warnT: p.warnT || 0,   // 问号剩余时长(渐变消失用)
         exclaimT: p.exclaimT || 0,
       })),
-      ball: engine.ball.inHand
-        ? null
-        : { pos: engine.ball.pos, vel: engine.ball.vel, spin: engine.ball.spin, vis: true },
-      ballInHand: engine.ball.inHand ? engine.ball.pos : null,
+      ball: !engine.ball.inHand && engine.ball.vis !== false
+        ? { pos: engine.ball.pos, vel: engine.ball.vel, spin: engine.ball.spin, vis: true }
+        : null,
+      ballInHand: engine.ball.inHand && engine.ball.vis !== false ? engine.ball.pos : null,
       time: engine.t,
       phase: engine.phase,
       score: engine.score,
@@ -232,8 +232,7 @@
       sb: p.sb,
       crouch: p.cq,  // 蹲下（Ctrl）：渲染层画蹲姿
       run: p.rn,     // 跑步（Shift）
-      paddleSkin: i === side ? (PPD.app.equip.paddle || null) : (PPD.app.oppSkin ? (PPD.app.oppSkin.paddle || null) : null), // 装扮球拍(自己/联机对手互见 v2.0)
-      shirtSkin: i === side ? (PPD.app.equip.shirt || null) : (PPD.app.oppSkin ? (PPD.app.oppSkin.shirt || null) : null), // 装扮上衣(自己/联机对手互见 v2.0)
+      // v2.1 特效分离：装扮仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
     }));
     let ball = null, ballInHand = null;
     if (snap.b) {
@@ -292,8 +291,7 @@
         // 蹲下/跑步钳制 0~1：alpha 负外推（时钟略落后于上一快照）时防止状态值越界
         crouch: Math.max(0, Math.min(1, lerp(a.cq != null ? a.cq : 0, p.cq))),
         run: Math.max(0, Math.min(1, lerp(a.rn != null ? a.rn : 0, p.rn))),
-        paddleSkin: i === side ? (PPD.app.equip.paddle || null) : (PPD.app.oppSkin ? (PPD.app.oppSkin.paddle || null) : null), // 装扮球拍(自己/联机对手互见 v2.0)
-        shirtSkin: i === side ? (PPD.app.equip.shirt || null) : (PPD.app.oppSkin ? (PPD.app.oppSkin.shirt || null) : null), // 装扮上衣(自己/联机对手互见 v2.0)
+        // v2.1 特效分离：装扮仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
       };
     });
     let ball = null, ballInHand = null;
@@ -602,6 +600,8 @@
   PPD.renderLocal = renderLocal;
   PPD.renderOnline = renderOnline;
   PPD.renderSingle = renderSingle;
+  PPD.updateTrail = updateTrail;       // 回放（replay.js）复用尾影
+  PPD.applyViewMirror = applyViewMirror; // 回放复用红方视角镜像
   PPD.viewModelFromEngine = viewModelFromEngine;
   PPD.viewModelFromSnap = viewModelFromSnap;
   PPD.viewModelFromSnapInterp = viewModelFromSnapInterp;

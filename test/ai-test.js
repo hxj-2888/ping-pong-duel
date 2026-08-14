@@ -388,5 +388,19 @@ const DT = 1 / 120;
   check('AI 使用前/后移动与跑步（与玩家移动范围同步）', stats.f > 0 && stats.b > 0 && stats.run > 0);
 }
 
+// ---------- 7. 无尽人机配置：无尽-1 基线正确，攻击/敏捷随关卡线性增长 ----------
+{
+  const i1 = AIC.endlessConfig(1);
+  const i2 = AIC.endlessConfig(2);
+  const i3 = AIC.endlessConfig(3);
+  check('无尽-1：反应 0 秒 / 防扣 95% / 攻击敏捷与地狱一致',
+    i1.react === 0 && i1.smashDef === 0.95 && i1.attackMul === 1 && i1.agilityMul === 1 && i1.infinite === true);
+  check('无尽关卡：攻击与敏捷线性增长且上不封顶',
+    i2.attackMul > i1.attackMul && i3.attackMul > i2.attackMul &&
+    i2.agilityMul > i1.agilityMul && i3.agilityMul > i2.agilityMul);
+  check('无尽难度标识解析（inf-N / 对象 / 普通档位）',
+    AIC.levelName('inf-2') === '无尽-2' && AIC.isInfiniteLevel('inf-1') && !AIC.isInfiniteLevel(3));
+}
+
 console.log(failures === 0 ? '\n人机对手测试全部通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);

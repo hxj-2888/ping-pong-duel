@@ -108,15 +108,20 @@
       el.innerHTML = '个人生涯 · 探索中（网页版暂未开放）<span class="career-warn" title="点开查看说明">!</span>';
       return;
     }
+    // v2.2：并入历史回放 —— 蓝块摘要加回放数
+    let replayCount = 0;
+    try {
+      if (PPD.Replay && PPD.Replay.list) replayCount = (await PPD.Replay.list()).length;
+    } catch (e) { /* ignore */ }
     const list = await fetchRecords(60);
     if (!list.length) {
-      el.innerHTML = '个人生涯：暂无对局 · 点击展开';
+      el.innerHTML = `个人生涯：暂无对局 · 回放 ${replayCount} · 点击展开`;
       return;
     }
     const wins = list.filter((r) => r && r.winner === 0).length;
     const total = list.length;
     const rate = total ? Math.round((wins / total) * 100) : 0;
-    el.innerHTML = `个人生涯：总场次 ${total} · 胜率 ${rate}% · 点击展开`;
+    el.innerHTML = `个人生涯：总场次 ${total} · 胜率 ${rate}% · 回放 ${replayCount} · 点击展开`;
   }
 
   // ---------- 个人生涯单开页面（点击小方框展开，分页展示战绩记录） ----------
@@ -133,13 +138,13 @@
   }
 
   function careerItemHtml(r) {
-    const d = DIFF[r.difficulty] || '中等';
+    const d = r.mode === 'endless' ? '无尽-' + (r.difficulty || 1) : (DIFF[r.difficulty] || '中等');
     const t = new Date(r.ts || Date.now());
     const pad = (n) => String(n).padStart(2, '0');
     const time = `${pad(t.getMonth() + 1)}-${pad(t.getDate())} ${pad(t.getHours())}:${pad(t.getMinutes())}`;
     const sc = `${r.score ? r.score[0] : '?'}:${r.score ? r.score[1] : '?'}`;
     const wl = r.winner === 0 ? '胜' : '负';
-    const modeLbl = r.mode === 'ai' ? '人机' : (r.mode === 'local' ? '双人' : (r.mode === 'online' ? '联机' : '对战'));
+    const modeLbl = r.mode === 'endless' ? '无尽人机' : (r.mode === 'ai' ? '人机' : (r.mode === 'local' ? '双人' : (r.mode === 'online' ? '联机' : '对战')));
     return `<div class="career-item">${wl} · ${modeLbl} · ${d} · ${sc} · ${time} · ${escapeHtml(r.name || '玩家')}</div>`;
   }
 
@@ -170,7 +175,7 @@
       if (PPD.showOverlay) {
         PPD.showOverlay(
           '个人生涯 · 探索中',
-          '个人生涯功能网页版正在探索中，暂不对网页版开放。\n作战数据仅保存在本地应用端（桌面版 / 安装包，存于应用目录 records.json），不会上传到网页版后端。',
+          '个人生涯（战绩记录与历史回放）网页版正在探索中，暂不对网页版开放。\n作战数据仅保存在本地应用端（桌面版 / 安装包，存于应用目录 records.json），不会上传到网页版后端。',
           '知道了',
           () => {}
         );
@@ -182,9 +187,11 @@
     careerRecords = await fetchRecords(60);
     careerPage = 0;
     renderCareerPage();
+    if (PPD.Replay && PPD.Replay.showCareerTab) PPD.Replay.showCareerTab(); // 默认切到「战绩记录」标签
   }
 
   function closeCareer() {
+    if (PPD.Replay && PPD.Replay.closeHistory) PPD.Replay.closeHistory(); // 复位回放删除态/标签
     if (PPD.ui.careerPanel) PPD.show(PPD.ui.careerPanel, false);
     if (PPD.ui.menu) PPD.show(PPD.ui.menu, true);
   }

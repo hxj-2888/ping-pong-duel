@@ -34,10 +34,11 @@
       for (let i = 0; i < FRAME_HIST; i++) sum += frameHist[i];
       const avg = sum / FRAME_HIST;
       PPD.app.quality.frameMs = avg;
-      // 右上角估测帧数（30/60 档封顶 60；无上限档显示真实帧率；约 5 次/秒刷新，避免 DOM 抖动）
+      // 右上角估测帧数（v2.4：一律显示真实渲染帧率，去掉 30/60 档"封顶 60"的误导；
+      // 选 30 档显示真实 ~30，选 60 档在 60Hz 门控下显示真实 ~60；约 5 次/秒刷新，避免 DOM 抖动）
       if (now - lastFpsUpdate > 200) {
         lastFpsUpdate = now;
-        const fps = frameRate === 'unlimited' ? Math.round(1000 / avg) : Math.min(60, Math.round(1000 / avg));
+        const fps = Math.round(1000 / avg);
         if (PPD.ui.fpsMeter) {
           PPD.ui.fpsMeter.textContent = String(fps);
           if (fps < 45) PPD.ui.fpsMeter.classList.add('low');
@@ -49,6 +50,14 @@
     for (let i = 0; i < 2; i++) {
       PPD.app.fan.cheer[i] = Math.max(0, PPD.app.fan.cheer[i] - dt * 0.6);
       PPD.app.fan.shake[i] = Math.max(0, PPD.app.fan.shake[i] - dt * 0.6);
+    }
+    // 回放播放：优先于比赛模式处理（不推进引擎，只推进回放时钟并渲染在 game canvas）
+    if (PPD.Replay && PPD.Replay.isActive()) {
+      PPD.Replay.frame(dt);
+      PPD.app.resizeDirty = false;
+      lastRender = now;
+      PPD.Replay.render();
+      return;
     }
     // 主菜单（mode===null）无需 HUD 更新
     if (PPD.app.mode !== null) PPD.updateHud();
@@ -72,6 +81,7 @@
             PPD.TT.setInput(PPD.app.engine, i, { ...k, lb: (k.crouch && k.pu) ? 1 : 0 });
           }
           PPD.TT.step(PPD.app.engine, step);
+          if (PPD.Replay) PPD.Replay.tick(PPD.app.engine); // 回放录制：每 2 物理步采一帧
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
           n++;
@@ -105,9 +115,16 @@
           // 人机专属微调：地狱 ×1.0 完全不再刻意漏球（与观战一致，高手仍可战胜）；暂停面板滑杆可覆盖
           // AI 控制降频到 60Hz（每 2 物理步一次、dt 加倍保持累计时间一致）——省 predictCrossing 高频求解
           if (aiTick++ % 2 === 0) {
-            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevel, { hellCatchMul: 1, ...(PPD.app.aiTuneB || {}) });
+            const aiSpec = PPD.app.aiGameType === 'endless'
+              ? PPD.AIC.endlessConfig(PPD.app.endlessLevel)
+              : PPD.app.aiLevel;
+            const aiTune = PPD.app.aiGameType === 'endless'
+              ? { hellCatchMul: 1 }
+              : { hellCatchMul: 1, ...(PPD.app.aiTuneB || {}) };
+            PPD.AIC.control(PPD.app.engine, 1, step * 2, aiSpec, aiTune);
           }
           PPD.TT.step(PPD.app.engine, step);
+          if (PPD.Replay) PPD.Replay.tick(PPD.app.engine); // 回放录制：每 2 物理步采一帧
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
           n++;
@@ -128,10 +145,13 @@
         while (acc >= step && n < 8) {
           // AI 观战：双方 AI 控制降频到 60Hz（每 2 物理步一次、dt 加倍保持累计时间一致）
           if (aiTick++ % 2 === 0) {
-            PPD.AIC.control(PPD.app.engine, 0, step * 2, PPD.app.aiLevelA, PPD.app.aiTuneA);
-            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevelB, PPD.app.aiTuneB);
+            const tuneA = PPD.AIC.isInfiniteLevel(PPD.app.aiLevelA) ? {} : PPD.app.aiTuneA;
+            const tuneB = PPD.AIC.isInfiniteLevel(PPD.app.aiLevelB) ? {} : PPD.app.aiTuneB;
+            PPD.AIC.control(PPD.app.engine, 0, step * 2, PPD.app.aiLevelA, tuneA);
+            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevelB, tuneB);
           }
           PPD.TT.step(PPD.app.engine, step);
+          if (PPD.Replay) PPD.Replay.tick(PPD.app.engine); // 回放录制：每 2 物理步采一帧
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
           n++;

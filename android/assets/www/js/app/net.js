@@ -135,7 +135,7 @@
         PPD.app.heartbeatTimer = setInterval(() => { if (PPD.app.net && PPD.app.net.connected) PPD.app.net.send({ t: 'ping' }); }, 5000);
       }
       if (hostMode && !PPD.app.roomCode) {
-        // 首次建房：尚无房间码，创建（带当前装配皮肤,服务器广播给对手,联机互见 v2.0）
+        // 首次建房：尚无房间码，创建（带当前装配特效皮肤,服务器广播给对手;v2.1 仅尾影/溅射）
         net.send({ t: 'create', name: PPD.app.names[0], skin: PPD.app.equip });
         scheduleJoinRetry();
       } else if (PPD.app.reconnectAttempt > 0 && PPD.app.roomCode) {
@@ -153,7 +153,7 @@
     net.on('room', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       clearJoinTimer();
-      // 联机皮肤同步(v2.0):服务器广播双方装配,存对手皮肤供渲染(球拍/上衣;尾影保持本地)
+      // 联机皮肤同步(v2.1):服务器广播双方装配特效(尾影/溅射),存对手皮肤供溅射归属;球衣/拍面恒=队服
       if (m.skins) PPD.app.oppSkin = m.skins[1 - m.side] || null;
       PPD.GameAudio.ensure();
       PPD.app.roomCode = m.code;
@@ -213,7 +213,7 @@
     });
     net.on('state', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换:退出后迟到的快照不得再执行(审计 #5)
-      // 联机皮肤同步(v2.0):服务器广播双方装配,存对手皮肤供渲染(球拍/上衣;尾影保持本地)
+      // 联机皮肤同步(v2.1):服务器广播双方装配特效(尾影/溅射),存对手皮肤供溅射归属
       if (m.skins) PPD.app.oppSkin = m.skins[1 - PPD.app.side] || null;
       PPD.app.lastStateAt = Date.now(); // 看门狗基线：服务端 Alarm 保证 ≥2Hz
       const wasReconnecting = PPD.app.reconnecting; // 先记录：下方会清除重连标记
@@ -257,6 +257,7 @@
       }
       PPD.app.snapB = snap;
       PPD.app.tB = performance.now();
+      if (PPD.Replay) PPD.Replay.recordOnline(snap);
       // 本地玩家输入预测：以服务器快照为锚（详见 render.js stepPrediction）。
       // 首次初始化；偏差校准（输入丢失/卡顿恢复/重连）时校正预测位置，避免长期漂移。
       // 正常对局时服务器只是滞后于预测（追赶中），不重置——保证本地手感即时。
@@ -350,7 +351,7 @@
               PPD.GameAudio.cheer();   // 得分 → 掌声音效
               PPD.triggerCheer(e.s);   // 得分方观众欢呼、对方摇头
               // 失分原因（含未过网）：与本地/人机同一映射，按快照 pointReason 显示
-              const reason = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网' }[(m.s && m.s.pr) || ''] || '';
+              const reason = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网', 'serve-timeout': '发球超时' }[(m.s && m.s.pr) || ''] || '';
               PPD.showPoint(`${e.s === PPD.app.side ? '你' : '对手'} 得分${reason ? ' · ' + reason : ''}`);
             }
             break;
@@ -363,6 +364,14 @@
             PPD.updateGameTools();
             PPD.showPoint(e.s === PPD.app.side ? '你赢了！' : '对手获胜');
             PPD.showGameOver(e.s === PPD.app.side ? '您赢了' : '您输了');
+            if (PPD.Replay) {
+              PPD.Replay.finish({
+                score: (PPD.app.snapB && PPD.app.snapB.sc) ? PPD.app.snapB.sc : [0, 0],
+                winner: e.s,
+                names: m.n || PPD.app.names,
+                difficulty: 1,
+              });
+            }
             // 个人生涯：联机（真人）对局计入——记录自己视角的胜负（与本地双人/人机一致）
             if (PPD.saveRecord) {
               const n = PPD.app.names || [];

@@ -45,6 +45,44 @@
     { name: '地狱', react: 0.01, err: 0.01, agility: 1.00, smashY: 0.95, smashProb: 1, catchProb: 1.0, lowShotProb: 0.50, lobProb: 0.12, smashDef: 0.95, trickBase: 0.28, failSkip: 0.9, trickyProb: 0.40 },
   ];
 
+  // 无尽关卡：以地狱为基线，反应延迟固定 0 秒、防扣杀率固定 95%；
+  // 攻击/敏捷随关卡线性增长，无上限。
+  const ENDLESS_ATTACK_STEP = 0.12;
+  const ENDLESS_AGILITY_STEP = 0.08;
+
+  function endlessConfig(n) {
+    const k = Math.max(1, parseInt(n, 10) || 1);
+    const H = LEVELS[3];
+    return Object.assign({}, H, {
+      name: '无尽-' + k,
+      infinite: true,
+      react: 0,
+      catchProb: 1.0,
+      smashDef: 0.95,
+      attackMul: 1 + (k - 1) * ENDLESS_ATTACK_STEP,
+      agilityMul: 1 + (k - 1) * ENDLESS_AGILITY_STEP,
+    });
+  }
+
+  // 难度标识兼容三种形态：普通档位 0~3 / 'inf-N' 字符串 / 无尽配置对象。
+  function resolveLevel(level) {
+    if (level && typeof level === 'object') return level;
+    if (typeof level === 'string') {
+      const m = /^inf-(\d+)$/.exec(level);
+      if (m) return endlessConfig(parseInt(m[1], 10));
+    }
+    const n = parseInt(level, 10);
+    return LEVELS[n] || LEVELS[1];
+  }
+
+  function isInfiniteLevel(level) {
+    return !!(resolveLevel(level).infinite);
+  }
+
+  function levelName(level) {
+    return resolveLevel(level).name;
+  }
+
   // 每个引擎实例、每个方位各一份 AI 状态（确定性种子随机，便于测试）。
   // 注意按 (engine, side) 区分：AI vs AI / 观战模式时双方各用各的状态，
   // 单人对战（只有 side 1 用 AI）行为与原来完全一致。
@@ -171,17 +209,21 @@
     // 标记该玩家为 AI：引擎的反击扣杀奖励据此区分"人类击球"（见 strokes.js applyPaddleHit）
     if (engine && engine.players && engine.players[side]) engine.players[side].isAI = 1;
     s.level = level;
-    const L = LEVELS[level] || LEVELS[1];
+    const L = resolveLevel(level);
+    const isInf = !!L.infinite;
+    const normalLevel = (!isInf && typeof level === 'number') ? level : (isInf ? -1 : 1);
     const t = tune || {};
     // 有效参数：基准 × 倍率（反应越大越快=延迟越小；其余越大越强），并夹取安全范围
     // v1.6.1：地狱反应线性调节——滑块 0.5→0.02s、1.5→0s 均匀递减（×1 仍为基准 0.01s）；其余难度保持 基准/倍率
     const reactMulT = t.reactMul == null ? 1 : t.reactMul;
-    const react = level === 3
-      ? Math.max(0, Math.min(0.02, 0.02 * (1.5 - reactMulT)))
-      : L.react / reactMulT;
+    const react = isInf
+      ? 0
+      : (normalLevel === 3
+        ? Math.max(0, Math.min(0.02, 0.02 * (1.5 - reactMulT)))
+        : L.react / reactMulT);
     // 人机对战专属微调（hellCatchMul，仅地狱生效）：观战保留 catch 1.0 的强版展示，
     // 人机对战默认 ×1（地狱完全不再刻意漏球，与观战一致）——玩家可在暂停面板用 catchMul 覆盖
-    const catchBase = L.catchProb * (level === 3 && t.hellCatchMul != null ? t.hellCatchMul : 1);
+    const catchBase = L.catchProb * (normalLevel === 3 && t.hellCatchMul != null ? t.hellCatchMul : 1);
     // 漏球率线性模型（修复旧版 1.2 后无变化）：0.5~1.5 全程线性有效——
     // 漏球率 = 基准漏球率 / 倍率（×1.5 漏球减为 2/3、×0.5 漏球翻倍），封顶 80%、下限 0.5%；
     // 地狱基准 1.0 恒不漏球（miss=0），不受倍率影响
@@ -191,21 +233,25 @@
     // 攻击/敏捷的"溢出"加成（仅调高 >×1 时生效，×1 时恒为 0/系数 1，默认强度不变）：
     // 概率类基准已到顶（困难/地狱 smashProb=1、agility=1）或为 0（简单不扣杀）时，
     // 把多余倍率转成同属性的其他维度，避免滑杆"拖了没反应"的死区
-    const smashMul = t.smashMul == null ? 1 : t.smashMul;
-    const smashOver = Math.max(0, smashMul - 1); // 0~0.5，仅调高时有
+    const smashMul = t.smashMul == null ? (isInf ? L.attackMul : 1) : t.smashMul;
+    const smashOver = Math.max(0, smashMul - 1); // 攻击溢出（无尽关卡线性增长）
     const smashProb = clamp(L.smashProb * smashMul, 0, 1);
     // 简单档无扣杀基准（只推球、来球高度也达不到扣杀门）：调高攻击按溢出比例
     // 赋予少量"打刁钻角"能力（×1.5 → 20%）；其余难度概率已满/可夹取时，
     // 溢出统一转为"回球落点更刁钻"（见击球分支的 aimBias 放大）
     const trickyProbEff = (L.trickyProb || 0) + (L.smashProb <= 0 ? smashOver * 0.4 : 0);
-    const agilityMul = t.agilityMul == null ? 1 : t.agilityMul;
-    const agiOver = Math.max(0, agilityMul - 1); // 0~0.5，调高>×1 才有
-    const agiUnder = Math.max(0, 1 - agilityMul); // 0~0.5，调低<×1 的惩罚
+    const agilityMul = t.agilityMul == null ? (isInf ? L.agilityMul : 1) : t.agilityMul;
+    const agiOver = Math.max(0, agilityMul - 1);
+    const agiUnder = Math.max(0, 1 - agilityMul);
     const agility = clamp(L.agility * agilityMul, 0, 1);
-    const errScale = 1 - agiOver * 0.6; // 溢出→站位误差缩小（困难/地狱调高敏捷=站位更准）
-    // 敏捷>1（滑杆值 >×1）移动速度加成：最大 +25%（×1.5 封顶）——
+    const errScale = isInf
+      ? Math.max(0.25, 1 - agiOver * 0.08)
+      : 1 - agiOver * 0.6; // 溢出→站位误差缩小
+    // 敏捷>1 移动速度加成：普通难度 ×1.5 封顶 +25%；无尽关卡线性无上限——
     // 写入玩家 speedMul（引擎 step 逐帧应用），与惩罚占空比并存
-    const speedBonus = Math.min(0.25, Math.max(0, agilityMul - 1) * 0.5);
+    const speedBonus = isInf
+      ? (agilityMul - 1) * 0.5
+      : Math.min(0.25, Math.max(0, agilityMul - 1) * 0.5);
     // 敏捷<1 惩罚：占空比额外折扣（mul=0.5 时再打 75 折）+ 前后(z)移动也纳入门控 + 追球死区放大
     const moveDuty = clamp(agility * (1 - agiUnder * 0.5), 0, 1);
     const moveDead = 0.045 * (1 + agiUnder * 1.5);
@@ -215,9 +261,11 @@
     // v1.6.2：AI 观战地狱「接球」滑杆 → 防扣球 40%（×0.5）~ 90%（×1.5）均匀线性；
     // 人机对战（带 hellCatchMul）地狱 → 防扣率分段线性：×0.5→50%、×1→80%、×1.5→95%（上限封顶）
     let smashDef;
-    if (level === 3 && t.hellCatchMul == null) {
+    if (isInf) {
+      smashDef = L.smashDef;
+    } else if (normalLevel === 3 && t.hellCatchMul == null) {
       smashDef = 0.40 + 0.50 * Math.max(0, Math.min(1, catchMul - 0.5));
-    } else if (level === 3) {
+    } else if (normalLevel === 3) {
       const m = Math.max(0.5, Math.min(1.5, catchMul));
       smashDef = m <= 1 ? 0.50 + 0.60 * (m - 0.5) : 0.80 + 0.30 * (m - 1);
     } else {
@@ -478,5 +526,13 @@
     stateMap.clear();
   }
 
-  return { control, reset, LEVELS };
+  return {
+    control,
+    reset,
+    LEVELS,
+    resolveLevel,
+    isInfiniteLevel,
+    levelName,
+    endlessConfig,
+  };
 });

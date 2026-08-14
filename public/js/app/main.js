@@ -16,6 +16,13 @@
     PPD.GameAudio.ui();
     PPD.startAI();
   });
+  if (PPD.ui.btnEndless) {
+    PPD.ui.btnEndless.addEventListener('click', () => {
+      PPD.GameAudio.ensure();
+      PPD.GameAudio.ui();
+      openEndlessPanel();
+    });
+  }
   PPD.ui.btnAIVsAI.addEventListener('click', () => {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
@@ -49,6 +56,94 @@
     if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
   }
   PPD.closeNetPanel = closeNetPanel;
+  // ---------- 无尽人机：主页入口 / 关卡页 / AI 观战动态选项 ----------
+  function refreshAIEntries() {
+    if (!PPD.ui.btnAI) return;
+    if (PPD.isHellCleared()) {
+      PPD.ui.btnAI.textContent = '常规单机';
+      if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, true);
+    } else {
+      PPD.ui.btnAI.textContent = '人机对战（单机）';
+      if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, false);
+    }
+  }
+
+  function syncEndlessAIOptions() {
+    const hell = PPD.isHellCleared();
+    const unlocked = PPD.getEndlessUnlocked ? PPD.getEndlessUnlocked() : 0;
+    const selects = [PPD.ui.aiLevelA, PPD.ui.aiLevelB, PPD.ui.pauseAiLevelA, PPD.ui.pauseAiLevelB];
+    for (const sel of selects) {
+      if (!sel || !sel.options) continue;
+      for (let i = sel.options.length - 1; i >= 0; i--) {
+        if (sel.options[i].getAttribute && sel.options[i].getAttribute('data-endless')) sel.remove(i);
+      }
+      if (!hell) continue;
+      const maxN = Math.max(1, unlocked);
+      for (let n = 1; n <= maxN; n++) {
+        const opt = document.createElement('option');
+        opt.value = 'inf-' + n;
+        opt.textContent = '无尽-' + n;
+        opt.setAttribute('data-endless', '1');
+        sel.appendChild(opt);
+      }
+      if (sel.value && sel.value.indexOf('inf-') === 0) {
+        const n = parseInt(sel.value.slice(4), 10) || 1;
+        if (n > unlocked && n !== 1) sel.value = 'inf-1';
+      }
+    }
+  }
+
+  function renderEndlessPanel() {
+    const list = PPD.ui.endlessList;
+    if (!list) return;
+    const highest = PPD.getEndlessHighest ? PPD.getEndlessHighest() : 0;
+    const maxLevel = highest + 1;
+    const parts = [];
+    for (let n = 1; n <= maxLevel; n++) {
+      parts.push(`<button type="button" class="btn endless-level" data-level="${n}">无尽-${n} 挑战</button>`);
+    }
+    list.innerHTML = parts.length
+      ? parts.join('')
+      : '<div class="career-empty">请先通关地狱模式解锁无尽人机</div>';
+  }
+
+  function openEndlessPanel() {
+    if (!PPD.isHellCleared()) {
+      PPD.setStatus('请先通关地狱模式');
+      return;
+    }
+    renderEndlessPanel();
+    PPD.show(PPD.ui.endlessPanel, true);
+    PPD.show(PPD.ui.menu, false);
+    PPD.show(PPD.ui.netPanel, false);
+    PPD.show(PPD.ui.netWait, false);
+  }
+
+  function closeEndlessPanel() {
+    PPD.show(PPD.ui.endlessPanel, false);
+    PPD.show(PPD.ui.menu, true);
+  }
+
+  if (PPD.ui.endlessList) {
+    PPD.ui.endlessList.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('.endless-level') : null;
+      if (btn && btn.dataset && btn.dataset.level) {
+        if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();
+        PPD.startEndless(parseInt(btn.dataset.level, 10) || 1);
+      }
+    });
+  }
+  if (PPD.ui.btnEndlessBack) {
+    PPD.ui.btnEndlessBack.addEventListener('click', () => {
+      if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();
+      closeEndlessPanel();
+    });
+  }
+  PPD.refreshAIEntries = refreshAIEntries;
+  PPD.syncEndlessAIOptions = syncEndlessAIOptions;
+  PPD.openEndlessPanel = openEndlessPanel;
+  PPD.closeEndlessPanel = closeEndlessPanel;
+
   if (PPD.ui.btnNetBack) {
     PPD.ui.btnNetBack.addEventListener('click', () => {
       PPD.GameAudio.ensure();
@@ -170,6 +265,8 @@
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
     if (PPD.ui.setShowHitRanges) PPD.ui.setShowHitRanges.checked = PPD.app.showHitRanges;
+    // v2.4：判定范围虚线需通关困难解锁——打开设置时同步勾选框禁用态
+    if (PPD.syncHitRangeToggle) PPD.syncHitRangeToggle();
     if (PPD.ui.setMusic) PPD.ui.setMusic.checked = PPD.GameAudio.isMusicOn();
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
     syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());
@@ -385,6 +482,9 @@
   // ---------- 启动 ----------
   // 各难度下拉的地狱选项：按解锁状态全量同步（人机 + AI 观战主页/暂停面板）
   PPD.syncHellOptions();
+  if (PPD.syncHitRangeToggle) PPD.syncHitRangeToggle(); // v2.4：判定范围虚线解锁态同步（设置面板勾选框禁用）
+  PPD.syncEndlessAIOptions();
+  PPD.refreshAIEntries();
   // 背景音乐：页面打开即播（浏览器自动播放策略拦截时，首次交互立即恢复出声）
   PPD.GameAudio.autoplayMusic();
   // 通关记录：进入主菜单时拉取后端并渲染（失败静默）
@@ -437,6 +537,7 @@
     solveServeTo: PPD.TT.solveServeTo,
     saveRecord: PPD.saveRecord,
     fetchRecords: PPD.fetchRecords,
+    Replay: PPD.Replay,
     // 地狱解锁（冒烟测试用）
     isHellUnlocked: PPD.isHellUnlocked,
     unlockHell: PPD.unlockHell,
@@ -444,5 +545,10 @@
     // 地狱通关（冒烟测试用）：人机击败地狱 → 解锁人机暂停的电脑 AI 数值调控
     isHellCleared: PPD.isHellCleared,
     markHellCleared: PPD.markHellCleared,
+    getEndlessHighest: PPD.getEndlessHighest,
+    getEndlessUnlocked: PPD.getEndlessUnlocked,
+    advanceEndless: PPD.advanceEndless,
+    resetEndless: PPD.resetEndless,
+    syncEndlessAIOptions: PPD.syncEndlessAIOptions,
   };
 })();

@@ -19,13 +19,12 @@ const BROADCAST_HZ = 20; // 快照广播速率：物理仍 60Hz 内部步进，�
 const BROADCAST_MS = 1000 / BROADCAST_HZ; // 100ms：相邻快照间隔，客户端据此插值平滑
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混 I/L/O/0/1
 
-// 校验并规整客户端上报的装扮(联机皮肤同步 v2.0):只接受白名单 id,防注入
+// 校验并规整客户端上报的装扮(联机皮肤同步):只接受白名单 id,防注入。
+// v2.1 特效分离:装扮仅 尾影/溅射 特效;球衣与拍面恒=队服(旗帜队色),球拍/上衣装扮已删除
 function sanitizeSkin(s) {
   if (!s || typeof s !== 'object') return null;
-  const ok = { trail: null, paddle: null, shirt: null, splash: false };
+  const ok = { trail: null, splash: false };
   if (typeof s.trail === 'string' && /^(yellow|black|red)$/.test(s.trail)) ok.trail = s.trail;
-  if (typeof s.paddle === 'string' && /^(skinA|skinB|skinC)$/.test(s.paddle)) ok.paddle = s.paddle;
-  if (typeof s.shirt === 'string' && /^(green|purple|orange|cyan)$/.test(s.shirt)) ok.shirt = s.shirt;
   ok.splash = !!s.splash;
   return ok;
 }
