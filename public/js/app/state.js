@@ -115,6 +115,7 @@
     setPublicServerUrl: document.getElementById('setPublicServerUrl'), // 审计 #8:公网联机服务器地址(手机端战绩同步)
     btnSavePublicServerUrl: document.getElementById('btnSavePublicServerUrl'),
     publicServerUrlStatus: document.getElementById('publicServerUrlStatus'),
+    serverLine: document.getElementById('setServerLine'), // v2.5:联机服务器线路（线路一 Cloudflare / 线路二 ECS）
     fpsMeter: document.getElementById('fpsMeter'),
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
@@ -214,7 +215,9 @@
       // 无 host（内置安卓版 file:// 页面）：本地模式没有可连的服务器，退回公网默认
       return 'wss://ping-pong-duel.pages.dev/ws';
     }
-    // 公网模式：桌面端默认 Cloudflare，网页版/局域网页面默认同域 /ws
+    // 公网模式：线路选择优先（v2.5 线路一 Cloudflare / 线路二 ECS），未选时按平台默认
+    if (app.serverLine === 'cloudflare') return 'wss://ping-pong-duel.pages.dev/ws';
+    if (app.serverLine === 'ecs') return 'wss://searchdelta.online/ws';
     if (isLocalHost) {
       return 'wss://ping-pong-duel.pages.dev/ws'; // 桌面端切公网：默认直连 Cloudflare
     }
@@ -233,7 +236,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '2.4.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '2.5.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -259,6 +262,7 @@
     serverVersion: null,  // 本地服务器版本（心跳 pong 带 ver；用于识别旧服务器）
     serverStaleWarned: false, // 是否已提示过"服务器版本过旧"（只提示一次）
     publicServerUrl: '',  // 审计 #8:公网联机服务器地址(手机端战绩同步,设置面板填写;ws:// 或 http://)
+    serverLine: 'auto',   // v2.5:联机服务器线路 'auto'|'cloudflare'|'ecs'（线路一 Cloudflare / 线路二 ECS；仅公网模式生效）
     engine: null,
     net: null,
     matchTeams: null,   // 本局双方队伍 [{id,name,color,accent}, ...]（本地/人机/AI 观战；联机不设置）
@@ -396,6 +400,14 @@
     if (v) app.publicServerUrl = String(v).trim();
   } catch (e) { /* ignore */ }
   if (ui.setPublicServerUrl) ui.setPublicServerUrl.value = app.publicServerUrl;
+
+  // ---------- 联机服务器线路（v2.5：线路一 Cloudflare / 线路二 ECS；localStorage 记忆） ----------
+  const SERVER_LINE_KEY = 'ppd_server_line';
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(SERVER_LINE_KEY) : null;
+    if (v === 'cloudflare' || v === 'ecs') app.serverLine = v;
+  } catch (e) { /* ignore */ }
+  if (ui.serverLine) ui.serverLine.value = app.serverLine;
 
   // ---------- 养成系统（v2.0：积分/持有库存/当前装配/装扮方案/能力等级，localStorage 记忆；网页版禁用） ----------
   const POINTS_KEY = 'ppd_points';
