@@ -15,6 +15,11 @@
     ShiftLeft: 'P1S', ShiftRight: 'P1S',      // Shift 跑步
   };
 
+  // v2.6.0：蹲下按键看门狗计时——Ctrl keyup 可能被浏览器吞掉（Ctrl+W/Tab、切标签页、IME 等），
+  // 导致 keys.crouch 永久卡 1（蹲下后无法站起）。物理按住时 OS 按键重复会持续刷新该时刻，
+  // keyup 丢失后重复停止 → 200ms 轮询发现"按住超 500ms 且无重复"即强制释放。
+  let lastCrouchDownAt = 0;
+
   function applyKey(code, down) {
     const k = KEYMAP[code];
     if (!k) return;
@@ -26,7 +31,10 @@
     if (k.endsWith('B')) map.b = down ? 1 : 0; // S：向后移动
     if (k.endsWith('U')) map.pu = down ? 1 : 0;
     if (k.endsWith('D')) map.sm = down ? 1 : 0;
-    if (k.endsWith('C')) map.crouch = down ? 1 : 0;
+    if (k.endsWith('C')) {
+      map.crouch = down ? 1 : 0;
+      if (down) lastCrouchDownAt = performance.now();
+    }
     if (k.endsWith('S')) map.run = down ? 1 : 0;
     if (down && k.endsWith('U') && PPD.app.mode === 'online' && PPD.app.snapB && PPD.app.snapB.ph === 0) {
       PPD.GameAudio.ensure();
@@ -66,6 +74,16 @@
       run: PPD.app.keyP1.run || PPD.app.keyP2.run,
     };
   }
+
+  // v2.6.0：蹲下按键看门狗——keyup 被浏览器吞掉时强制释放（防"蹲下后无法站起"）
+  setInterval(() => {
+    if (PPD.app && PPD.app.mode === 'online' && PPD.app.keys && PPD.app.keys.crouch === 1 &&
+        performance.now() - lastCrouchDownAt > 500) {
+      if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
+      if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
+      syncKeys();
+    }
+  }, 200);
 
   // ---------- 手机端触控按钮 ----------
   function showTouch(v) {
@@ -298,20 +316,20 @@
     if (PPD.app.mode !== 'ai' && PPD.app.mode !== 'local' && PPD.app.mode !== 'aivai') return;
     PPD.app.paused = !PPD.app.paused;
     PPD.show(PPD.ui.pausePanel, PPD.app.paused);
-    // AI 观战：暂停面板显示双方难度下拉并同步当前值（改后写回 app.aiLevelA/B）
+    // 模拟推演：暂停面板显示双方难度下拉并同步当前值（改后写回 app.aiLevelA/B）
     if (PPD.app.paused && PPD.app.mode === 'aivai') {
       PPD.show(PPD.ui.pauseAIVsAI, true);
       PPD.show(PPD.ui.pauseAITune, false);
       if (PPD.ui.pauseAiLevelA) PPD.ui.pauseAiLevelA.value = String(PPD.app.aiLevelA);
       if (PPD.ui.pauseAiLevelB) PPD.ui.pauseAiLevelB.value = String(PPD.app.aiLevelB);
-      // AI 观战：暂停可改双方名字（回填当前值，改动即时写回 HUD/胜负显示）
-      if (PPD.ui.pauseAiNameA) PPD.ui.pauseAiNameA.value = PPD.app.names[0] || '红方 AI';
-      if (PPD.ui.pauseAiNameB) PPD.ui.pauseAiNameB.value = PPD.app.names[1] || '蓝方 AI';
+      // 模拟推演：暂停可改双方名字（回填当前值，改动即时写回 HUD/胜负显示）
+      if (PPD.ui.pauseAiNameA) PPD.ui.pauseAiNameA.value = PPD.app.names[0] || '甲 AI';
+      if (PPD.ui.pauseAiNameB) PPD.ui.pauseAiNameB.value = PPD.app.names[1] || '乙 AI';
       syncTuneSliders();
       // v2.0:AI 观战暂停同步尾影/撞击特效开关(仅观战生效,AI 不受玩家装扮影响)
       if (PPD.ui.setTrailFx) PPD.ui.setTrailFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.trail);
       if (PPD.ui.setSplashFx) PPD.ui.setSplashFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.splash);
-    } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.isHellCleared()) {
+    } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.app.aiGameType !== 'endless' && PPD.isHellCleared()) {
       // 人机 + 地狱已通关：暂停面板变为「电脑 AI 数值调控」（滑杆即时生效）
       PPD.show(PPD.ui.pauseAIVsAI, false);
       PPD.show(PPD.ui.pauseAITune, true);
@@ -328,27 +346,27 @@
   PPD.ui.btnExit.addEventListener('click', () => { PPD.GameAudio.ensure(); PPD.GameAudio.ui(); PPD.backToMenu(); });
   PPD.ui.btnResume.addEventListener('click', () => { PPD.GameAudio.ensure(); togglePause(); });
   PPD.ui.btnPauseExit.addEventListener('click', () => { PPD.app.paused = false; PPD.backToMenu(); });
-  // AI 观战：暂停面板里调整双方 AI 难度（写回 app，loop 下一帧生效；等效值提示随之刷新）
+  // 模拟推演：暂停面板里调整甲/乙双方 AI 难度（写回 app，loop 下一帧生效；等效值提示随之刷新）
   if (PPD.ui.pauseAiLevelA) {
     PPD.ui.pauseAiLevelA.addEventListener('change', () => {
       if (PPD.app.mode !== 'aivai') return;
-      PPD.app.aiLevelA = PPD.readAiLevel(PPD.ui.pauseAiLevelA);
+      PPD.app.aiLevelA = PPD.readAISpec(PPD.ui.pauseAiLevelA);
       refreshAllTuneEff();
     });
   }
   if (PPD.ui.pauseAiLevelB) {
     PPD.ui.pauseAiLevelB.addEventListener('change', () => {
       if (PPD.app.mode !== 'aivai') return;
-      PPD.app.aiLevelB = PPD.readAiLevel(PPD.ui.pauseAiLevelB);
+      PPD.app.aiLevelB = PPD.readAISpec(PPD.ui.pauseAiLevelB);
       refreshAllTuneEff();
     });
   }
-  // AI 观战：暂停面板修改双方 AI 名字（写回 PPD.app.names → HUD/胜负即时生效；持久化本地）
+  // 模拟推演：暂停面板修改甲/乙 AI 名字（写回 PPD.app.names → HUD/胜负即时生效；持久化本地）
   const bindAIName = (el, side) => {
     if (!el) return;
     const apply = () => {
       if (PPD.app.mode !== 'aivai') return;
-      PPD.app.names[side] = el.value.trim() || (side === 0 ? '红方 AI' : '蓝方 AI');
+      PPD.app.names[side] = el.value.trim() || (side === 0 ? '甲 AI' : '乙 AI');
       if (PPD.saveAINames) PPD.saveAINames(PPD.app.names);
     };
     el.addEventListener('input', apply);
@@ -357,10 +375,18 @@
   bindAIName(PPD.ui.pauseAiNameA, 0);
   bindAIName(PPD.ui.pauseAiNameB, 1);
   window.addEventListener('keydown', (e) => {
-    // Esc：个人生涯页 > 说明书 > 联机框 > 设置面板 > 比赛中暂停/继续
+    // Esc：个人生涯合并页 > 无尽人机 > 说明书 > 联机框 > 设置面板 > 比赛中暂停/继续
     if (e.code === 'Escape') {
+      if (PPD.Replay && PPD.Replay.isActive() && PPD.Replay.closePlayer) {
+        PPD.Replay.closePlayer();
+        return;
+      }
       if (PPD.ui.careerPanel && PPD.ui.careerPanel.style.display !== 'none' && PPD.closeCareer) {
         PPD.closeCareer();
+        return;
+      }
+      if (PPD.ui.endlessPanel && PPD.ui.endlessPanel.style.display !== 'none' && PPD.closeEndlessPanel) {
+        PPD.closeEndlessPanel();
         return;
       }
       if (PPD.ui.manualPanel && PPD.ui.manualPanel.style.display !== 'none' && PPD.closeManual) {

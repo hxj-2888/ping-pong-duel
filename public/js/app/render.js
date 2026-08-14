@@ -480,6 +480,15 @@
       if (dx < dz) { pred.x = pred.x >= 0 ? rw : -rw; pred.padX = pred.x + f * 0.18; }
       else pred.z = side === 0 ? -rl : rl;
     }
+    // v2.6.0：预测纠偏按帧平滑——net.js 在偏差>1m 时记录 serverX/Z，这里每渲染帧按 dt 收敛
+    // （~10/s），消除公网 20Hz 下"每快照 20% 离散回拉"（自机/相机 50ms 跳一次）；
+    // 偏差<1m（正常预测领先）或严重失步（net.js 已硬校准）时不启动
+    if (PPD.app.serverX != null && (Math.abs(PPD.app.serverX - pred.x) > 1.0 || Math.abs(PPD.app.serverZ - pred.z) > 1.0)) {
+      const k = Math.min(1, dt * 10);
+      pred.x += (PPD.app.serverX - pred.x) * k;
+      pred.z += (PPD.app.serverZ - pred.z) * k;
+      pred.padX = pred.x + f * 0.18;
+    }
     pred.t = performance.now();
   }
 
@@ -531,10 +540,24 @@
       PPD.app.interpClock += (now - PPD.app._interpLast);
     }
     PPD.app._interpLast = now;
+    // v2.6.0：向后重锚——引擎变慢/断流后时钟越过最新帧（插值退化为整帧步进、延迟感加重），
+    // 检测到持续超前 2 帧即回拉到（最新帧-lag），恢复平滑插值（一次性小幅回退后连续）
+    if (PPD.app.interpClock != null && typeof snap.t === 'number' && PPD.app.interpClock > snap.t) {
+      PPD.app._interpOver = (PPD.app._interpOver || 0) + 1;
+      if (PPD.app._interpOver >= 2) {
+        const lag = Math.max(25, Math.min(80, (PPD.app.interpGap || 50) * 1.5));
+        PPD.app.interpClock = snap.t - lag;
+        PPD.app._interpOver = 0;
+      }
+    } else {
+      PPD.app._interpOver = 0;
+    }
     // 球外推平滑（快球低延迟；玩家/球拍等慢速对象走插值）
+    // v2.6.0：外推滞后改用「插值时钟与最新帧的时间差」——稳态恒定 ~lag、随时钟单调连续变化；
+    // 旧版按到达时刻 tB 计算（每条快照重置 → 外推锯齿 → 公网 20Hz 小球每 50ms 回跳/卡顿）
     let ex = { x: 0, y: 0, z: 0 };
-    if (snap.b) {
-      const lag = Math.min(0.12, Math.max(0, (now - PPD.app.tB) / 1000 - 0.03));
+    if (snap.b && PPD.app.interpClock != null) {
+      const lag = Math.min(0.12, Math.max(0, (snap.t - PPD.app.interpClock) / 1000));
       ex = { x: snap.b[3] * lag, y: snap.b[4] * lag, z: snap.b[5] * lag };
     }
     // 快照缓冲跨帧插值：在缓冲内找跨插值时钟的相邻帧对，alpha ∈ [0,1] 纯插值。
@@ -545,15 +568,20 @@
     const clock = PPD.app.interpClock != null ? PPD.app.interpClock : (buf.length ? buf[buf.length - 1].t : 0);
     let s1 = null, s2 = null, alpha = 0;
     if (buf.length >= 2) {
+      const maxSpan = (PPD.app.interpGap || 50) * 1.5;
       for (let i = 1; i < buf.length; i++) {
+        const span = buf[i].t - buf[i - 1].t;
+        // v2.6.0：断流大间隔帧对不用于插值（避免恢复瞬间 alpha≈0.85 跳变），
+        // 时钟落在断流区间时走下方兜底 = 冻结在最新帧
+        if (span > maxSpan) continue;
         if (buf[i - 1].t <= clock && clock <= buf[i].t) {
           s1 = buf[i - 1].s; s2 = buf[i].s;
-          alpha = (clock - buf[i - 1].t) / (buf[i].t - buf[i - 1].t);
+          alpha = (clock - buf[i - 1].t) / span;
           break;
         }
       }
       if (!s1) {
-        // 时钟超出缓冲范围（首帧/追赶瞬态）：钳到最近帧，不外推
+        // 时钟超出缓冲范围（首帧/追赶瞬态/断流区间）：钳到最近帧，不外推
         if (clock < buf[0].t) { s1 = buf[0].s; s2 = buf[1].s; alpha = 0; }
         else { s1 = buf[buf.length - 2].s; s2 = buf[buf.length - 1].s; alpha = 1; }
       }

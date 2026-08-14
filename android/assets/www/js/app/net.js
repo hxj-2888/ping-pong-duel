@@ -99,6 +99,7 @@
     PPD.app._interpLast = null;
     PPD.app.interpGap = null;
     PPD.app.pred = null; // 本地玩家预测状态随新会话重建
+    PPD.app.serverX = null; PPD.app.serverZ = null; // v2.6.0：纠偏目标随会话重建
     // 审计 #11:保存本会话玩家名——断线重连 join 用这个名字(不能用 names[0]:
     // 加入方 names[0] 可能被房主名覆盖,重连会让槽位被改名、生涯记录记错名)
     PPD.app.sessionName = PPD.getPlayerName ? (PPD.getPlayerName() || (hostMode ? '房主' : '挑战者')) : PPD.app.names[0];
@@ -276,13 +277,10 @@
               PPD.app.pred.padX = me.pc ? me.pc[0] : me.x;
               PPD.app.pred.crouch = me.cq || 0;
             } else {
-              // 平滑纠偏：移动网络下预测领先 RTT×速度 可达 0.6m+，旧版硬切 pred=me 会
-              // 造成行走时反复瞬移/抽动（相机跟随 pred 一起抖）。改为按比例收敛位置、
-              // 保留输入驱动速度（行走动画连续），仅位置缓慢回归服务器。
-              const k = 0.2;
-              PPD.app.pred.x += ex * k;
-              PPD.app.pred.z += ez * k;
-              PPD.app.pred.padX = PPD.app.pred.x + (PPD.app.side === 0 ? 0.18 : -0.18);
+              // v2.6.0：平滑纠偏——不再每快照离散拉回（公网 20Hz 下自机/相机每 50ms 跳 0.2×err），
+              // 只记录服务器位置，由 render.js stepPrediction 每渲染帧按 dt 平滑收敛
+              PPD.app.serverX = me.x;
+              PPD.app.serverZ = me.z;
             }
           }
           PPD.app.pred.t = performance.now();
@@ -443,7 +441,13 @@
   // 后台标签页回前台：重置看门狗基线（后台期间消息可能积压/暂停，避免一回来就误判断线）+ 立即 ping
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
+      if (document.hidden) {
+        // v2.6.0：切后台时清空蹲下键——Ctrl keyup 可能被浏览器吞掉（Ctrl+W/Tab、IME 等），
+        // 导致 keys.crouch 永久卡 1（蹲下后无法站起）；后台期间统一释放
+        if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
+        if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
+        if (PPD.app.keys) PPD.app.keys.crouch = 0;
+      } else {
         PPD.app.lastStateAt = Date.now();
         PPD.app.lastPongAt = Date.now();
         if (PPD.app.net && PPD.app.net.connected) {

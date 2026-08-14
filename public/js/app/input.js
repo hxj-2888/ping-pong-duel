@@ -15,6 +15,11 @@
     ShiftLeft: 'P1S', ShiftRight: 'P1S',      // Shift 跑步
   };
 
+  // v2.6.0：蹲下按键看门狗计时——Ctrl keyup 可能被浏览器吞掉（Ctrl+W/Tab、切标签页、IME 等），
+  // 导致 keys.crouch 永久卡 1（蹲下后无法站起）。物理按住时 OS 按键重复会持续刷新该时刻，
+  // keyup 丢失后重复停止 → 200ms 轮询发现"按住超 500ms 且无重复"即强制释放。
+  let lastCrouchDownAt = 0;
+
   function applyKey(code, down) {
     const k = KEYMAP[code];
     if (!k) return;
@@ -26,7 +31,10 @@
     if (k.endsWith('B')) map.b = down ? 1 : 0; // S：向后移动
     if (k.endsWith('U')) map.pu = down ? 1 : 0;
     if (k.endsWith('D')) map.sm = down ? 1 : 0;
-    if (k.endsWith('C')) map.crouch = down ? 1 : 0;
+    if (k.endsWith('C')) {
+      map.crouch = down ? 1 : 0;
+      if (down) lastCrouchDownAt = performance.now();
+    }
     if (k.endsWith('S')) map.run = down ? 1 : 0;
     if (down && k.endsWith('U') && PPD.app.mode === 'online' && PPD.app.snapB && PPD.app.snapB.ph === 0) {
       PPD.GameAudio.ensure();
@@ -66,6 +74,16 @@
       run: PPD.app.keyP1.run || PPD.app.keyP2.run,
     };
   }
+
+  // v2.6.0：蹲下按键看门狗——keyup 被浏览器吞掉时强制释放（防"蹲下后无法站起"）
+  setInterval(() => {
+    if (PPD.app && PPD.app.mode === 'online' && PPD.app.keys && PPD.app.keys.crouch === 1 &&
+        performance.now() - lastCrouchDownAt > 500) {
+      if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
+      if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
+      syncKeys();
+    }
+  }, 200);
 
   // ---------- 手机端触控按钮 ----------
   function showTouch(v) {
