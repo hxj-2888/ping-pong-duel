@@ -354,6 +354,7 @@ function handleMessage(room, client, msg) {
         lb: c && pu, // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导）
         crouch: c, run: rn,
       });
+      client.lastInputAt = Date.now(); // v2.6.0：输入超时判定的最后输入时刻
       // 鼠标/手指瞄准：目标落点（世界坐标）随输入帧上报，服务端求解发球方案并随快照返回
       if (Array.isArray(msg.a) && msg.a.length === 2) {
         const ax = Number(msg.a[0]), az = Number(msg.a[1]);
@@ -392,7 +393,7 @@ server.on('upgrade', (req, socket) => {
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
 
-  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, lastSeen: Date.now(), fragState: { fragOp: -1, fragParts: [] } };
+  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, lastSeen: Date.now(), lastInputAt: Date.now(), fragState: { fragOp: -1, fragParts: [] } };
   socket.on('data', (chunk) => {
     // 审计 #6:任何数据到达都视为连接存活(僵尸清扫据此判定失联)
     client.lastSeen = Date.now();
@@ -576,6 +577,15 @@ setInterval(() => {
         if (c && c.ws && c.ws.writable) {
           try { c.ws.write(encodeFrame(0x1, Buffer.from(data))); } catch (e) { /* ignore */ }
         }
+      }
+    }
+    // v2.6.0：输入超时——客户端断线/静默超 1s 未发输入 → 清零该席位输入（TT.setInput 全 0），
+    // 防止玩家永久保持蹲姿/移动状态广播给对手（keyup 丢失、网络静默、拔线未触发 close 等）
+    for (let i = 0; i < 2; i++) {
+      const c = room.clients[i];
+      if (c && c.ws && c.ws.writable && nowTick - (c.lastInputAt || nowTick) > 1000) {
+        TT.setInput(room.engine, i, { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lb: 0, crouch: 0, run: 0 });
+        c.lastInputAt = nowTick;
       }
     }
   }
