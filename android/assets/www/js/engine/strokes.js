@@ -10,11 +10,12 @@
 
   function startServeStroke(state, pi, type) {
     const p = state.players[pi];
-    // 瞄准目标解不出合法发球：发不出球（轨迹已消失）
-    if (p.serveAimBlocked) { p.hitCd = 0.25; return; }
     // 瞄准模式：直接使用鼠标/手指瞄准时求解好的方案（预览即实发）；
     // 未瞄准（AI 自动发球/键盘发球）时按原逻辑搜索默认轨迹。
-    let plan = (p.serveAimSet && p.servePlan)
+    // 修复"有时无法发球"：瞄准目标解不出合法发球（站位偏离中心等，serveAimBlocked）时
+    // 不再硬性禁止发球——回退到默认合法发球轨迹（solveServe），
+    // 避免"无法发球 → 6s 发球超时丢分"的卡死体验（轨迹预览仍按 sb 标志隐藏，按下发球键能正常发出）。
+    let plan = (p.serveAimSet && p.servePlan && !p.serveAimBlocked)
       ? p.servePlan
       : ctx.solveServe(state, pi, type === 2);
     // v1.6.1：修复"发球无法落到对方球台"——瞄准后移动站位会使旧 plan 失效（按新发球点发射轨迹出界）。

@@ -450,6 +450,8 @@ function handleClientMessage(client, msg) {
       lastSnap: '',
       lastSeen: [Date.now(), Date.now()], // 每席位最近活跃/断线时刻(审计 #6:断线宽限与僵尸清扫依据)
       skins: [null, null], // 联机皮肤同步(v2.0):双方装配的装扮,随 room/state 广播给对手
+      accTime: 0,   // 固定步长累计器(镜像 DO stepRoom)：游戏时间按真实经过时间追赶，不被 setInterval 拖慢
+      lastTick: 0,
     };
     rooms.set(code, room);
     client.room = room; client.side = 0; client.name = String(msg.name || '玩家1').slice(0, 12);
@@ -557,6 +559,10 @@ function roomAlive(room, now) {
 }
 
 // ---------- 主循环：60Hz 模拟 + 广播 ----------
+// 固定 60Hz 步长 + 按真实经过时间累计追赶（镜像 DO stepRoom）：
+// setInterval 被 tick 开销/机器负载拖慢时（实测曾掉到 ~41Hz），若每拍只步进固定 1/60，
+// 游戏时间会永久落后墙钟（移动/物理全部变慢，联机手感"走不动"）。
+// 累计器保证游戏时间始终贴近墙钟 1x：无论循环实际频率多少，物理都按 60Hz 步进补齐。
 setInterval(() => {
   const nowTick = Date.now();
   for (const room of rooms.values()) {
@@ -564,7 +570,16 @@ setInterval(() => {
       rooms.delete(room.code);
       continue;
     }
-    TT.step(room.engine, 1 / TICK_HZ);
+    const step = 1 / TICK_HZ;
+    const last = room.lastTick || (nowTick - 1000 / TICK_HZ); // 新房间首拍按一帧计，立即步进
+    room.accTime = Math.min(0.5, (room.accTime || 0) + (nowTick - last) / 1000);
+    room.lastTick = nowTick;
+    let n = 0;
+    while (room.accTime >= step && n < 60) {
+      TT.step(room.engine, step);
+      room.accTime -= step;
+      n++;
+    }
     const snap = TT.snapshot(room.engine);
     const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1, skins: room.skins });
     // 保底广播：内容变化即发，或距上次发送 ≥50ms 也发一次——发球待发等静默相位保持
