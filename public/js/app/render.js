@@ -156,16 +156,30 @@
     const server = snap.sv;
     const H = { x: snap.bh[0], y: snap.bh[1], z: snap.bh[2] };
     const facing = server === 0 ? 1 : -1;
-    // 服务端判定瞄准目标解不出合法发球：轨迹消失（联机）
-    if (snap.sb) {
-      servePathKey = null;
-      servePathPts = null;
-      smoothServeState = null;
-      return null;
+    let plan = null;
+    // v2.1.1：自己发球 + 已有瞄准 → 本地即时求解（消除"瞄准→服务器→快照"往返延迟，
+    // 公网 RTT+快照间隔可达 150~300ms，是"轨迹有很强延迟、不跟球"的根因）。
+    // 服务器仍权威，实发时按实际站位复验/回退。
+    if (server === PPD.app.side && PPD.app.serveAim) {
+      const aim = PPD.app.serveAim;
+      const p = snap.p[server];
+      // solveServeTo 只需 players[pi] 的 facing/padX/crouch/z（serveBallPos 用），用快照姿态重建即可
+      const minPlayer = { facing, padX: p.pc[0], crouch: p.cq || 0, z: p.z };
+      const lp = PPD.TT.solveServeTo({ players: [minPlayer, minPlayer] }, server, aim.x, aim.z, false);
+      if (lp) plan = { vel: lp.vel, spin: lp.spin };
     }
-    const plan = snap.sp
-      ? { vel: { x: snap.sp[0], y: snap.sp[1], z: snap.sp[2] }, spin: { x: snap.sp[3], y: snap.sp[4], z: snap.sp[5] } }
-      : defaultServePlanAt(H, facing);
+    if (!plan) {
+      // 非自己发球 / 本地无解：用服务器 sp（对手精确轨迹）/ 默认示意方案
+      if (snap.sb) {
+        servePathKey = null;
+        servePathPts = null;
+        smoothServeState = null;
+        return null;
+      }
+      plan = snap.sp
+        ? { vel: { x: snap.sp[0], y: snap.sp[1], z: snap.sp[2] }, spin: { x: snap.sp[3], y: snap.sp[4], z: snap.sp[5] } }
+        : defaultServePlanAt(H, facing);
+    }
     if (!plan) return null;
     const key = `${server}:${Math.round(H.x * 4)}:${Math.round(H.y * 10)}:${plan.vel.z.toFixed(2)}:${plan.vel.x.toFixed(2)}:${plan.vel.y.toFixed(2)}`;
     if (key === servePathKey) return servePathPts;
@@ -482,8 +496,13 @@
     }
     // v2.6.0：预测纠偏按帧平滑——net.js 在偏差>1m 时记录 serverX/Z，这里每渲染帧按 dt 收敛
     // （~10/s），消除公网 20Hz 下"每快照 20% 离散回拉"（自机/相机 50ms 跳一次）；
-    // 偏差<1m（正常预测领先）或严重失步（net.js 已硬校准）时不启动
-    if (PPD.app.serverX != null && (Math.abs(PPD.app.serverX - pred.x) > 1.0 || Math.abs(PPD.app.serverZ - pred.z) > 1.0)) {
+    // 偏差<1m（正常预测领先）或严重失步（net.js 已硬校准）时不启动。
+    // v2.1.1 修复"走不动卡住"：仅"静止"时收敛——公网高 RTT 下 pred 天然领先 RTT×速度
+    // （可达 1m+），移动中按帧拉回会与输入预测对抗（走着走着被拽住）；移动中信任本地预测，
+    // 静止时才平滑收敛到服务器，严重失步仍由 net.js >3m 硬校准兜底。
+    const kKeys = PPD.app.keys;
+    const kMoving = !!(kKeys.l || kKeys.r || kKeys.f || kKeys.b);
+    if (PPD.app.serverX != null && !kMoving && (Math.abs(PPD.app.serverX - pred.x) > 1.0 || Math.abs(PPD.app.serverZ - pred.z) > 1.0)) {
       const k = Math.min(1, dt * 10);
       pred.x += (PPD.app.serverX - pred.x) * k;
       pred.z += (PPD.app.serverZ - pred.z) * k;
