@@ -112,7 +112,9 @@
     const clearJoinTimer = () => { if (PPD.app.joinTimer) { clearTimeout(PPD.app.joinTimer); PPD.app.joinTimer = null; } };
     const scheduleJoinRetry = () => {
       clearJoinTimer();
-      // v1.6.2：首次 12s（DO 冷启动/驱逐恢复宽限），后续 6s；共 4 次重试——避免部署后冷启动误报"建房超时"
+      // P0-2 进房时序：缩短 create/join 无响应的等待并更早反馈——
+      // 局域网/本地秒进，无需 12s 宽限；DO 冷启动由 NetClient 握手重试兜底。
+      // 首次 4s、后续 3s，共 4 次重试。
       PPD.app.joinTimer = setTimeout(() => {
         // 审计 #4:会话已切换(用户退出/重开联机/返回菜单)→ 本定时器作废,绝不复活旧连接
         if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return;
@@ -124,7 +126,7 @@
         PPD.setStatus(hostMode ? '建房超时，自动重连中…' : '加入超时，自动重连中…');
         net.close();
         net.connect();
-      }, joinTries === 0 ? 12000 : 6000);
+      }, joinTries === 0 ? 4000 : 3000);
     };
     net.on('open', () => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
@@ -193,6 +195,14 @@
         PPD.app.lastStateAt = Date.now(); // 开局数据流基线：4s 内必有首帧快照
         if (PPD.app.mode !== 'online' || PPD.ui.gameScreen.style.display === 'none') {
           PPD.startOnlineGame(PPD.app.side); // 内部会隐藏主菜单与联机框
+          // P0-2 首帧提示：进对局后 2s 仍无首帧快照 → 明确提示（避免黑屏/等待文字干等）
+          clearTimeout(PPD.app.firstSnapTimer);
+          PPD.app.firstSnapTimer = setTimeout(() => {
+            if (PPD.app.net === net && token === PPD.app.netSessionToken &&
+                PPD.app.mode === 'online' && !PPD.app.snapB) {
+              PPD.setStatus('正在等待服务器数据…');
+            }
+          }, 2000);
         } else {
           // 已在对局中（重连/重挂补发的 room）：只隐藏遮罩，不重置快照避免闪屏
           PPD.show(PPD.ui.overlay, false);
