@@ -135,7 +135,12 @@
       // 1) 等待对手/空闲时保持服务器侧活跃，减少 DO 驱逐；
       // 2) DO 驱逐恢复后，本条消息让服务器按 attachment 把本连接重挂回房间席位。
       if (!PPD.app.heartbeatTimer) {
-        PPD.app.heartbeatTimer = setInterval(() => { if (PPD.app.net && PPD.app.net.connected) PPD.app.net.send({ t: 'ping' }); }, 5000);
+        PPD.app.heartbeatTimer = setInterval(() => {
+          if (PPD.app.net && PPD.app.net.connected) {
+            PPD.app._pingSentAt = Date.now(); // fix:往返 RTT 测量——pong 回来时算 now-发送时刻（不依赖服务器时钟）
+            PPD.app.net.send({ t: 'ping' });
+          }
+        }, 5000);
       }
       if (hostMode && !PPD.app.roomCode) {
         // 首次建房：尚无房间码，创建（带当前装配特效皮肤,服务器广播给对手;v2.1 仅尾影/溅射）
@@ -214,10 +219,11 @@
     net.on('pong', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.app.lastPongAt = Date.now();
-      // v2.7.0-fix:测量 RTT（服务器 pong.st = 服务器发送时刻的 Date.now()，客户端与本地时钟差值
-      // 即往返时延；EMA 平滑，钳制 0~10s 防时钟异常）。供插值滞后上界与预测纠偏领先距离自适应。
-      if (m && typeof m.st === 'number') {
-        const rtt = Date.now() - m.st;
+      // fix:往返 RTT 测量——用客户端发送时刻（_pingSentAt）而非 m.st：
+      // m.st 是服务器时钟，客户端与服务器时钟偏差（实测 CF ~430ms）会让单程差值变负被过滤
+      if (PPD.app._pingSentAt) {
+        const rtt = Date.now() - PPD.app._pingSentAt;
+        PPD.app._pingSentAt = 0;
         if (rtt > 0 && rtt < 10000) {
           PPD.app.rtt = PPD.app.rtt == null ? rtt : PPD.app.rtt * 0.7 + rtt * 0.3;
         }
@@ -507,6 +513,7 @@
         PPD.app.lastStateAt = Date.now();
         PPD.app.lastPongAt = Date.now();
         if (PPD.app.net && PPD.app.net.connected) {
+          PPD.app._pingSentAt = Date.now(); // fix:往返 RTT 测量（与心跳一致）
           PPD.app.net.send({ t: 'ping' });
         }
         // 回前台立即补发一次当前按键（后台 setInterval 已降频，即刻恢复输入流，消除回前台瞬间的卡顿/状态分叉）
