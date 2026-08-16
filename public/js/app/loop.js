@@ -81,7 +81,8 @@
         }
         // v2.7.2:右上角网络延迟显示（联机模式；RTT EMA 已在 pong 处理器计算）
         if (PPD.ui.pingMeter) {
-          const online = PPD.app.mode === 'online' && PPD.app.ws && PPD.app.ws.readyState === 1;
+          // fix:PPD.app.ws 不存在（WebSocket 封装是 PPD.app.net），原条件恒 false 导致延迟永不显示
+          const online = PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected;
           if (online) {
             const rtt = Math.round(PPD.app.rtt || 0);
             PPD.ui.pingMeter.textContent = rtt + ' ms';
