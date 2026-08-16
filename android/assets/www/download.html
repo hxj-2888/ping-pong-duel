@@ -141,7 +141,7 @@
     var status = document.getElementById('dlStatus');
     btn.addEventListener('click', function (e) {
       status.textContent = '正在校验安装包完整性…';
-      fetch('PingPongDuel-v260.apk', { cache: 'no-cache' })
+      fetch('PingPongDuel-v270.apk', { cache: 'no-cache' })
         .then(function (r) {
           if (!r.ok) throw new Error('服务器返回 ' + r.status);
           return r.blob();
@@ -153,7 +153,7 @@
           var url = URL.createObjectURL(blob);
           var a = document.createElement('a');
           a.href = url;
-          a.download = 'PingPongDuel-v260.apk';
+          a.download = 'PingPongDuel-v270.apk';
           document.body.appendChild(a);
           a.click();
           a.remove();
