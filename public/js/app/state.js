@@ -115,6 +115,7 @@
     frameRate: document.getElementById('frameRate'),
     serverLine: document.getElementById('setServerLine'), // v2.5:联机服务器线路（线路一 Cloudflare / 线路二 ECS）
     fpsMeter: document.getElementById('fpsMeter'),
+    pingMeter: document.getElementById('pingMeter'), // v2.7.2:右上角网络延迟显示（联机模式）
     serveDot: document.getElementById('serveDot'),
     tips: document.getElementById('tips'),
     recordsPanel: document.getElementById('recordsPanel'),
@@ -350,15 +351,11 @@
   function isHellUnlocked() { return hellUnlockedMem; }
 
   // 判定范围虚线开关（设置面板，localStorage 持久化；默认关闭）。
-  // v2.4：通关困难模式解锁——未解锁时强制关闭并写回，避免"虚线仍显示但勾选框禁用"的不一致
+  // v2.7.2:限制解除——不再要求通关困难模式，所有人可自由开关虚线指示。
   let showHitRanges = false;
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(HIT_RANGE_KEY) : null;
     showHitRanges = v === null ? false : v === '1';
-    if (showHitRanges && !hellUnlockedMem) {
-      showHitRanges = false;
-      if (typeof localStorage !== 'undefined') localStorage.setItem(HIT_RANGE_KEY, '0');
-    }
   } catch (e) { /* ignore */ }
   app.showHitRanges = showHitRanges;
 
@@ -584,10 +581,11 @@
   }
 
   // v2.4：判定范围虚线需通关困难解锁（与地狱解锁同条件）——同步设置面板勾选框禁用态
+  // v2.7.2:限制解除——勾选框恒可用，不再要求通关困难
   function syncHitRangeToggle() {
     const el = PPD.ui.setShowHitRanges;
     if (!el) return;
-    el.disabled = !isHellUnlocked();
+    el.disabled = false;
   }
 
   // ---------- 地狱通关（人机击败地狱难度，localStorage 持久化） ----------

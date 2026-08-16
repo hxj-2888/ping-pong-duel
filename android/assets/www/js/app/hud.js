@@ -340,14 +340,29 @@
       const text = phId === 0 ? '发球' : phId === 1 ? '对打' : phId === 2 ? '得分' : '比赛结束';
       // 发球瞄准提示按设备区分：桌面只提鼠标，触屏才提"鼠标/手指"
       const aimHint = PPD.isTouch ? '移动鼠标/手指瞄准落点' : '移动鼠标瞄准落点';
+      // v2.7.2:发球阶段提示只在首次显示（玩家看过一次即可，后续不再提醒，避免每回合重复干扰）。
+      // 其他阶段（对打/得分/比赛结束）正常显示，不影响比分/胜负感知。
+      let serveHintShown = false;
+      try { serveHintShown = typeof localStorage !== 'undefined' && localStorage.getItem('ppd_serve_hint_shown') === '1'; } catch (e) { /* ignore */ }
       if (phId === 0 && PPD.app.mode === 'online') {
-        showPhase(server === PPD.app.side ? `你的发球 · ${aimHint}` : '对方发球');
+        if (!serveHintShown) {
+          showPhase(server === PPD.app.side ? `你的发球 · ${aimHint}` : '对方发球');
+          try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_serve_hint_shown', '1'); } catch (e) { /* ignore */ }
+        }
+        // 已看过：发球阶段不再弹 phaseBanner 提醒（serveDot 已指示发球方）
       } else if (phId === 0 && PPD.app.mode === 'ai') {
-        const pn = (PPD.app.names && PPD.app.names[0]) || '你';
-        showPhase(server === 0 ? `${pn} 发球 · ${aimHint}` : '电脑发球');
+        if (!serveHintShown) {
+          const pn = (PPD.app.names && PPD.app.names[0]) || '你';
+          showPhase(server === 0 ? `${pn} 发球 · ${aimHint}` : '电脑发球');
+          try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_serve_hint_shown', '1'); } catch (e) { /* ignore */ }
+        }
       } else if (phId === 0 && PPD.app.mode === 'local') {
-        showPhase(`${server === 0 ? 'P1' : 'P2'} 发球 · ${aimHint}`);
+        if (!serveHintShown) {
+          showPhase(`${server === 0 ? 'P1' : 'P2'} 发球 · ${aimHint}`);
+          try { if (typeof localStorage !== 'undefined') localStorage.setItem('ppd_serve_hint_shown', '1'); } catch (e) { /* ignore */ }
+        }
       } else if (phId === 0 && PPD.app.mode === 'aivai') {
+        // AI 观战：无人类瞄准，仍提示发球方
         const na = (PPD.app.names && PPD.app.names[0]) || '甲';
         const nb = (PPD.app.names && PPD.app.names[1]) || '乙';
         showPhase(`${server === 0 ? na : nb} 发球`);

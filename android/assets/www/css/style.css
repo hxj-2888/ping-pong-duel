@@ -314,8 +314,9 @@ input:focus { border-color: var(--blue); }
   #hud { top: 64px; }
   #netInfo { display: none; }
   #hitRangeInfo .hr-title { display: none; } /* 手机端紧凑：隐藏标题行 */
-  #phaseBanner { top: 230px; }
-  #pointToast { top: 272px; }
+  /* 提示字（发球/得分等阶段横幅）紧贴比分栏下方，不再远悬在画面中部 */
+  #phaseBanner { top: 116px; }
+  #pointToast { top: 158px; }
   /* 手机端：暂停面板（AI 观战调难度/调参）内边距收窄，调参区随屏收缩，文字全部留在框内 */
   .pause-card { padding: 18px 14px; min-width: 0; }
   .tune-side { min-width: 0; }
@@ -395,6 +396,17 @@ canvas#game { touch-action: none; }
   font-variant-numeric: tabular-nums; user-select: none;
 }
 .fps-meter.low { color: #ffd479; }
+/* 帧率+延迟垂直堆叠容器（右上角） */
+.stat-stack { display: flex; flex-direction: column; gap: 3px; }
+/* 右上角网络延迟（联机模式；按延迟值变色：<100 绿、<200 黄、≥200 红） */
+.ping-meter {
+  min-width: 52px; text-align: center;
+  background: rgba(10, 15, 26, 0.72); border: 1px solid var(--line); color: #9fe8a0;
+  border-radius: 8px; padding: 5px 6px; font-size: 11px; font-weight: 700;
+  font-variant-numeric: tabular-nums; user-select: none; line-height: 1.2;
+}
+.ping-meter.warn { color: #ffd479; }
+.ping-meter.bad { color: #ff8b96; }
 /* 主菜单右上角 ⚙ 设置按钮（固定于视口右上角，与比赛页 gameTools 同位） */
 .settings-btn {
   position: fixed; top: 14px; right: 14px; z-index: 8;

@@ -19,6 +19,9 @@
   // 导致 keys.crouch 永久卡 1（蹲下后无法站起）。物理按住时 OS 按键重复会持续刷新该时刻，
   // keyup 丢失后重复停止 → 200ms 轮询发现"按住超 500ms 且无重复"即强制释放。
   let lastCrouchDownAt = 0;
+  // v2.7.2-fix:手机端蹲下按钮按住标记——触控按住没有 OS 键盘重复事件，lastCrouchDownAt 不会
+  // 刷新，看门狗会在 500ms 后把"仍在按住"的蹲误释放（手机联机蹲不住）。按住期间豁免看门狗。
+  let touchCrouchHeld = false;
 
   function applyKey(code, down) {
     const k = KEYMAP[code];
@@ -100,7 +103,7 @@
   // v2.6.0：蹲下按键看门狗——keyup 被浏览器吞掉时强制释放（防"蹲下后无法站起"）
   setInterval(() => {
     if (PPD.app && PPD.app.mode === 'online' && PPD.app.keys && PPD.app.keys.crouch === 1 &&
-        performance.now() - lastCrouchDownAt > 500) {
+        !touchCrouchHeld && performance.now() - lastCrouchDownAt > 500) {
       if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
       if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
       syncKeys();
@@ -179,6 +182,14 @@
     };
     // 蹲下按钮（手机端）：按住蹲下（与电脑 Ctrl 相同效果）；扣球已改为滑屏（见 canvas pointerup）
     hold(PPD.ui.btnCrouch, 'crouch', 'keyP1');
+    // v2.7.2-fix:按住期间豁免键盘看门狗（触控无 OS 重复事件，否则 500ms 后被误释放→蹲不住）
+    if (PPD.ui.btnCrouch) {
+      PPD.ui.btnCrouch.addEventListener('pointerdown', () => { touchCrouchHeld = true; });
+      const crouchOff = () => { touchCrouchHeld = false; };
+      PPD.ui.btnCrouch.addEventListener('pointerup', crouchOff);
+      PPD.ui.btnCrouch.addEventListener('pointercancel', crouchOff);
+      PPD.ui.btnCrouch.addEventListener('pointerleave', crouchOff);
+    }
     // 手机端已取消本地分屏：仅 P1 一套摇杆（P2 触控组已删除）
     makeJoy(PPD.ui.joyBase, PPD.ui.joyKnob, 'keyP1');
   }

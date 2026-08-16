@@ -79,6 +79,20 @@
           if (fps < 45) PPD.ui.fpsMeter.classList.add('low');
           else PPD.ui.fpsMeter.classList.remove('low');
         }
+        // v2.7.2:右上角网络延迟显示（联机模式；RTT EMA 已在 pong 处理器计算）
+        if (PPD.ui.pingMeter) {
+          const online = PPD.app.mode === 'online' && PPD.app.ws && PPD.app.ws.readyState === 1;
+          if (online) {
+            const rtt = Math.round(PPD.app.rtt || 0);
+            PPD.ui.pingMeter.textContent = rtt + ' ms';
+            PPD.ui.pingMeter.classList.remove('warn', 'bad');
+            if (rtt >= 200) PPD.ui.pingMeter.classList.add('bad');
+            else if (rtt >= 100) PPD.ui.pingMeter.classList.add('warn');
+            PPD.ui.pingMeter.style.display = '';
+          } else {
+            PPD.ui.pingMeter.style.display = 'none';
+          }
+        }
       }
     }
     // 观众欢呼/摇头强度逐帧衰减（约 1.7s 内平息，与 1.5s 掌声时长接近）
