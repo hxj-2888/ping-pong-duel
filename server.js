@@ -580,13 +580,14 @@ setInterval(() => {
       room.accTime -= step;
       n++;
     }
-    const snap = TT.snapshot(room.engine);
-    const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1, skins: room.skins });
-    // 保底广播：内容变化即发，或距上次发送 ≥50ms 也发一次——发球待发等静默相位保持
-    // ≥20Hz 插值锚点，避免客户端插值时钟断档后跳变/回溯（画面平滑的锚点连续性保证）
-    if (data !== room.lastSnap || nowTick - (room.lastSentAt || 0) >= 50) {
+    // P0-4 广播节流：物理仍 60Hz 步进（accTime 已保证 1×），快照 stringify+广播按 25ms 地板（40Hz）。
+    // 原"内容变化或≥50ms"因 t 每 tick 变导致恒真 → 每 tick 全量 snapshot+stringify（60Hz），
+    // 是本地服务器 CPU/带宽热点（实测循环被拖慢）。改为仅在广播时 snapshot+stringify，省 ~1/3 开销；
+    // 40Hz 插值锚点对客户端（滞后 25~80ms、缓冲 6 帧）仍平滑。
+    if (nowTick - (room.lastSentAt || 0) >= 25) {
+      const snap = TT.snapshot(room.engine);
+      const data = JSON.stringify({ t: 'state', s: snap, n: room.clients.map((c) => (c ? c.name : '')), my: -1, skins: room.skins });
       stats.broadcast++;
-      room.lastSnap = data;
       room.lastSentAt = nowTick;
       for (const c of room.clients) {
         if (c && c.ws && c.ws.writable) {

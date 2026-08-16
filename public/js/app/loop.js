@@ -18,6 +18,10 @@
 
   function loop(now) {
     requestAnimationFrame(loop);
+    // 渲染循环整体容错（P0-1）：任何单帧异常（HUD/渲染/插值对异常快照抛错）都不再
+    // 永久停画——联机音效在 WS 回调独立播放，若渲染被异常掐断会出现"听得到音效、
+    // 看到界面、画面迟迟不出"。这里捕获后仅警告一次，下一帧继续渲染。
+    try {
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
     // 对局开场渲染期间（introActive）：冻结物理（不步进），画面照常渲染打底（见下方各分支与 skipRender）
@@ -191,6 +195,12 @@
         PPD.app.resizeDirty = false;
         lastRender = now;
         PPD.renderOnline();
+      }
+    }
+    } catch (e) {
+      if (!PPD.app._loopErrWarned) {
+        PPD.app._loopErrWarned = true;
+        if (typeof console !== 'undefined' && console.error) console.error('渲染循环异常（已容错，仅提示一次）:', e);
       }
     }
   }
