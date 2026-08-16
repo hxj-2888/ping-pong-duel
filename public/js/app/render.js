@@ -341,8 +341,15 @@
     });
     let ball = null, ballInHand = null;
     if (sb.b) {
+      // v2.7.0-fix:发球离手过渡——上一帧持球(sa.bh)、本帧飞行(sb.b)时，球位从持球点按 alpha
+      // 插值到飞行点（不再直接画最新飞行位），消除高速发球"球瞬移离手"的观感（50ms 位移 0.3~0.5m）
+      const release = sa && sa.bh;
       ball = {
-        pos: { x: safeNum(sb.b[0], 0) + (ballExtrap ? ballExtrap.x : 0), y: safeNum(sb.b[1], 0) + (ballExtrap ? ballExtrap.y : 0), z: safeNum(sb.b[2], 0) + (ballExtrap ? ballExtrap.z : 0) },
+        pos: {
+          x: release ? lerp(sa.bh[0], sb.b[0]) : safeNum(sb.b[0], 0) + (ballExtrap ? ballExtrap.x : 0),
+          y: release ? lerp(sa.bh[1], sb.b[1]) : safeNum(sb.b[1], 0) + (ballExtrap ? ballExtrap.y : 0),
+          z: release ? lerp(sa.bh[2], sb.b[2]) : safeNum(sb.b[2], 0) + (ballExtrap ? ballExtrap.z : 0),
+        },
         vel: { x: safeNum(sb.b[3], 0), y: safeNum(sb.b[4], 0), z: safeNum(sb.b[5], 0) },
         spin: { x: safeNum(sb.b[6], 0), y: safeNum(sb.b[7], 0), z: safeNum(sb.b[8], 0) },
         vis: true,
@@ -526,6 +533,27 @@
       if (dx < dz) { pred.x = pred.x >= 0 ? rw : -rw; pred.padX = pred.x + f * 0.18; }
       else pred.z = side === 0 ? -rl : rl;
     }
+    // v2.7.0-fix:发球阶段站位钳制（与引擎同步，见 engine.js）：我是发球方且持球时，
+    // 不能进入"解不出合法发球"的近网死区（边线绕行逼近球网后 z≥~-0.6 即解不出、bh 越网）
+    if (PPD.app.snapB && PPD.app.snapB.ph === 0 && PPD.app.snapB.sv === side) {
+      pred.z = predClamp(pred.z, side === 0 ? -R.Z_BACK : R.SERVE_Z_SAFE, side === 0 ? -R.SERVE_Z_SAFE : R.Z_BACK);
+    }
+    // v2.7.0-fix:消费 net.js 写入的纠偏目标（原 v2.6.0 只写不读=死代码）：
+    // 移动中预测合法领先服务器约 RTT×速度，只在偏差超过领先距离时向服务器平滑收敛，
+    // 避免"走着走着被拽住"与"漂移无界最终 3m 瞬移"；>3m 严重失步仍由 net.js 硬重置兜底。
+    if (PPD.app.serverX != null && PPD.app.serverZ != null) {
+      const sx = PPD.app.serverX, sz = PPD.app.serverZ;
+      const ex = sx - pred.x, ez = sz - pred.z;
+      const dr = Math.hypot(ex, ez);
+      const lead = ((PPD.app.rtt != null ? PPD.app.rtt : 60) / 1000) * speed * 1.5 + 0.1;
+      if (dr > lead) {
+        const k = dr > 2 ? 0.5 : 0.25; // 偏差越大收敛越快，但不瞬间硬跳
+        pred.x += ex * Math.min(1, k * dt * 60);
+        pred.z += ez * Math.min(1, k * dt * 60);
+        pred.padX = pred.x + (side === 0 ? 0.18 : -0.18);
+        if (dr < lead * 1.15) { PPD.app.serverX = null; PPD.app.serverZ = null; } // 到位即清
+      }
+    }
     pred.t = performance.now();
   }
 
@@ -539,6 +567,17 @@
     const f = side === 0 ? 1 : -1;
     const swinging = !!(sp.st && sp.st[0] !== 0);
     const isServer = snap.sv === side;
+    // v2.7.1-fix:发球阶段（自己持球待发）禁用本地预测——发球点/球拍/持球严格用服务器快照。
+    // 发球求解（servePathFromSnap 本地 solveServeTo + 服务器 setServeAim 复验）对站位极敏感：
+    // 公网 RTT 下本地预测与服务器发球点哪怕差几厘米，本地"能解出/球在某处"与服务器判定就分叉，
+    // 表现为"发球有时无法求解 + 对方看球位置偏移很远"。发球是低频精确操作，不需预测平滑。
+    const serving = isServer && snap.ph === 0;
+    if (serving) {
+      // 同步预测锚点到服务器，避免发球结束切回预测时位置跳变
+      pred.x = sp.x; pred.z = sp.z; pred.vx = sp.vx || 0; pred.vz = sp.vz || 0;
+      pred.padX = sp.pc ? sp.pc[0] : sp.x; pred.crouch = sp.cq || 0;
+      return; // 位置/球拍/持球全部保留服务器快照插值结果（含 ballInHand 贴拍）
+    }
     const oldPad = { x: me.paddle.p.x, z: me.paddle.p.z };
     // 位置/速度/蹲姿始终用本地预测：挥拍前后连续，消除"挥拍结束瞬间从服务器插值硬切回预测"
     // 的位置/速度跳变（行走动画抽动主因）。挥拍期间仅球拍保持服务器插值的挥拍轨迹。

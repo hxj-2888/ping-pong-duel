@@ -165,6 +165,16 @@
     black: 'rgba(42,46,56,',
     red: 'rgba(255,72,48,',
   };
+  // 球台撞击特效（溅射粒子）与尾影配色匹配（v2.4）：装备尾影时溅射粒子用同色系；
+  // 黑色尾影提亮为灰蓝以保证在深色球台上可见；未装备用默认橙红渐变。
+  const SPLASH_RGB = {
+    yellow: [255, 215, 80],
+    black: [110, 118, 132],
+    red: [255, 72, 48],
+  };
+  // 手机端渲染预算（v2.4）：观众动画层半分辨率，减 75% 动画期填充
+  const animScale = () => (typeof PPD !== 'undefined' && PPD && PPD.isTouch) ? 0.5 : 1.0;
+  const isTouchNow = () => !!(typeof PPD !== 'undefined' && PPD && PPD.isTouch);
 
   // ---------- 观众席（坐姿火柴人，与球员同一画风：圆头 + 骨线骨架） ----------
   // 场地两端 + 两侧共四个方向的观众席，一次性生成固定站位（确定性伪随机）
@@ -421,8 +431,6 @@
   // 无 document.createElement 的环境（测试桩/极端环境）自动回退逐帧直画。
   const CROWD_CAM_BUCKET = 0.06; // 相机移动重建阈值(m)（0.04→0.06：平移重建阈值 0.02→0.03m，频率降约 1/3，视觉不可察）
   const CROWD_ANIM_HZ = 30;      // 欢呼动画刷入动画层的频率（Hz）
-  const CROWD_ANIM_SCALE = 1.0;  // 动画层分辨率倍率（全分辨率：与静态层一致，高画质玩家动画小人轮廓清晰、大小相同；
-                                 // 动画仅在得分欢呼时短暂触发 ~1.5s，全分辨率开销可控，且动画期静态层不含观众）
   // 静态/动画离屏缓存：按 viewSide（分屏两侧队色相反）分键——本地双人两视口各自缓存，
   // 避免 A 视口重建后 B 视口 key 不同又踢掉重建，导致每帧全量重画 376 人观众席（帧率抖动）。
   // 每个 entry 懒创建（先静态层后动画层，保持 createElement 顺序，兼容测试桩 canvas 序号）。
@@ -476,7 +484,7 @@
   function rebuildAnimCache(entry, cam, vw, vh, viewSide, mainCtx, time, fan, teamFixed) {
     // 同 rebuildCrowdCache：按整屏 CSS 宽计算缓存 dpr（分屏下避免 2×dpr → 4× 冗余像素）
     const dpr = mainCtx.canvas ? Math.max(1, mainCtx.canvas.width / Math.max(1, mainCtx.canvas.clientWidth || vw)) : 1;
-    const s = CROWD_ANIM_SCALE;
+    const s = animScale(); // 手机端动画层半分辨率（减动画期填充 75%，v2.4）
     entry.anim.canvas.width = Math.max(1, Math.round(vw * dpr * s));
     entry.anim.canvas.height = Math.max(1, Math.round(vh * dpr * s));
     const ac = entry.anim.ctx;
@@ -779,8 +787,9 @@
     }
   }
 
-  // 球台撞击特效：默认扩散红圈+中心闪光；装备"撞击溅射"时(type='splash')改为飞溅粒子
-  function drawEffects(ctx, cam, fx, time) {
+  // 球台撞击特效：默认扩散红圈+中心闪光；装备"撞击溅射"时(type='splash')改为飞溅粒子。
+  // v2.4 预算：low 时溅射只保留主冲击波纹（不画粒子）；溅射粒子色随装备尾影匹配（trailStyle）。
+  function drawEffects(ctx, cam, fx, time, low, trailStyle) {
     for (const f of fx || []) {
       const age = time - f.t0;
       if (age < 0 || age > 0.45) continue;
@@ -788,7 +797,7 @@
       const p = cam.project(v3(f.x, R.TABLE_HEIGHT + 0.006, f.z));
       if (!p) continue;
       if (f.type === 'splash') {
-        drawSplash(ctx, p, k);
+        drawSplash(ctx, p, k, low, trailStyle);
         continue;
       }
       const r = (0.045 + k * 0.40) * p.s;
@@ -805,8 +814,13 @@
     }
   }
 
-  // 撞击溅射粒子(增强 v2.0)：中心冲击闪光 + 双层粒子(亮火花 + 暗尾粒) + 白→橙→红渐变
-  function drawSplash(ctx, p, k) {
+  // 撞击溅射粒子(增强 v2.0)：中心冲击闪光 + 双层粒子(亮火花 + 暗尾粒)。
+  // v2.4：粒子数手机端减半（6）/桌面 8；低画质仅主冲击波纹；装备尾影时粒子用同色系（SPLASH_RGB 匹配）。
+  // v2.7.0：特效质量随画质分级——高=全额(14)、中=大部分(8)、低=少量(4)，低画质不再完全关闭粒子（手机端再减半）。
+  function fxTier() {
+    return (root && root.PPD && root.PPD.app && root.PPD.app.quality && root.PPD.app.quality.mode) || 'high';
+  }
+  function drawSplash(ctx, p, k, low, trailStyle) {
     // 中心冲击闪光：短促的白亮圈(仅前 40% 生命周期,随后被飞溅粒子覆盖)
     if (k < 0.45) {
       const flash = 1 - k / 0.45;
@@ -816,7 +830,11 @@
       ctx.arc(p.x, p.y, fr, 0, Math.PI * 2);
       ctx.fill();
     }
-    const n = 14;
+    // v2.7.0：低画质不再完全关闭粒子，改为少量（保留撞击观感）
+    const tier = fxTier();
+    const base = tier === 'high' ? 14 : tier === 'medium' ? 8 : 4;
+    const n = isTouchNow() ? Math.max(2, Math.round(base / 2)) : base;
+    const rgb = SPLASH_RGB[trailStyle] || null; // 与装备尾影配色匹配；未装备默认橙红渐变
     for (let i = 0; i < n; i++) {
       const seed = (i * 0.618 + p.x * 0.0371) % 1;
       const a = seed * Math.PI * 2 + (i % 3) * 0.35;
@@ -827,9 +845,15 @@
       const big = i % 3 !== 2;                        // 2/3 亮火花 + 1/3 暗尾粒
       const r = Math.max(big ? 1.1 : 0.7, 0.024 * p.s * (1 - k) * (big ? (0.6 + ((i * 0.37) % 1) * 0.8) : 0.45));
       const alpha = (1 - k) * (big ? 0.95 : 0.6);
-      const hue = big ? (15 + ((i * 9) % 20)) : (30 + ((i * 11) % 20)); // 橙红渐变
-      const light = big ? (58 + ((i * 7) % 22)) : (48 + ((i * 9) % 15));
-      ctx.fillStyle = `hsla(${hue},100%,${light}%,${alpha.toFixed(3)})`;
+      if (rgb) {
+        // 尾影同色系：亮火花按亮度微调、暗尾粒压暗
+        const mul = big ? (0.75 + ((i * 0.37) % 1) * 0.45) : 0.5;
+        ctx.fillStyle = `rgba(${Math.round(rgb[0] * mul)},${Math.round(rgb[1] * mul)},${Math.round(rgb[2] * mul)},${alpha.toFixed(3)})`;
+      } else {
+        const hue = big ? (15 + ((i * 9) % 20)) : (30 + ((i * 11) % 20)); // 橙红渐变
+        const light = big ? (58 + ((i * 7) % 22)) : (48 + ((i * 9) % 15));
+        ctx.fillStyle = `hsla(${hue},100%,${light}%,${alpha.toFixed(3)})`;
+      }
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();
@@ -838,29 +862,50 @@
 
   // 对抗尾影：球飞行路径的渐隐残影（点含时间戳，按年龄淡出）。
   // trailStyle=已装备尾影(yellow/black/red)时换色并附带粒子；未装备用默认浅蓝。
-  function drawTrail(ctx, cam, trail, time, trailStyle) {
+  // v2.4 预算：主轨迹按年龄分 4 段合成（每段 1 次 stroke，替代逐段 60+ 次提交）；
+  // low 时只画主轨迹、关闭粒子（保留拖影观感、省路径提交）。
+  function drawTrail(ctx, cam, trail, time, trailStyle, low) {
     if (!trail || trail.length < 2) return;
     const color = TRAIL_COLORS[trailStyle] || 'rgba(150,210,255,';
-    for (let i = 1; i < trail.length; i++) {
-      const a = trail[i - 1], b = trail[i];
-      const age = time - b.t;
-      if (age < 0 || age > 0.4) continue;
-      const k = 1 - age / 0.4;
-      const pa = cam.project({ x: a.x, y: a.y, z: a.z });
-      const pb = cam.project({ x: b.x, y: b.y, z: b.z });
-      if (!pa || !pb) continue;
-      const w = Math.max(1.2, 0.022 * Math.min(pa.s, pb.s) * (0.35 + 0.65 * k));
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = `${color}${(0.5 * k).toFixed(3)})`;
-      ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    ctx.lineCap = 'round';
+    const SEGS = 4; // 年龄带数：每带一次 stroke
+    for (let s = 0; s < SEGS; s++) {
+      const k0 = s / SEGS, k1 = (s + 1) / SEGS;
+      const midK = (k0 + k1) / 2;
+      // v2.7.0 尾影削弱：透明度 0.65→0.55（对应本实现 0.5→0.42）
+      ctx.strokeStyle = `${color}${(0.42 * midK).toFixed(3)})`;
+      let started = false;
+      let bandW = 1.2;
+      ctx.beginPath();
+      for (let i = 1; i < trail.length; i++) {
+        const a = trail[i - 1], b = trail[i];
+        const age = time - b.t;
+        if (age < 0 || age > 0.4) continue;
+        const k = 1 - age / 0.4;
+        if (k < k0 || k >= k1) continue;
+        const pa = cam.project({ x: a.x, y: a.y, z: a.z });
+        const pb = cam.project({ x: b.x, y: b.y, z: b.z });
+        if (!pa || !pb) continue;
+        if (!started) { ctx.moveTo(pa.x, pa.y); started = true; }
+        ctx.lineTo(pb.x, pb.y);
+        // v2.7.0 尾影削弱：主线宽 1.6→1.4（系数 0.022→0.019）
+        const w = Math.max(1.2, 0.019 * Math.max(pa.s, pb.s) * (0.35 + 0.65 * midK));
+        if (w > bandW) bandW = w;
+      }
+      if (started) { ctx.lineWidth = bandW; ctx.stroke(); }
     }
-    // 装备的尾影附带粒子：沿残影线抖动的光点（确定性伪随机，不额外维护粒子数组）
-    if (TRAIL_COLORS[trailStyle]) drawTrailParticles(ctx, cam, trail, time, color);
+    // v2.7.0：粒子随画质分级（高逐点/中隔点/低隔4点），低画质不再完全关闭；仅装备尾影附带
+    if (TRAIL_COLORS[trailStyle]) drawTrailParticles(ctx, cam, trail, time, color, low);
   }
 
-  function drawTrailParticles(ctx, cam, trail, time, color) {
-    for (let i = 1; i < trail.length; i += 2) {
+  function drawTrailParticles(ctx, cam, trail, time, color, low) {
+    // v2.7.0 分级：高=逐点(1)、中=隔点(2，手机 4)、低=隔4点(4)；粒子半径/亮度回调（尾影削弱）
+    const tier = fxTier();
+    let step;
+    if (low || tier === 'low') step = 4;
+    else if (tier === 'high') step = 1;
+    else step = isTouchNow() ? 4 : 2;
+    for (let i = 1; i < trail.length; i += step) {
       const b = trail[i];
       const age = time - b.t;
       if (age < 0 || age > 0.4) continue;
@@ -872,8 +917,9 @@
       const d = (0.5 + (i % 3) * 0.6) * k * 0.014 * p.s;
       const px = p.x + Math.cos(ang) * d;
       const py = p.y + Math.sin(ang) * d;
-      const r = Math.max(0.8, 0.010 * p.s * k * (0.7 + (i % 4) * 0.3));
-      ctx.fillStyle = `${color}${(0.7 * k).toFixed(3)})`;
+      // v2.7.0 尾影削弱：粒子半径/亮度回调（半径系数 0.010→0.0085、alpha 0.7→0.6）
+      const r = Math.max(0.7, 0.0085 * p.s * k * (0.65 + (i % 4) * 0.25));
+      ctx.fillStyle = `${color}${(0.6 * k).toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();
@@ -1032,10 +1078,11 @@
 
     drawTable(ctx, cam);
     drawNet(ctx, cam);
-    drawEffects(ctx, cam, view.fx, time);
+    drawEffects(ctx, cam, view.fx, time, !!view.low, view.trailStyle); // 低画质关溅射粒子、溅射随尾影配色
     // 发球预测轨迹与对抗尾影画在球台之上、角色/球之下（避免被不透明台面遮挡）
     if (view.servePath) drawServePath(ctx, cam, view.servePath);
-    if (view.trail && view.trail.length > 1 && !low && !view.trailHidden) drawTrail(ctx, cam, view.trail, time, view.trailStyle);
+    // v2.4：低画质也保留尾影主轨迹（无粒子），关掉 !low 整体跳过
+    if (view.trail && view.trail.length > 1 && !view.trailHidden) drawTrail(ctx, cam, view.trail, time, view.trailStyle, !!view.low);
     // 判定范围虚线（首页开关控制）：与实际判定一致——接球碰撞箱（进箱即命中，
     // 以球员为中心、向网前偏移 0.42m；蹲下时箱体下探可接贴地球）
     if (view.showHitRanges) {

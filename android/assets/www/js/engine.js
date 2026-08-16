@@ -116,6 +116,12 @@
           p.z = p.side === 0 ? -rl : rl; // 从端线进入：退到端线后
         }
       }
+      // v2.7.0-fix:发球阶段站位钳制——发球方可绕台边走到网前（实测 z≥~-0.6 时解不出合法发球、
+      // 持球点 bh 越过网面，对方视角看到"球飘很远"）；发球方持球期间把身体钳回 |z|≥SERVE_Z_SAFE，
+      // 保证任意站位都能解出合法发球、bh 永不越网（与客户端 render.js stepPrediction 同步）
+      if (state.phase === 'serve' && state.ball.inHand && state.server === i) {
+        p.z = ctx.clamp(p.z, i === 0 ? -ctx.RULES.Z_BACK : ctx.RULES.SERVE_Z_SAFE, i === 0 ? -ctx.RULES.SERVE_Z_SAFE : ctx.RULES.Z_BACK);
+      }
       p.run = inp.run ? 1 : 0;
       // 高吊球意图：普通来球蹲下+推球=高吊；扣杀来球(hitType===2)时不转高吊——
       // 反击扣杀用蹲防推球（贴网低净空防守），高吊弧线对快球解不出、易打空

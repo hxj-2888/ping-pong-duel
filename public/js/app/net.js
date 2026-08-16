@@ -20,8 +20,8 @@
   // 最坏情况(连接从未成功)下 1)与 2)会叠加,实际 ~6 次握手/20-30s,属正常自愈路径而非死循环。
   const WATCHDOG_MS = 1000;    // 看门狗检查周期
   const STATE_STALE_MS = 6000; // state 超过该时长未更新 → 判定数据流中断（Alarm ≥2Hz，留足网络抖动余量）
-  const PONG_STALE_MS = 20000; // pong 超过该时长未收到 → 判定半死连接
-  const MAX_RECONNECTS = 2;    // 自动重连上限（超过回菜单）
+  const PONG_STALE_MS = 25000; // v2.7.0-fix:pong 超过该时长未收到 → 判定半死连接（原 20s，公网高抖动下放宽）
+  const MAX_RECONNECTS = 3;    // v2.7.0-fix:自动重连上限（原 2，公网高抖动下减少重连耗尽回菜单）
   const RECONNECT_TIMEOUT_MS = 8000; // 重连 join 超过该时长无响应 → 本次重连作废进入下一轮
 
   // 看门狗：联机中周期性检查 state/pong 新鲜度
@@ -207,11 +207,21 @@
           // 已在对局中（重连/重挂补发的 room）：只隐藏遮罩，不重置快照避免闪屏
           PPD.show(PPD.ui.overlay, false);
         }
+        // v2.7.0-fix:进房（对局建立/恢复）后补发握手/重连期间缓存的输入帧（NetClient 出站队列）
+        if (net.flushPending) net.flushPending();
       }
     });
     net.on('pong', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.app.lastPongAt = Date.now();
+      // v2.7.0-fix:测量 RTT（服务器 pong.st = 服务器发送时刻的 Date.now()，客户端与本地时钟差值
+      // 即往返时延；EMA 平滑，钳制 0~10s 防时钟异常）。供插值滞后上界与预测纠偏领先距离自适应。
+      if (m && typeof m.st === 'number') {
+        const rtt = Date.now() - m.st;
+        if (rtt > 0 && rtt < 10000) {
+          PPD.app.rtt = PPD.app.rtt == null ? rtt : PPD.app.rtt * 0.7 + rtt * 0.3;
+        }
+      }
       // 本地模式：新版 server.js 的 pong 带 ver 字段；旧服务器（缺 k 位掩码输入解析）没有 →
       // 提示重启服务器，避免"进房后双方卡死"（输入被旧服务器静默丢弃）。只提示一次。
       if (!PPD.isLocalHost || PPD.app.publicServer || PPD.app.serverStaleWarned) return;
@@ -278,20 +288,33 @@
         if (me) {
           if (!PPD.app.pred) {
             PPD.app.pred = { x: me.x, z: me.z, vx: me.vx || 0, vz: me.vz || 0, padX: me.pc ? me.pc[0] : me.x, crouch: me.cq || 0 };
-          } else if (Math.abs(me.x - PPD.app.pred.x) > 1.0 || Math.abs(me.z - PPD.app.pred.z) > 1.0) {
+            PPD.app.serverX = null; PPD.app.serverZ = null;
+          } else {
             const ex = me.x - PPD.app.pred.x, ez = me.z - PPD.app.pred.z;
-            if (Math.abs(ex) > 3 || Math.abs(ez) > 3) {
-              // 严重失步（重连/传送/卡顿恢复）：整体硬校准回服务器
-              PPD.app.pred.x = me.x; PPD.app.pred.z = me.z;
-              PPD.app.pred.vx = me.vx || 0; PPD.app.pred.vz = me.vz || 0;
-              PPD.app.pred.padX = me.pc ? me.pc[0] : me.x;
-              PPD.app.pred.crouch = me.cq || 0;
+            if (Math.abs(ex) > 1.0 || Math.abs(ez) > 1.0) {
+              if (Math.abs(ex) > 3 || Math.abs(ez) > 3) {
+                // 严重失步（重连/传送/卡顿恢复）：整体硬校准回服务器
+                PPD.app.pred.x = me.x; PPD.app.pred.z = me.z;
+                PPD.app.pred.vx = me.vx || 0; PPD.app.pred.vz = me.vz || 0;
+                PPD.app.pred.padX = me.pc ? me.pc[0] : me.x;
+                PPD.app.pred.crouch = me.cq || 0;
+                PPD.app.serverX = null; PPD.app.serverZ = null;
+              } else {
+                // v2.7.0-fix:1~3m 区间记录服务器位置，由 render.js stepPrediction 每帧按
+                // "合法领先距离（RTT×速度）"平滑收敛（原 v2.6.0 只写不读=死代码，见 render.js stepPrediction）
+                PPD.app.serverX = me.x;
+                PPD.app.serverZ = me.z;
+              }
             } else {
-              // v2.6.0：平滑纠偏——不再每快照离散拉回（公网 20Hz 下自机/相机每 50ms 跳 0.2×err），
-              // 只记录服务器位置，由 render.js stepPrediction 每渲染帧按 dt 平滑收敛
-              PPD.app.serverX = me.x;
-              PPD.app.serverZ = me.z;
+              // 偏差 ≤1m：正常范围，清掉陈旧纠偏目标（防 render 拉向过期位置）
+              PPD.app.serverX = null;
+              PPD.app.serverZ = null;
             }
+          }
+          // v2.7.0-fix:蹲姿同步——服务器 cq=0 且本地未按蹲时，pred.crouch 强制归 0
+          //（Ctrl keyup 丢失/看门狗释放后 pred 可能残留蹲姿，而服务器已站立，本地却一直显示蹲）
+          if (me.cq === 0 && PPD.app.keys && PPD.app.keys.crouch === 0 && PPD.app.pred.crouch > 0.3) {
+            PPD.app.pred.crouch = 0;
           }
           PPD.app.pred.t = performance.now();
         }
@@ -305,7 +328,11 @@
         if (buf.length >= 2) {
           const gap = Math.min(120, Math.max(16, buf[buf.length - 1].t - buf[buf.length - 2].t));
           PPD.app.interpGap = PPD.app.interpGap == null ? gap : PPD.app.interpGap * 0.7 + gap * 0.3;
-          const lag = Math.max(25, Math.min(80, (PPD.app.interpGap || 50) * 1.5));
+          // v2.7.0-fix:插值滞后 = max(帧间隔×1.5, RTT×0.5+30)，钳位放宽到 25~120ms——
+          // 公网高 RTT 下给足缓冲余量，避免时钟追平最新帧导致抽动；本地低 RTT 保持原手感
+          const baseLag = (PPD.app.interpGap || 50) * 1.5;
+          const rttLag = PPD.app.rtt != null ? PPD.app.rtt * 0.5 + 30 : 0;
+          const lag = Math.max(25, Math.min(120, Math.max(baseLag, rttLag)));
           const target = PPD.app.snapB.t - lag;
           // 滞后建立：首帧/缓冲刚满 2 帧（interpLagged=false）时锚定到 target 建立渲染滞后
           // （否则时钟贴最新帧 → alpha 恒 1 → 低广播率按整帧步进 = 抽动）。
@@ -463,6 +490,8 @@
         if (PPD.app.net && PPD.app.net.connected) {
           PPD.app.net.send({ t: 'ping' });
         }
+        // 回前台立即补发一次当前按键（后台 setInterval 已降频，即刻恢复输入流，消除回前台瞬间的卡顿/状态分叉）
+        if (PPD.sendOnlineInput) PPD.sendOnlineInput();
       }
     });
   }

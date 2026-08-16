@@ -61,9 +61,9 @@
 <body>
   <div class="card">
     <h1>🏓 乒乓对决</h1>
-    <div class="sub">安卓版安装包 · v2.6.0 · <span id="apkSize">3,559,769 字节（3.39 MB）</span>· 离线可玩</div>
+    <div class="sub">安卓版安装包 · v2.7.0 · <span id="apkSize">3,572,057 字节（3.41 MB）</span>· 离线可玩</div>
 
-    <a class="btn-dl" id="dlBtn" href="PingPongDuel-v260.apk" download="PingPongDuel-v260.apk">📱 点击下载安装包</a>
+    <a class="btn-dl" id="dlBtn" href="PingPongDuel-v270.apk" download="PingPongDuel-v270.apk">📱 点击下载安装包</a>
     <div class="meta" id="dlStatus">下载后点通知栏的「安装」即可</div>
 
     <div class="qr">
@@ -75,7 +75,7 @@
 
     <h2>安装步骤（只需一次）</h2>
     <ol>
-      <li>点击上方按钮，等下载完成（<span id="apkSizeLi">3.39 MB / 3,559,769 字节</span>）</li>
+      <li>点击上方按钮，等下载完成（<span id="apkSizeLi">3.41 MB / 3,572,057 字节</span>）</li>
       <li>下拉通知栏，点「<b>安装</b>」；若提示「允许安装未知来源应用」→ 点<b>设置 → 允许</b></li>
       <li>若出现 <b>Play 保护</b>提示 → 点「<b>仍要安装</b>」</li>
       <li>华为/小米等手机若开启「<b>纯净模式/安全检测</b>」→ 关闭或点「继续安装」</li>
@@ -86,7 +86,7 @@
     <div class="fallback">
       ① 微信/QQ 里点开会被拦 → 点右上角 <b>··· → 在浏览器打开</b><br>
       ② 下载后若文件只有几 KB 或后缀是 .html/.bin → 下载被浏览器拦截，长按按钮「<b>复制链接</b>」，粘贴到 <b>Chrome/Edge 浏览器</b>打开<br>
-      ③ 还不行 → 在<b>电脑</b>上下载 <b>PingPongDuel-v260.apk</b>，用数据线/微信文件传输把 APK <b>当文件</b>发到手机，用「文件管理」点开安装（最稳，绕开所有浏览器）
+      ③ 还不行 → 在<b>电脑</b>上下载 <b>PingPongDuel-v270.apk</b>，用数据线/微信文件传输把 APK <b>当文件</b>发到手机，用「文件管理」点开安装（最稳，绕开所有浏览器）
     </div>
 
     <h2>直接玩网页版</h2>
@@ -136,7 +136,7 @@
 
     // 校验后下载：先取回安装包核对完整性，再触发保存；
     // 若被浏览器拦截/截断（最常见导致"无效安装包"的原因），当场提示而不是给坏文件
-    var EXPECTED = 3559769; // v2.6.0 实际大小（构建 APK 后更新，与 PingPongDuel-v260.apk 一致；v172 为新文件名破缓存）
+    var EXPECTED = 3572057; // v2.7.0 实际大小（构建 APK 后更新，与 PingPongDuel-v270.apk 一致；v270 为新文件名破缓存）
     var btn = document.getElementById('dlBtn');
     var status = document.getElementById('dlStatus');
     btn.addEventListener('click', function (e) {

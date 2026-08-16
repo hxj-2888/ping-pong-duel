@@ -16,6 +16,37 @@
   let frameIdx = 0;
   let lastFpsUpdate = 0;
 
+  // ---------- 联机输入泵（RAF 无关，独立 setInterval 驱动） ----------
+  // 关键修复：输入发送原先绑在 requestAnimationFrame（loop）里。页面被遮挡/切后台/系统
+  // 降帧时 RAF 冻结 → 输入停发 → 公网 DO（消息驱动推进引擎）收不到消息就几乎不推进物理
+  // （只剩 Alarm 兜底）→ 角色卡住不动/蹲下等状态不更新；回前台积攒快照一次性涌入 →
+  // 插值时钟猛追 → 瞬移/超长回溯。本地 server.js 用 setInterval 独立推进故不明显。
+  // 修复：输入发送改为 setInterval 独立驱动（RAF 停了也照常发），保持公网引擎"心跳"不断。
+  // 50ms 节流 + 按键变化立即补发；setInterval 后台仅被节流到 ~1Hz（不冻结），足以续推引擎。
+  function sendOnlineInput() {
+    if (PPD.app.mode !== 'online' || !PPD.app.net || !PPD.app.net.connected) return;
+    if (PPD.app.paused || PPD.app.introActive) return; // 暂停/开场不发送（恢复后快照自动锚定）
+    const k = PPD.app.keys;
+    const myKeys = (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.pu ? 4 : 0) | (k.sm ? 8 : 0) | (k.f ? 16 : 0) | (k.b ? 32 : 0) | (k.crouch ? 64 : 0) | (k.run ? 128 : 0);
+    const now = Date.now();
+    const changed = myKeys !== PPD.app._lastKeysSent;
+    if (changed || now - (PPD.app.lastInputSent || 0) >= 50) {
+      PPD.app._lastKeysSent = myKeys;
+      PPD.app.lastInputSent = now;
+      // v2.7.0-fix:输入帧序号（会话内单调递增；服务器按 per-connection 水印丢弃乱序/重放，
+      // 兼容不发送 seq 的旧客户端）
+      const seq = (PPD.app._inSeq = (PPD.app._inSeq || 0) + 1);
+      // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）；
+      // 瞄准未变化时不带（undefined 省略字段），进一步减包
+      const aim = PPD.app.serveAim;
+      if (aim) {
+        PPD.app.net.send({ t: 'in', k: myKeys, seq, a: [Math.round(aim.x * 100) / 100, Math.round(aim.z * 100) / 100] });
+      } else {
+        PPD.app.net.send({ t: 'in', k: myKeys, seq });
+      }
+    }
+  }
+
   function loop(now) {
     requestAnimationFrame(loop);
     // 渲染循环整体容错（P0-1）：任何单帧异常（HUD/渲染/插值对异常快照抛错）都不再
@@ -169,27 +200,7 @@
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
       // 设置暂停（需求 10）：暂停期间冻结输入发送（服务端继续推进，恢复时快照自动锚定）
       if (!PPD.app.paused && !intro) {
-      // 输入发送（50ms 节流 + 按键变化立即补发）：
-      // - Cloudflare DO 官方建议"批量 50-100ms、少而大的消息"，大量小消息会压垮单个 DO；
-      //   60Hz×2 客户端 = 120 条/秒会拖垮 DO（实测公网部署端广播塌到 ~1Hz）并快速吃满
-      //   免费档 100k 请求/天。50ms 节流把 120 条/秒降到 ~20 条/秒。
-      // - 服务端物理仍 60Hz 固定步长推进（DO 消息驱动 + Alarm 兜底 / 本地 setInterval），
-      //   节流只影响按键变化送达延迟（≤50ms），公网 RTT 下可忽略；按键变化时立即补发。
-      // 包体压缩：8 个按键布尔字段 → 1 个位掩码（82B → 17B，约 4.8x），仅传联机必要数据
-      const myKeys = (PPD.app.keys.l ? 1 : 0) | (PPD.app.keys.r ? 2 : 0) | (PPD.app.keys.pu ? 4 : 0) | (PPD.app.keys.sm ? 8 : 0) | (PPD.app.keys.f ? 16 : 0) | (PPD.app.keys.b ? 32 : 0) | (PPD.app.keys.crouch ? 64 : 0) | (PPD.app.keys.run ? 128 : 0);
-      const changed = myKeys !== PPD.app._lastKeysSent;
-      if (changed || now - PPD.app.lastInputSent >= 50) {
-        PPD.app._lastKeysSent = myKeys;
-        PPD.app.lastInputSent = now;
-        // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）；
-        // 瞄准未变化时不带（undefined 省略字段），进一步减包
-        const aim = PPD.app.serveAim;
-        if (aim) {
-          PPD.app.net.send({ t: 'in', k: myKeys, a: [Math.round(aim.x * 100) / 100, Math.round(aim.z * 100) / 100] });
-        } else {
-          PPD.app.net.send({ t: 'in', k: myKeys });
-        }
-      }
+        sendOnlineInput();
       } // 设置暂停：输入发送块结束（恢复后由快照自动锚定）
       if (renderNow || PPD.app.resizeDirty) {
         PPD.app.resizeDirty = false;
@@ -208,7 +219,14 @@
 
   function startLoop() {
     requestAnimationFrame((t) => { lastTime = t; requestAnimationFrame(loop); });
+    // 联机输入泵：独立 setInterval（RAF 无关）。页面被遮挡/后台/降帧时 RAF 冻结，
+    // 但 setInterval 仍被唤醒（后台节流到 ~1Hz），持续向服务器发输入保持引擎推进。
+    // 前台时 RAF loop 也调用 sendOnlineInput，二者经 50ms 节流去重，不会重复发送。
+    if (!PPD.app._onlineInputTimer) {
+      PPD.app._onlineInputTimer = setInterval(sendOnlineInput, 50);
+    }
   }
   PPD.loop = loop;
   PPD.startLoop = startLoop;
+  PPD.sendOnlineInput = sendOnlineInput; // visibilitychange 回前台补发复用
 })();

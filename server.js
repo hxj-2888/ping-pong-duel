@@ -332,6 +332,12 @@ function handleMessage(room, client, msg) {
   switch (msg.t) {
     case 'in': {
       stats.in++;
+      // v2.7.0-fix:输入帧序号（客户端会话内自增）：per-connection 水印丢弃乱序/重放
+      // （WebSocket 有序传输下主要为去重/防迟到帧）；无 seq 的旧客户端照常处理（兼容）
+      if (typeof msg.seq === 'number') {
+        if (msg.seq <= client.lastInSeq) break;
+        client.lastInSeq = msg.seq;
+      }
       // 输入位掩码 k（客户端压缩：8 键 → 1 数，位 0=l 1=r 2=pu 3=sm 4=f 5=b 6=crouch 7=run）；
       // 兼容旧客户端发 i 对象（未升级端仍可玩）
       let l = 0, r = 0, f = 0, b = 0, pu = 0, sm = 0, c = 0, rn = 0;
@@ -392,8 +398,11 @@ server.on('upgrade', (req, socket) => {
     'Connection: Upgrade\r\n' +
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
+  // v2.7.0-fix:关闭 Nagle（参照 v2.1 server.js:394-396，v2.7 误删）——联机输入/快照都是小包，
+  // 攒批会额外增加最多 ~40ms 延迟（公网明显）；实时游戏宁可多发小包也不要延迟。
+  try { socket.setNoDelay(true); } catch (e) { /* ignore */ }
 
-  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, lastSeen: Date.now(), lastInputAt: Date.now(), fragState: { fragOp: -1, fragParts: [] } };
+  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, lastSeen: Date.now(), lastInputAt: Date.now(), lastInSeq: 0, fragState: { fragOp: -1, fragParts: [] } };
   socket.on('data', (chunk) => {
     // 审计 #6:任何数据到达都视为连接存活(僵尸清扫据此判定失联)
     client.lastSeen = Date.now();
@@ -493,7 +502,10 @@ function handleClientMessage(client, msg) {
     room.clients[client.side] = client;
     room.lastSeen[client.side] = Date.now();
     room.skins[client.side] = sanitizeSkin(msg.skin); // 联机皮肤同步(v2.0)
-    broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: false, skins: room.skins });
+    // v2.7.0-fix:等待标志与 room-core 对齐——仅双方席位都占用才 wait:false（原无条件 false，
+    // 导致 host 断线重连带 side 回房时"独自开局"）；单人 join/重连回到等待面板
+    const waiting = !(room.clients[0] && room.clients[1]);
+    broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: waiting, skins: room.skins });
     return;
   }
   if (client.room) {
@@ -572,13 +584,23 @@ setInterval(() => {
     }
     const step = 1 / TICK_HZ;
     const last = room.lastTick || (nowTick - 1000 / TICK_HZ); // 新房间首拍按一帧计，立即步进
-    room.accTime = Math.min(0.5, (room.accTime || 0) + (nowTick - last) / 1000);
-    room.lastTick = nowTick;
-    let n = 0;
-    while (room.accTime >= step && n < 60) {
-      TT.step(room.engine, step);
-      room.accTime -= step;
-      n++;
+    // v2.7.1-fix:人满前冻结引擎推进（问题3：开房间等待期就开始比赛）。仅 1 人（等待对手）时
+    // 不推进物理、不累时间，对手加入后双方从同一起跑线开始；重置 lastTick/accTime 不补等待期欠账。
+    const roomFull = !!(room.clients[0] && room.clients[1]);
+    if (!roomFull) {
+      room.lastTick = nowTick;
+      room.accTime = 0;
+    } else {
+      // v2.7.0-fix:accTime 追赶上限 0.5s→2.0s——断流/卡顿 >0.5s 后游戏时间不再永久落后墙钟
+      //（恢复后最多一次补齐 2s，避免极端情况下瞬间追赶爆炸）
+      room.accTime = Math.min(2.0, (room.accTime || 0) + (nowTick - last) / 1000);
+      room.lastTick = nowTick;
+      let n = 0;
+      while (room.accTime >= step && n < 60) {
+        TT.step(room.engine, step);
+        room.accTime -= step;
+        n++;
+      }
     }
     // P0-4 广播节流：物理仍 60Hz 步进（accTime 已保证 1×），快照 stringify+广播按 25ms 地板（40Hz）。
     // 原"内容变化或≥50ms"因 t 每 tick 变导致恒真 → 每 tick 全量 snapshot+stringify（60Hz），
@@ -590,7 +612,8 @@ setInterval(() => {
       stats.broadcast++;
       room.lastSentAt = nowTick;
       for (const c of room.clients) {
-        if (c && c.ws && c.ws.writable) {
+        // v2.7.0-fix:背压——发送缓冲超限（慢客户端）跳过本帧（快照全量、最新语义，丢旧保新）
+        if (c && c.ws && c.ws.writable && c.ws.writableLength < 512 * 1024) {
           try { c.ws.write(encodeFrame(0x1, Buffer.from(data))); } catch (e) { /* ignore */ }
         }
       }

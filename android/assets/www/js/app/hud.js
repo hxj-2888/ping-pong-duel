@@ -6,11 +6,11 @@
   'use strict';
 
   // ---------- 事件 → 音效/提示 ----------
-  // 得分方名称（按模式取 PPD.app.names：人机=昵称/电脑，AI 观战=双方 AI 名字，其余=玩家1/2）
+  // 得分方名称（按模式取 PPD.app.names：人机=昵称/电脑，模拟推演=甲乙 AI 名字，其余=玩家1/2）
   function winnerName(side) {
     const n = PPD.app.names || [];
     if (PPD.app.mode === 'ai') return side === 0 ? (n[0] || '你') : '电脑';
-    if (PPD.app.mode === 'aivai') return side === 0 ? (n[0] || '红方 AI') : (n[1] || '蓝方 AI');
+    if (PPD.app.mode === 'aivai') return side === 0 ? (n[0] || '甲 AI') : (n[1] || '乙 AI');
     return side === 0 ? (n[0] || '玩家1') : (n[1] || '玩家2');
   }
 
@@ -57,7 +57,7 @@
             PPD.GameAudio.cheer();   // 得分 → 掌声音效
             PPD.triggerCheer(e.s);   // 得分方观众欢呼、对方摇头
             const winner = winnerName(e.s);
-            const reasonText = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网' }[engine.pointReason] || '';
+            const reasonText = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网', 'serve-timeout': '发球超时' }[engine.pointReason] || '';
             showPoint(`${winner} 得分${reasonText ? ' · ' + reasonText : ''}`);
           }
           break;
@@ -75,8 +75,15 @@
           if (PPD.app.mode === 'ai' && e.s === 0 && PPD.app.aiLevel === 3 && PPD.markHellCleared) {
             PPD.markHellCleared();
           }
+          // 无尽人机：胜利 → 解锁下一关；落败 → 闯关进度回到无尽-1（AI 观战已解锁项保留）
+          if (PPD.app.mode === 'ai' && PPD.app.aiGameType === 'endless') {
+            if (e.s === 0 && PPD.advanceEndless) PPD.advanceEndless(PPD.app.endlessLevel);
+            else if (e.s === 1 && PPD.resetEndless) PPD.resetEndless();
+          }
           // 个人生涯：人机/本地双人/联机每局结束都记录（winner=玩家视角胜负；后端留最近 60 条）
-          const recMode = PPD.app.mode === 'ai' ? 'ai' : (PPD.app.mode === 'local' ? 'local' : 'online');
+          const recMode = PPD.app.mode === 'ai'
+            ? (PPD.app.aiGameType === 'endless' ? 'endless' : 'ai')
+            : (PPD.app.mode === 'local' ? 'local' : 'online');
           if ((PPD.app.mode === 'ai' || PPD.app.mode === 'local' || PPD.app.mode === 'online') && PPD.saveRecord) {
             const eng = PPD.app.engine;
             const n = PPD.app.names || [];
@@ -89,7 +96,9 @@
               mode: recMode,
               winner: recWinner,
               score: eng && eng.score ? [eng.score[0], eng.score[1]] : [0, 0],
-              difficulty: PPD.app.mode === 'ai' ? PPD.app.aiLevel : 1,
+              difficulty: PPD.app.mode === 'ai'
+                ? (PPD.app.aiGameType === 'endless' ? PPD.app.endlessLevel : PPD.app.aiLevel)
+                : 1,
               ts: Date.now(),
             });
           }
@@ -108,6 +117,17 @@
           PPD.showGameOver(PPD.app.mode === 'ai'
             ? (e.s === 0 ? '您赢了' : '您输了')
             : `${winnerName(e.s)} 获胜`);
+          // 赛后回放：终局落盘本场回放（结算页「查看回放/保存回放」按钮随之可用）
+          if (PPD.Replay) {
+            PPD.Replay.finish({
+              score: PPD.app.engine && PPD.app.engine.score ? [PPD.app.engine.score[0], PPD.app.engine.score[1]] : [0, 0],
+              winner: e.s,
+              names: PPD.app.names,
+              difficulty: PPD.app.mode === 'ai'
+                ? (PPD.app.aiGameType === 'endless' ? PPD.app.endlessLevel : PPD.app.aiLevel)
+                : 1,
+            });
+          }
           break;
         case 'let': PPD.GameAudio.letSound(); showPoint('触网 · 重发'); break;
       }
@@ -128,8 +148,16 @@
       splashOn = !!(PPD.app.equip && PPD.app.equip.splash);
     }
     const t = (type === 'bounce' && splashOn) ? 'splash' : type;
+    // v2.4 预算：fx 同屏上限 8（原 12）；splash 类型同屏最多 3 个（超出替换最旧溅射，避免连续撞击累积尖峰）
+    if (t === 'splash') {
+      let n = 0, firstSplash = -1;
+      for (let i = 0; i < PPD.app.fx.length; i++) {
+        if (PPD.app.fx[i].type === 'splash') { n++; if (firstSplash < 0) firstSplash = i; }
+      }
+      if (n >= 3 && firstSplash >= 0) PPD.app.fx.splice(firstSplash, 1);
+    }
     PPD.app.fx.push({ type: t, x, y, z, t0 });
-    if (PPD.app.fx.length > 12) PPD.app.fx.shift();
+    if (PPD.app.fx.length > 8) PPD.app.fx.shift();
   }
 
   let pointToastTimer = null;
@@ -148,6 +176,26 @@
     el.style.opacity = 1;
     clearTimeout(phaseBannerTimer);
     phaseBannerTimer = setTimeout(() => { el.style.opacity = 0; }, 1400);
+  }
+
+  // 6 秒发球倒计时：只在发球方持球时显示；剩余 2 秒进入红色警示。
+  function updateServeTimer(phId, ballInHand, phaseT) {
+    const el = PPD.ui.serveTimer;
+    if (!el) return;
+    const limit = PPD.TT.RULES.SERVE_TIME_LIMIT || 6;
+    if (phId !== 0 || !ballInHand) {
+      if (el.style.display !== 'none') {
+        el.style.display = 'none';
+        el.classList.remove('warning');
+      }
+      return;
+    }
+    const remain = Math.max(0, Math.ceil(limit - phaseT));
+    const warn = remain <= 2;
+    const text = warn ? `发球 ${remain}s · 即将超时` : `发球 ${remain}s`;
+    if (el.style.display === 'none') el.style.display = '';
+    if (el.textContent !== text) el.textContent = text;
+    if (el.classList.contains('warning') !== warn) el.classList.toggle('warning', warn);
   }
 
   // ---------- 球高 + 进箱状态实时指示（左上角） ----------
@@ -171,48 +219,10 @@
   // 感知辅助上升沿跟踪：球进"人类控制方"箱体的一瞬间播一次提示音
   let lastInBox = {};
   let lastBallH = ''; // 球高文本缓存（每帧 toFixed 结果相同则跳过 DOM 写入）
-  // "可扣杀/可高吊"指示：与 AI 同一判定（computeShot 求解），节流避免频繁求解
-  let lastSmashCheck = 0;
-  // 求解结果指纹缓存（低端机优化）：computeShot 每次全量弹道搜索 ~1200~4500 子步，
-  // 且两个指示函数轮流调用。按 球 pos(0.05m)/vel(0.5m/s) 量化 + 玩家侧 + 类型 生成
-  // key，同一状态下 300ms 内直接复用，避免对同一球况重复全量求解。
-  let hitRangeKey = null, hitRangeVal = false, hitRangeT = 0;
-  function solveHitRange(engine, i, type) {
-    const b = engine.ball;
-    const q = (v, g) => Math.round(v / g);
-    const key = `${i}|${type}|${q(b.pos.x, 0.05)}|${q(b.pos.y, 0.05)}|${q(b.pos.z, 0.05)}|${q(b.vel.x, 0.5)}|${q(b.vel.y, 0.5)}|${q(b.vel.z, 0.5)}`;
-    const now = performance ? performance.now() : Date.now();
-    if (hitRangeKey === key && now - hitRangeT < 300) return hitRangeVal;
-    const shot = PPD.TT.computeShot(engine, i, type, type === 1 ? { lob: true } : undefined);
-    hitRangeKey = key;
-    hitRangeVal = !!(shot && (type === 2 ? !shot.netHit : !shot.degraded));
-    hitRangeT = now;
-    return hitRangeVal;
-  }
-  function canSmashNow(engine, i) {
-    const b = engine && engine.ball;
-    if (!b || !engine.players || engine.phase !== 'play' || b.inHand) return false;
-    const p = engine.players[i], f = p.facing;
-    const zc = p.z + f * 0.42;
-    if (b.vel.z * f >= 0) return false;                       // 未朝本方来
-    if (Math.abs(b.pos.z - zc) > 1.5) return false;            // 太远（求解无意义且省开销）
-    return solveHitRange(engine, i, 2);
-  }
-  // "可高吊"指示：蹲下+推球（推球进阶技巧）能否放出高吊——与人机 lb 同一求解判定
-  function canLobNow(engine, i) {
-    const b = engine && engine.ball;
-    if (!b || !engine.players || engine.phase !== 'play' || b.inHand) return false;
-    const p = engine.players[i], f = p.facing;
-    const zc = p.z + f * 0.42;
-    if (b.vel.z * f >= 0) return false;
-    if (Math.abs(b.pos.z - zc) > 1.5) return false;
-    return solveHitRange(engine, i, 1);
-  }
   function updateHitRangeLive() {
     const mode = PPD.app.mode;
     const elH = PPD.ui.ballHeight, elS = PPD.ui.inBoxStatus;
-    // 左上角判定面板跟随主页开关：关闭时隐藏全部提示内容（v2.0 精简：只保留球高/进箱，
-    // 已移除碰撞箱尺寸文字栏与扣杀/高吊提示行，虚线框在场景中绘制）
+    // 左上角判定面板跟随主页开关：关闭时隐藏全部提示内容（v2.4 精简：只保留 球高/进箱）
     const panel = PPD.ui.hitRangeInfo;
     if (panel && panel.style.display !== (PPD.app.showHitRanges ? '' : 'none')) {
       panel.style.display = PPD.app.showHitRanges ? '' : 'none';
@@ -229,10 +239,10 @@
     }
     const htxt = bv ? bv.y.toFixed(2) + 'm' : '—';
     if (lastBallH !== htxt) { lastBallH = htxt; elH.textContent = htxt; }
-    // 判定对象：人机=红方(昵称)，联机=自己，本地=P1+P2，AI 观战=红/蓝双方 AI
+    // 判定对象：人机=玩家(昵称)，联机=自己，本地=P1+P2，模拟推演=甲/乙
     const sides = (mode === 'local' || mode === 'aivai') ? [0, 1] : (mode === 'ai' ? [0] : [PPD.app.side]);
     const label = (i) => {
-      if (mode === 'aivai') return PPD.app.names[i] || (i === 0 ? '红方 AI' : '蓝方 AI');
+      if (mode === 'aivai') return PPD.app.names[i] || (i === 0 ? '甲 AI' : '乙 AI');
       if (mode === 'local') return PPD.app.names[i] || `P${i + 1}`;
       return PPD.app.names[PPD.app.side] || '你';
     };
@@ -273,25 +283,33 @@
   let lastHud = { p1: '', p2: '', s1: -1, s2: -1, dotLeft: null, dotOpacity: 0 };
   let lastNetInfo = ''; // 联机/人机/观战状态栏文本缓存（每帧重算但值不变则跳过 DOM 写入）
   function updateHud() {
-    let score = [0, 0], server = 0, phId = 0, names = PPD.app.names;
+    let score = [0, 0], server = 0, phId = 0, phaseT = 0, ballInHand = false, names = PPD.app.names;
     if (PPD.app.mode === 'local' && PPD.app.engine) {
       score = PPD.app.engine.score;
       server = PPD.app.engine.server;
       phId = PPD.TT.PHASE_ID[PPD.app.engine.phase];
+      phaseT = PPD.app.engine.phaseT;
+      ballInHand = PPD.app.engine.ball.inHand;
     } else if (PPD.app.mode === 'ai' && PPD.app.engine) {
       score = PPD.app.engine.score;
       server = PPD.app.engine.server;
       phId = PPD.TT.PHASE_ID[PPD.app.engine.phase];
+      phaseT = PPD.app.engine.phaseT;
+      ballInHand = PPD.app.engine.ball.inHand;
       names = PPD.app.names;
     } else if (PPD.app.mode === 'aivai' && PPD.app.engine) {
       score = PPD.app.engine.score;
       server = PPD.app.engine.server;
       phId = PPD.TT.PHASE_ID[PPD.app.engine.phase];
+      phaseT = PPD.app.engine.phaseT;
+      ballInHand = PPD.app.engine.ball.inHand;
       names = PPD.app.names;
     } else if (PPD.app.mode === 'online' && PPD.app.snapB) {
       score = PPD.app.snapB.sc;
       server = PPD.app.snapB.sv;
       phId = PPD.app.snapB.ph;
+      phaseT = PPD.app.snapB.pt || 0;
+      ballInHand = !!(PPD.app.snapB.bh && !PPD.app.snapB.b);
       names = PPD.app.names;
     }
     // 背景音乐紧张强度随比分实时变化（胶着/赛点节奏加快）
@@ -330,25 +348,30 @@
       } else if (phId === 0 && PPD.app.mode === 'local') {
         showPhase(`${server === 0 ? 'P1' : 'P2'} 发球 · ${aimHint}`);
       } else if (phId === 0 && PPD.app.mode === 'aivai') {
-        const na = (PPD.app.names && PPD.app.names[0]) || '红方';
-        const nb = (PPD.app.names && PPD.app.names[1]) || '蓝方';
+        const na = (PPD.app.names && PPD.app.names[0]) || '甲';
+        const nb = (PPD.app.names && PPD.app.names[1]) || '乙';
         showPhase(`${server === 0 ? na : nb} 发球`);
       } else if (phId !== 2) {
         showPhase(text);
       }
     }
 
+    updateServeTimer(phId, ballInHand, phaseT);
+
     let netTxt = '本地双人';
     if (PPD.app.mode === 'online') {
       netTxt = PPD.app.net && PPD.app.net.connected ? `房间 ${PPD.app.roomCode}` : '连接中断';
     } else if (PPD.app.mode === 'ai') {
-      const L = PPD.AIC.LEVELS[PPD.app.aiLevel] || PPD.AIC.LEVELS[1];
+      const aiSpec = PPD.app.aiGameType === 'endless'
+        ? PPD.AIC.endlessConfig(PPD.app.endlessLevel)
+        : PPD.app.aiLevel;
+      const L = PPD.AIC.resolveLevel(aiSpec);
       netTxt = `人机对战 · ${L.name}`;
     } else if (PPD.app.mode === 'aivai') {
-      const LA = PPD.AIC.LEVELS[PPD.app.aiLevelA] || PPD.AIC.LEVELS[1];
-      const LB = PPD.AIC.LEVELS[PPD.app.aiLevelB] || PPD.AIC.LEVELS[1];
+      const LA = PPD.AIC.resolveLevel(PPD.app.aiLevelA);
+      const LB = PPD.AIC.resolveLevel(PPD.app.aiLevelB);
       const tuned = (t) => Object.values(t).some((v) => v !== 1);
-      netTxt = `AI 观战 · 红${LA.name}${tuned(PPD.app.aiTuneA) ? '⚙' : ''} vs 蓝${LB.name}${tuned(PPD.app.aiTuneB) ? '⚙' : ''}`;
+      netTxt = `模拟推演 · 甲${LA.name}${tuned(PPD.app.aiTuneA) ? '⚙' : ''} vs 乙${LB.name}${tuned(PPD.app.aiTuneB) ? '⚙' : ''}`;
     }
     if (lastNetInfo !== netTxt) { lastNetInfo = netTxt; PPD.ui.netInfo.textContent = netTxt; } // 值变化才写 DOM
 

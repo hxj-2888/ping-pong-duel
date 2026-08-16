@@ -19,6 +19,7 @@
       this.retryDelay = (opts && opts.retryDelay) || 1200; // 重试间隔（ms），逐次 ×1.5
       this._retries = 0;
       this._retryTimer = null;
+      this._pendingIn = null; // v2.7.0-fix:未 OPEN 时缓存的最新输入帧（出站队列，最新覆盖）
     }
 
     on(type, fn) {
@@ -87,6 +88,19 @@
     send(obj) {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify(obj));
+        if (obj && obj.t === 'in') this._pendingIn = null; // 已送达，清缓存
+        return;
+      }
+      // v2.7.0-fix:未 OPEN（重连/握手窗口）：缓存最新输入帧（最新覆盖，不堆积），
+      // 进房后由 flushPending() 补发——避免重连窗口内输入静默丢失导致操作缺口
+      if (obj && obj.t === 'in') this._pendingIn = obj;
+    }
+
+    // v2.7.0-fix:补发重连/握手期间缓存的输入帧（进房/对局恢复后调用；create/join/ping 不缓存）
+    flushPending() {
+      if (this._pendingIn && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(this._pendingIn));
+        this._pendingIn = null;
       }
     }
 

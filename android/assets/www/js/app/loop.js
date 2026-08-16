@@ -16,8 +16,43 @@
   let frameIdx = 0;
   let lastFpsUpdate = 0;
 
+  // ---------- 联机输入泵（RAF 无关，独立 setInterval 驱动） ----------
+  // 关键修复：输入发送原先绑在 requestAnimationFrame（loop）里。页面被遮挡/切后台/系统
+  // 降帧时 RAF 冻结 → 输入停发 → 公网 DO（消息驱动推进引擎）收不到消息就几乎不推进物理
+  // （只剩 Alarm 兜底）→ 角色卡住不动/蹲下等状态不更新；回前台积攒快照一次性涌入 →
+  // 插值时钟猛追 → 瞬移/超长回溯。本地 server.js 用 setInterval 独立推进故不明显。
+  // 修复：输入发送改为 setInterval 独立驱动（RAF 停了也照常发），保持公网引擎"心跳"不断。
+  // 50ms 节流 + 按键变化立即补发；setInterval 后台仅被节流到 ~1Hz（不冻结），足以续推引擎。
+  function sendOnlineInput() {
+    if (PPD.app.mode !== 'online' || !PPD.app.net || !PPD.app.net.connected) return;
+    if (PPD.app.paused || PPD.app.introActive) return; // 暂停/开场不发送（恢复后快照自动锚定）
+    const k = PPD.app.keys;
+    const myKeys = (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.pu ? 4 : 0) | (k.sm ? 8 : 0) | (k.f ? 16 : 0) | (k.b ? 32 : 0) | (k.crouch ? 64 : 0) | (k.run ? 128 : 0);
+    const now = Date.now();
+    const changed = myKeys !== PPD.app._lastKeysSent;
+    if (changed || now - (PPD.app.lastInputSent || 0) >= 50) {
+      PPD.app._lastKeysSent = myKeys;
+      PPD.app.lastInputSent = now;
+      // v2.7.0-fix:输入帧序号（会话内单调递增；服务器按 per-connection 水印丢弃乱序/重放，
+      // 兼容不发送 seq 的旧客户端）
+      const seq = (PPD.app._inSeq = (PPD.app._inSeq || 0) + 1);
+      // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）；
+      // 瞄准未变化时不带（undefined 省略字段），进一步减包
+      const aim = PPD.app.serveAim;
+      if (aim) {
+        PPD.app.net.send({ t: 'in', k: myKeys, seq, a: [Math.round(aim.x * 100) / 100, Math.round(aim.z * 100) / 100] });
+      } else {
+        PPD.app.net.send({ t: 'in', k: myKeys, seq });
+      }
+    }
+  }
+
   function loop(now) {
     requestAnimationFrame(loop);
+    // 渲染循环整体容错（P0-1）：任何单帧异常（HUD/渲染/插值对异常快照抛错）都不再
+    // 永久停画——联机音效在 WS 回调独立播放，若渲染被异常掐断会出现"听得到音效、
+    // 看到界面、画面迟迟不出"。这里捕获后仅警告一次，下一帧继续渲染。
+    try {
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
     // 对局开场渲染期间（introActive）：冻结物理（不步进），画面照常渲染打底（见下方各分支与 skipRender）
@@ -34,10 +69,11 @@
       for (let i = 0; i < FRAME_HIST; i++) sum += frameHist[i];
       const avg = sum / FRAME_HIST;
       PPD.app.quality.frameMs = avg;
-      // 右上角估测帧数（30/60 档封顶 60；无上限档显示真实帧率；约 5 次/秒刷新，避免 DOM 抖动）
+      // 右上角估测帧数（v2.4：一律显示真实渲染帧率，去掉 30/60 档"封顶 60"的误导；
+      // 选 30 档显示真实 ~30，选 60 档在 60Hz 门控下显示真实 ~60；约 5 次/秒刷新，避免 DOM 抖动）
       if (now - lastFpsUpdate > 200) {
         lastFpsUpdate = now;
-        const fps = frameRate === 'unlimited' ? Math.round(1000 / avg) : Math.min(60, Math.round(1000 / avg));
+        const fps = Math.round(1000 / avg);
         if (PPD.ui.fpsMeter) {
           PPD.ui.fpsMeter.textContent = String(fps);
           if (fps < 45) PPD.ui.fpsMeter.classList.add('low');
@@ -49,6 +85,14 @@
     for (let i = 0; i < 2; i++) {
       PPD.app.fan.cheer[i] = Math.max(0, PPD.app.fan.cheer[i] - dt * 0.6);
       PPD.app.fan.shake[i] = Math.max(0, PPD.app.fan.shake[i] - dt * 0.6);
+    }
+    // 回放播放：优先于比赛模式处理（不推进引擎，只推进回放时钟并渲染在 game canvas）
+    if (PPD.Replay && PPD.Replay.isActive()) {
+      PPD.Replay.frame(dt);
+      PPD.app.resizeDirty = false;
+      lastRender = now;
+      PPD.Replay.render();
+      return;
     }
     // 主菜单（mode===null）无需 HUD 更新
     if (PPD.app.mode !== null) PPD.updateHud();
@@ -72,6 +116,7 @@
             PPD.TT.setInput(PPD.app.engine, i, { ...k, lb: (k.crouch && k.pu) ? 1 : 0 });
           }
           PPD.TT.step(PPD.app.engine, step);
+          if (PPD.Replay) PPD.Replay.tick(PPD.app.engine); // 回放录制：每 2 物理步采一帧
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
           n++;
@@ -105,9 +150,16 @@
           // 人机专属微调：地狱 ×1.0 完全不再刻意漏球（与观战一致，高手仍可战胜）；暂停面板滑杆可覆盖
           // AI 控制降频到 60Hz（每 2 物理步一次、dt 加倍保持累计时间一致）——省 predictCrossing 高频求解
           if (aiTick++ % 2 === 0) {
-            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevel, { hellCatchMul: 1, ...(PPD.app.aiTuneB || {}) });
+            const aiSpec = PPD.app.aiGameType === 'endless'
+              ? PPD.AIC.endlessConfig(PPD.app.endlessLevel)
+              : PPD.app.aiLevel;
+            const aiTune = PPD.app.aiGameType === 'endless'
+              ? { hellCatchMul: 1 }
+              : { hellCatchMul: 1, ...(PPD.app.aiTuneB || {}) };
+            PPD.AIC.control(PPD.app.engine, 1, step * 2, aiSpec, aiTune);
           }
           PPD.TT.step(PPD.app.engine, step);
+          if (PPD.Replay) PPD.Replay.tick(PPD.app.engine); // 回放录制：每 2 物理步采一帧
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
           n++;
@@ -128,10 +180,13 @@
         while (acc >= step && n < 8) {
           // AI 观战：双方 AI 控制降频到 60Hz（每 2 物理步一次、dt 加倍保持累计时间一致）
           if (aiTick++ % 2 === 0) {
-            PPD.AIC.control(PPD.app.engine, 0, step * 2, PPD.app.aiLevelA, PPD.app.aiTuneA);
-            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevelB, PPD.app.aiTuneB);
+            const tuneA = PPD.AIC.isInfiniteLevel(PPD.app.aiLevelA) ? {} : PPD.app.aiTuneA;
+            const tuneB = PPD.AIC.isInfiniteLevel(PPD.app.aiLevelB) ? {} : PPD.app.aiTuneB;
+            PPD.AIC.control(PPD.app.engine, 0, step * 2, PPD.app.aiLevelA, tuneA);
+            PPD.AIC.control(PPD.app.engine, 1, step * 2, PPD.app.aiLevelB, tuneB);
           }
           PPD.TT.step(PPD.app.engine, step);
+          if (PPD.Replay) PPD.Replay.tick(PPD.app.engine); // 回放录制：每 2 物理步采一帧
           PPD.handleEngineEvents(PPD.app.engine);
           acc -= step;
           n++;
@@ -145,27 +200,7 @@
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
       // 设置暂停（需求 10）：暂停期间冻结输入发送（服务端继续推进，恢复时快照自动锚定）
       if (!PPD.app.paused && !intro) {
-      // 输入发送（50ms 节流 + 按键变化立即补发）：
-      // - Cloudflare DO 官方建议"批量 50-100ms、少而大的消息"，大量小消息会压垮单个 DO；
-      //   60Hz×2 客户端 = 120 条/秒会拖垮 DO（实测公网部署端广播塌到 ~1Hz）并快速吃满
-      //   免费档 100k 请求/天。50ms 节流把 120 条/秒降到 ~20 条/秒。
-      // - 服务端物理仍 60Hz 固定步长推进（DO 消息驱动 + Alarm 兜底 / 本地 setInterval），
-      //   节流只影响按键变化送达延迟（≤50ms），公网 RTT 下可忽略；按键变化时立即补发。
-      // 包体压缩：8 个按键布尔字段 → 1 个位掩码（82B → 17B，约 4.8x），仅传联机必要数据
-      const myKeys = (PPD.app.keys.l ? 1 : 0) | (PPD.app.keys.r ? 2 : 0) | (PPD.app.keys.pu ? 4 : 0) | (PPD.app.keys.sm ? 8 : 0) | (PPD.app.keys.f ? 16 : 0) | (PPD.app.keys.b ? 32 : 0) | (PPD.app.keys.crouch ? 64 : 0) | (PPD.app.keys.run ? 128 : 0);
-      const changed = myKeys !== PPD.app._lastKeysSent;
-      if (changed || now - PPD.app.lastInputSent >= 50) {
-        PPD.app._lastKeysSent = myKeys;
-        PPD.app.lastInputSent = now;
-        // 联机发球瞄准：随输入帧上报目标落点（服务端求解发球方案后随快照返回）；
-        // 瞄准未变化时不带（undefined 省略字段），进一步减包
-        const aim = PPD.app.serveAim;
-        if (aim) {
-          PPD.app.net.send({ t: 'in', k: myKeys, a: [Math.round(aim.x * 100) / 100, Math.round(aim.z * 100) / 100] });
-        } else {
-          PPD.app.net.send({ t: 'in', k: myKeys });
-        }
-      }
+        sendOnlineInput();
       } // 设置暂停：输入发送块结束（恢复后由快照自动锚定）
       if (renderNow || PPD.app.resizeDirty) {
         PPD.app.resizeDirty = false;
@@ -173,12 +208,25 @@
         PPD.renderOnline();
       }
     }
+    } catch (e) {
+      if (!PPD.app._loopErrWarned) {
+        PPD.app._loopErrWarned = true;
+        if (typeof console !== 'undefined' && console.error) console.error('渲染循环异常（已容错，仅提示一次）:', e);
+      }
+    }
   }
 
 
   function startLoop() {
     requestAnimationFrame((t) => { lastTime = t; requestAnimationFrame(loop); });
+    // 联机输入泵：独立 setInterval（RAF 无关）。页面被遮挡/后台/降帧时 RAF 冻结，
+    // 但 setInterval 仍被唤醒（后台节流到 ~1Hz），持续向服务器发输入保持引擎推进。
+    // 前台时 RAF loop 也调用 sendOnlineInput，二者经 50ms 节流去重，不会重复发送。
+    if (!PPD.app._onlineInputTimer) {
+      PPD.app._onlineInputTimer = setInterval(sendOnlineInput, 50);
+    }
   }
   PPD.loop = loop;
   PPD.startLoop = startLoop;
+  PPD.sendOnlineInput = sendOnlineInput; // visibilitychange 回前台补发复用
 })();

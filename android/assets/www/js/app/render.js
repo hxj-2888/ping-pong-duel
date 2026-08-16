@@ -10,6 +10,18 @@
   const TRAIL_MAX = 64;   // 尾影点数上限（桌面）；手机端减半（v2.4 预算）
   let trailCache = [];
 
+  // ---------- 联机视图安全工具 ----------
+  // 阶段用英文 id（与引擎 phase 一致；尾影/判定等依赖 'play'），ph 缺失/越界回退 'serve'
+  const PHASE_BY_ID = ['serve', 'play', 'point', 'over'];
+  function safePhase(ph) {
+    return (ph === 0 || ph === 1 || ph === 2 || ph === 3) ? PHASE_BY_ID[ph] : 'serve';
+  }
+  // NaN/缺字段安全取值：非有限值时回退到另一侧（或 0），防"静默不画"（NaN 坐标被 Canvas 忽略）
+  function safeNum(v, fb) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : (Number.isFinite(fb) ? fb : 0);
+  }
+
   // 记录当前球位到尾影缓存；返回裁剪后的点数组（拷贝值，避免引用引擎对象）
   function updateTrail(view) {
     if (view.ball && view.phase === 'play') {
@@ -147,6 +159,9 @@
 
   // 联机版：客户端只有快照，没有引擎。发球方案由服务端放在快照 sp 字段（精确），
   // 未生成时用默认示意方案；物理采样与本地/人机模式完全一致。
+  // v2.1.1：自己发球时改为"本地即时求解"——瞄准/站位一变就用引擎 solveServeTo 本地算出轨迹，
+  // 不再等"瞄准→服务器求解→快照返回"的往返（公网 RTT+快照间隔可达 150~300ms，
+  // 是"轨迹有很强延迟、不跟球"的根因）。服务器仍权威，实发时按实际站位复验/回退。
   function servePathFromSnap(snap) {
     if (snap.ph !== 0 || !snap.bh) {
       servePathKey = null;
@@ -157,16 +172,23 @@
     const H = { x: snap.bh[0], y: snap.bh[1], z: snap.bh[2] };
     const facing = server === 0 ? 1 : -1;
     let plan = null;
-    // v2.1.1：自己发球 + 已有瞄准 → 本地即时求解（消除"瞄准→服务器→快照"往返延迟，
-    // 公网 RTT+快照间隔可达 150~300ms，是"轨迹有很强延迟、不跟球"的根因）。
-    // 服务器仍权威，实发时按实际站位复验/回退。
+    // 自己发球 + 已有瞄准 → 本地即时求解（跟随鼠标，无往返延迟）。
+    // P1-1 节流：瞄准/站位未变或 <50ms 内不重解（solveServeTo 求解含物理搜索，发球期每帧调用是慢设备掉帧源）；
+    // 瞄准移动时按 50ms 节流 + 引擎缓存（量化键）仍跟手。
     if (server === PPD.app.side && PPD.app.serveAim) {
       const aim = PPD.app.serveAim;
       const p = snap.p[server];
-      // solveServeTo 只需 players[pi] 的 facing/padX/crouch/z（serveBallPos 用），用快照姿态重建即可
-      const minPlayer = { facing, padX: p.pc[0], crouch: p.cq || 0, z: p.z };
-      const lp = PPD.TT.solveServeTo({ players: [minPlayer, minPlayer] }, server, aim.x, aim.z, false);
-      if (lp) plan = { vel: lp.vel, spin: lp.spin };
+      const now = performance.now();
+      const localKey = `${aim.x.toFixed(2)},${aim.z.toFixed(2)},${(p.pc && p.pc[0]).toFixed(2)},${p.z.toFixed(2)},${(p.cq || 0).toFixed(2)}`;
+      if (localKey !== PPD.app._serveLocalKey || now - (PPD.app._serveLocalT || 0) > 50) {
+        PPD.app._serveLocalKey = localKey;
+        PPD.app._serveLocalT = now;
+        // solveServeTo 只需 players[pi] 的 facing/padX/crouch/z（serveBallPos 用），用快照姿态重建即可
+        const minPlayer = { facing, padX: p.pc ? p.pc[0] : p.x, crouch: p.cq || 0, z: p.z };
+        const lp = PPD.TT.solveServeTo({ players: [minPlayer, minPlayer] }, server, aim.x, aim.z, false);
+        PPD.app._serveLocalPlan = lp ? { vel: lp.vel, spin: lp.spin } : null;
+      }
+      plan = PPD.app._serveLocalPlan;
     }
     if (!plan) {
       // 非自己发球 / 本地无解：用服务器 sp（对手精确轨迹）/ 默认示意方案
@@ -218,13 +240,13 @@
       score: engine.score,
       server: engine.server,
       pointReason: engine.pointReason,
-      // 撞击特效:AI 观战可被暂停面板开关关闭;其他模式用玩家装备特效照常
-      fx: (isAivai && !fxShow.splash) ? [] : PPD.app.fx,
+      // 撞击特效：设置面板「撞击特效」开关全局生效（v2.7.0）
+      fx: (!fxShow.splash) ? [] : PPD.app.fx,
       fan: PPD.app.fan,
       servePath: servePath(engine),
-      // 尾影:AI 观战不受玩家装扮(默认色)且可被暂停面板开关隐藏
+      // 尾影：设置面板「尾影特效」开关全局生效（v2.7.0）；观战 AI 不受玩家装扮（默认色）
       trailStyle: isAivai ? null : (PPD.app.equip.trail || null),
-      trailHidden: isAivai && !fxShow.trail,
+      trailHidden: !fxShow.trail,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
       density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
@@ -233,44 +255,49 @@
   }
 
   function viewModelFromSnap(snap, side, ballExtrap) {
-    const players = snap.p.map((p, i) => ({
+    const players = (snap.p || []).map((p, i) => ({
       side: i,
-      x: p.x,
-      z: p.z,
-      vx: p.vx,
-      vz: p.vz,
-      lean: p.lean,
+      x: safeNum(p.x, 0),
+      z: safeNum(p.z, 0),
+      vx: safeNum(p.vx, 0),
+      vz: safeNum(p.vz, 0),
+      lean: safeNum(p.lean, 0),
       facing: i === 0 ? 1 : -1,
-      stroke: { active: p.st[0] !== 0, type: p.st[0], t: p.st[1], dur: p.st[2], hit: false },
-      paddle: { p: { x: p.pc[0], y: p.pc[1], z: p.pc[2] }, n: { x: p.pn[0], y: p.pn[1], z: p.pn[2] }, v: { x: p.pv[0], y: p.pv[1], z: p.pv[2] } },
+      stroke: { active: !!(p.st && p.st[0]), type: safeNum(p.st && p.st[0], 0), t: safeNum(p.st && p.st[1], 0), dur: safeNum(p.st && p.st[2], 0.2), hit: false },
+      paddle: {
+        p: { x: safeNum(p.pc && p.pc[0], 0), y: safeNum(p.pc && p.pc[1], 0.98), z: safeNum(p.pc && p.pc[2], 0) },
+        n: { x: safeNum(p.pn && p.pn[0], 0), y: safeNum(p.pn && p.pn[1], 0), z: safeNum(p.pn && p.pn[2], 0) },
+        v: { x: safeNum(p.pv && p.pv[0], 0), y: safeNum(p.pv && p.pv[1], 0), z: safeNum(p.pv && p.pv[2], 0) },
+      },
       sb: p.sb,
-      crouch: p.cq,  // 蹲下（Ctrl）：渲染层画蹲姿
-      run: p.rn,     // 跑步（Shift）
+      crouch: safeNum(p.cq, 0),  // 蹲下（Ctrl）：渲染层画蹲姿
+      run: safeNum(p.rn, 0),     // 跑步（Shift）
       // v2.1 特效分离：装扮仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
     }));
     let ball = null, ballInHand = null;
     if (snap.b) {
       ball = {
-        pos: { x: snap.b[0] + (ballExtrap ? ballExtrap.x : 0), y: snap.b[1] + (ballExtrap ? ballExtrap.y : 0), z: snap.b[2] + (ballExtrap ? ballExtrap.z : 0) },
-        vel: { x: snap.b[3], y: snap.b[4], z: snap.b[5] },
-        spin: { x: snap.b[6], y: snap.b[7], z: snap.b[8] },
+        pos: { x: safeNum(snap.b[0], 0) + (ballExtrap ? ballExtrap.x : 0), y: safeNum(snap.b[1], 0) + (ballExtrap ? ballExtrap.y : 0), z: safeNum(snap.b[2], 0) + (ballExtrap ? ballExtrap.z : 0) },
+        vel: { x: safeNum(snap.b[3], 0), y: safeNum(snap.b[4], 0), z: safeNum(snap.b[5], 0) },
+        spin: { x: safeNum(snap.b[6], 0), y: safeNum(snap.b[7], 0), z: safeNum(snap.b[8], 0) },
         vis: true,
       };
     } else if (snap.bh) {
-      ballInHand = { x: snap.bh[0], y: snap.bh[1], z: snap.bh[2] };
+      ballInHand = { x: safeNum(snap.bh[0], 0), y: safeNum(snap.bh[1], 0), z: safeNum(snap.bh[2], 0) };
     }
     return {
       side,
       players,
       ball,
       ballInHand,
-      time: snap.t / 1000,
-      phase: PPD.TT.PHASE_NAME[snap.ph].toLowerCase(),
+      time: safeNum(snap.t, 0) / 1000,
+      phase: safePhase(snap.ph), // 英文 id：尾影/判定等依赖 'play'
       score: snap.sc,
       server: snap.sv,
       pointReason: snap.pr,
-      fx: PPD.app.fx,
+      fx: (PPD.app.fxShow && !PPD.app.fxShow.splash) ? [] : PPD.app.fx, // v2.7.0 撞击特效开关全局生效
       fan: PPD.app.fan,
+      trailHidden: !(PPD.app.fxShow && PPD.app.fxShow.trail), // v2.7.0 尾影特效开关全局生效
       trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
@@ -283,10 +310,14 @@
   // 玩家/球拍/持球位置在相邻快照间线性插值（alpha 由显示时钟驱动，见 renderOnline），
   // 球保持速度外推（快球低延迟），状态字段（比分/发球方/阶段/挥拍）取最新快照。
   function viewModelFromSnapInterp(sa, sb, alpha, side, ballExtrap) {
-    const lerp = (a, b) => a + (b - a) * alpha;
-    const lerpV3 = (a, b) => ({ x: lerp(a[0], b[0]), y: lerp(a[1], b[1]), z: lerp(a[2], b[2]) });
-    const players = sb.p.map((p, i) => {
-      const a = sa.p[i] || p;
+    // NaN/缺字段安全插值：任一输入非有限值时回退到另一侧（或 0），防插值产生 NaN 静默不画
+    const lerp = (a, b) => {
+      const an = safeNum(a, b), bn = safeNum(b, an);
+      return an + (bn - an) * alpha;
+    };
+    const lerpV3 = (a, b) => ({ x: lerp(a && a[0], b && b[0]), y: lerp(a && a[1], b && b[1]), z: lerp(a && a[2], b && b[2]) });
+    const players = (sb.p || []).map((p, i) => {
+      const a = (sa && sa.p && sa.p[i]) || p;
       return {
         side: i,
         x: lerp(a.x, p.x),
@@ -295,11 +326,11 @@
         vz: lerp(a.vz, p.vz),
         lean: lerp(a.lean, p.lean),
         facing: i === 0 ? 1 : -1,
-        stroke: { active: p.st[0] !== 0, type: p.st[0], t: p.st[1], dur: p.st[2], hit: false },
+        stroke: { active: !!(p.st && p.st[0]), type: safeNum(p.st && p.st[0], 0), t: safeNum(p.st && p.st[1], 0), dur: safeNum(p.st && p.st[2], 0.2), hit: false },
         paddle: {
           p: lerpV3(a.pc, p.pc),
           n: lerpV3(a.pn, p.pn),
-          v: { x: lerp(a.pv[0], p.pv[0]), y: lerp(a.pv[1], p.pv[1]), z: lerp(a.pv[2], p.pv[2]) },
+          v: { x: lerp(a.pv && a.pv[0], p.pv && p.pv[0]), y: lerp(a.pv && a.pv[1], p.pv && p.pv[1]), z: lerp(a.pv && a.pv[2], p.pv && p.pv[2]) },
         },
         sb: p.sb,
         // 蹲下/跑步钳制 0~1：alpha 负外推（时钟略落后于上一快照）时防止状态值越界
@@ -310,10 +341,17 @@
     });
     let ball = null, ballInHand = null;
     if (sb.b) {
+      // v2.7.0-fix:发球离手过渡——上一帧持球(sa.bh)、本帧飞行(sb.b)时，球位从持球点按 alpha
+      // 插值到飞行点（不再直接画最新飞行位），消除高速发球"球瞬移离手"的观感（50ms 位移 0.3~0.5m）
+      const release = sa && sa.bh;
       ball = {
-        pos: { x: sb.b[0] + (ballExtrap ? ballExtrap.x : 0), y: sb.b[1] + (ballExtrap ? ballExtrap.y : 0), z: sb.b[2] + (ballExtrap ? ballExtrap.z : 0) },
-        vel: { x: sb.b[3], y: sb.b[4], z: sb.b[5] },
-        spin: { x: sb.b[6], y: sb.b[7], z: sb.b[8] },
+        pos: {
+          x: release ? lerp(sa.bh[0], sb.b[0]) : safeNum(sb.b[0], 0) + (ballExtrap ? ballExtrap.x : 0),
+          y: release ? lerp(sa.bh[1], sb.b[1]) : safeNum(sb.b[1], 0) + (ballExtrap ? ballExtrap.y : 0),
+          z: release ? lerp(sa.bh[2], sb.b[2]) : safeNum(sb.b[2], 0) + (ballExtrap ? ballExtrap.z : 0),
+        },
+        vel: { x: safeNum(sb.b[3], 0), y: safeNum(sb.b[4], 0), z: safeNum(sb.b[5], 0) },
+        spin: { x: safeNum(sb.b[6], 0), y: safeNum(sb.b[7], 0), z: safeNum(sb.b[8], 0) },
         vis: true,
       };
     } else if (sb.bh) {
@@ -326,13 +364,14 @@
       players,
       ball,
       ballInHand,
-      time: sb.t / 1000,
-      phase: PPD.TT.PHASE_NAME[sb.ph].toLowerCase(),
+      time: safeNum(sb.t, 0) / 1000,
+      phase: safePhase(sb.ph), // 英文 id：尾影/判定等依赖 'play'
       score: sb.sc,
       server: sb.sv,
       pointReason: sb.pr,
-      fx: PPD.app.fx,
+      fx: (PPD.app.fxShow && !PPD.app.fxShow.splash) ? [] : PPD.app.fx, // v2.7.0 撞击特效开关全局生效
       fan: PPD.app.fan,
+      trailHidden: !(PPD.app.fxShow && PPD.app.fxShow.trail), // v2.7.0 尾影特效开关全局生效
       trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
@@ -494,19 +533,26 @@
       if (dx < dz) { pred.x = pred.x >= 0 ? rw : -rw; pred.padX = pred.x + f * 0.18; }
       else pred.z = side === 0 ? -rl : rl;
     }
-    // v2.6.0：预测纠偏按帧平滑——net.js 在偏差>1m 时记录 serverX/Z，这里每渲染帧按 dt 收敛
-    // （~10/s），消除公网 20Hz 下"每快照 20% 离散回拉"（自机/相机 50ms 跳一次）；
-    // 偏差<1m（正常预测领先）或严重失步（net.js 已硬校准）时不启动。
-    // v2.1.1 修复"走不动卡住"：仅"静止"时收敛——公网高 RTT 下 pred 天然领先 RTT×速度
-    // （可达 1m+），移动中按帧拉回会与输入预测对抗（走着走着被拽住）；移动中信任本地预测，
-    // 静止时才平滑收敛到服务器，严重失步仍由 net.js >3m 硬校准兜底。
-    const kKeys = PPD.app.keys;
-    const kMoving = !!(kKeys.l || kKeys.r || kKeys.f || kKeys.b);
-    if (PPD.app.serverX != null && !kMoving && (Math.abs(PPD.app.serverX - pred.x) > 1.0 || Math.abs(PPD.app.serverZ - pred.z) > 1.0)) {
-      const k = Math.min(1, dt * 10);
-      pred.x += (PPD.app.serverX - pred.x) * k;
-      pred.z += (PPD.app.serverZ - pred.z) * k;
-      pred.padX = pred.x + f * 0.18;
+    // v2.7.0-fix:发球阶段站位钳制（与引擎同步，见 engine.js）：我是发球方且持球时，
+    // 不能进入"解不出合法发球"的近网死区（边线绕行逼近球网后 z≥~-0.6 即解不出、bh 越网）
+    if (PPD.app.snapB && PPD.app.snapB.ph === 0 && PPD.app.snapB.sv === side) {
+      pred.z = predClamp(pred.z, side === 0 ? -R.Z_BACK : R.SERVE_Z_SAFE, side === 0 ? -R.SERVE_Z_SAFE : R.Z_BACK);
+    }
+    // v2.7.0-fix:消费 net.js 写入的纠偏目标（原 v2.6.0 只写不读=死代码）：
+    // 移动中预测合法领先服务器约 RTT×速度，只在偏差超过领先距离时向服务器平滑收敛，
+    // 避免"走着走着被拽住"与"漂移无界最终 3m 瞬移"；>3m 严重失步仍由 net.js 硬重置兜底。
+    if (PPD.app.serverX != null && PPD.app.serverZ != null) {
+      const sx = PPD.app.serverX, sz = PPD.app.serverZ;
+      const ex = sx - pred.x, ez = sz - pred.z;
+      const dr = Math.hypot(ex, ez);
+      const lead = ((PPD.app.rtt != null ? PPD.app.rtt : 60) / 1000) * speed * 1.5 + 0.1;
+      if (dr > lead) {
+        const k = dr > 2 ? 0.5 : 0.25; // 偏差越大收敛越快，但不瞬间硬跳
+        pred.x += ex * Math.min(1, k * dt * 60);
+        pred.z += ez * Math.min(1, k * dt * 60);
+        pred.padX = pred.x + (side === 0 ? 0.18 : -0.18);
+        if (dr < lead * 1.15) { PPD.app.serverX = null; PPD.app.serverZ = null; } // 到位即清
+      }
     }
     pred.t = performance.now();
   }
@@ -521,6 +567,17 @@
     const f = side === 0 ? 1 : -1;
     const swinging = !!(sp.st && sp.st[0] !== 0);
     const isServer = snap.sv === side;
+    // v2.7.1-fix:发球阶段（自己持球待发）禁用本地预测——发球点/球拍/持球严格用服务器快照。
+    // 发球求解（servePathFromSnap 本地 solveServeTo + 服务器 setServeAim 复验）对站位极敏感：
+    // 公网 RTT 下本地预测与服务器发球点哪怕差几厘米，本地"能解出/球在某处"与服务器判定就分叉，
+    // 表现为"发球有时无法求解 + 对方看球位置偏移很远"。发球是低频精确操作，不需预测平滑。
+    const serving = isServer && snap.ph === 0;
+    if (serving) {
+      // 同步预测锚点到服务器，避免发球结束切回预测时位置跳变
+      pred.x = sp.x; pred.z = sp.z; pred.vx = sp.vx || 0; pred.vz = sp.vz || 0;
+      pred.padX = sp.pc ? sp.pc[0] : sp.x; pred.crouch = sp.cq || 0;
+      return; // 位置/球拍/持球全部保留服务器快照插值结果（含 ballInHand 贴拍）
+    }
     const oldPad = { x: me.paddle.p.x, z: me.paddle.p.z };
     // 位置/速度/蹲姿始终用本地预测：挥拍前后连续，消除"挥拍结束瞬间从服务器插值硬切回预测"
     // 的位置/速度跳变（行走动画抽动主因）。挥拍期间仅球拍保持服务器插值的挥拍轨迹。
@@ -559,25 +616,11 @@
       PPD.app.interpClock += (now - PPD.app._interpLast);
     }
     PPD.app._interpLast = now;
-    // v2.6.0：向后重锚——引擎变慢/断流后时钟越过最新帧（插值退化为整帧步进、延迟感加重），
-    // 检测到持续超前 2 帧即回拉到（最新帧-lag），恢复平滑插值（一次性小幅回退后连续）
-    if (PPD.app.interpClock != null && typeof snap.t === 'number' && PPD.app.interpClock > snap.t) {
-      PPD.app._interpOver = (PPD.app._interpOver || 0) + 1;
-      if (PPD.app._interpOver >= 2) {
-        const lag = Math.max(25, Math.min(80, (PPD.app.interpGap || 50) * 1.5));
-        PPD.app.interpClock = snap.t - lag;
-        PPD.app._interpOver = 0;
-      }
-    } else {
-      PPD.app._interpOver = 0;
-    }
-    // 球外推平滑（快球低延迟；玩家/球拍等慢速对象走插值）
-    // v2.6.0：外推滞后改用「插值时钟与最新帧的时间差」——稳态恒定 ~lag、随时钟单调连续变化；
-    // 旧版按到达时刻 tB 计算（每条快照重置 → 外推锯齿 → 公网 20Hz 小球每 50ms 回跳/卡顿）
+    // 球外推平滑（快球低延迟；玩家/球拍等慢速对象走插值）；NaN 兜底防静默不画
     let ex = { x: 0, y: 0, z: 0 };
-    if (snap.b && PPD.app.interpClock != null) {
-      const lag = Math.min(0.12, Math.max(0, (snap.t - PPD.app.interpClock) / 1000));
-      ex = { x: snap.b[3] * lag, y: snap.b[4] * lag, z: snap.b[5] * lag };
+    if (snap.b) {
+      const lag = Math.min(0.12, Math.max(0, (now - PPD.app.tB) / 1000 - 0.03));
+      ex = { x: safeNum(snap.b[3], 0) * lag, y: safeNum(snap.b[4], 0) * lag, z: safeNum(snap.b[5], 0) * lag };
     }
     // 快照缓冲跨帧插值：在缓冲内找跨插值时钟的相邻帧对，alpha ∈ [0,1] 纯插值。
     // 时钟滞后最新帧 1.5 间隔（net.js 锚定）→ 恒有可插值帧对 → 任意广播率平滑，
@@ -587,20 +630,15 @@
     const clock = PPD.app.interpClock != null ? PPD.app.interpClock : (buf.length ? buf[buf.length - 1].t : 0);
     let s1 = null, s2 = null, alpha = 0;
     if (buf.length >= 2) {
-      const maxSpan = (PPD.app.interpGap || 50) * 1.5;
       for (let i = 1; i < buf.length; i++) {
-        const span = buf[i].t - buf[i - 1].t;
-        // v2.6.0：断流大间隔帧对不用于插值（避免恢复瞬间 alpha≈0.85 跳变），
-        // 时钟落在断流区间时走下方兜底 = 冻结在最新帧
-        if (span > maxSpan) continue;
         if (buf[i - 1].t <= clock && clock <= buf[i].t) {
           s1 = buf[i - 1].s; s2 = buf[i].s;
-          alpha = (clock - buf[i - 1].t) / span;
+          alpha = (clock - buf[i - 1].t) / (buf[i].t - buf[i - 1].t);
           break;
         }
       }
       if (!s1) {
-        // 时钟超出缓冲范围（首帧/追赶瞬态/断流区间）：钳到最近帧，不外推
+        // 时钟超出缓冲范围（首帧/追赶瞬态）：钳到最近帧，不外推
         if (clock < buf[0].t) { s1 = buf[0].s; s2 = buf[1].s; alpha = 0; }
         else { s1 = buf[buf.length - 2].s; s2 = buf[buf.length - 1].s; alpha = 1; }
       }
