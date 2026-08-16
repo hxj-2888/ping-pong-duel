@@ -273,8 +273,6 @@
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
     syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());
     syncVolSlider(PPD.ui.setSfxVol, PPD.GameAudio.getSfxVol());
-    // 审计 #8:打开设置时预填已保存的公网联机服务器地址
-    if (PPD.ui.setPublicServerUrl) PPD.ui.setPublicServerUrl.value = PPD.app.publicServerUrl || '';
     // v2.5:打开设置时同步联机线路选择（与联机对战面板共用）
     if (PPD.ui.serverLine) PPD.ui.serverLine.value = PPD.app.serverLine || 'auto';
     // 对局中（mode 非空）：设置面板即暂停界面，不叠加暂停面板
@@ -285,20 +283,6 @@
       PPD.updateGameTools();
     }
     PPD.show(PPD.ui.settingsPanel, true);
-  }
-  // 审计 #8:保存公网联机服务器地址（手机端战绩跨设备同步）——localStorage 持久化 + 写回 app。
-  // 格式 ws://IP:8765 或 http://IP:8765；清空则仅存手机本地。
-  if (PPD.ui.btnSavePublicServerUrl) {
-    PPD.ui.btnSavePublicServerUrl.addEventListener('click', () => {
-      PPD.GameAudio.ui();
-      const v = (PPD.ui.setPublicServerUrl && PPD.ui.setPublicServerUrl.value || '').trim();
-      PPD.app.publicServerUrl = v;
-      try { localStorage.setItem('ppd_public_server_url', v); } catch (e) { /* ignore */ }
-      if (PPD.ui.publicServerUrlStatus) {
-        PPD.ui.publicServerUrlStatus.textContent = v ? '已保存：' + v : '已清除（战绩仅存手机本地）';
-      }
-      PPD.setStatus(v ? '服务器地址已保存' : '已清除服务器地址');
-    });
   }
   // v2.5:联机服务器线路切换（联机对战面板/设置面板内选择，localStorage 记忆；下次建房/加入生效）
   if (PPD.ui.serverLine) {

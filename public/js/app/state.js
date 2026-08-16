@@ -214,6 +214,8 @@
       return 'wss://ping-pong-duel.pages.dev/ws';
     }
     // 公网模式：线路选择优先（v2.5 线路一 Cloudflare / 线路二 ECS），未选时按平台默认
+    // v2.7.0-fix:已回退 DO 分片（原按每客户端随机 ?k= 路由到不同 DO 实例 → guest 无法加入 host 房间，
+    // 实测"房间不存在"；分片需"房间码级路由"设计留待后续）。统一走全局 game-room 实例，与 v2.6 一致。
     if (app.serverLine === 'cloudflare') return 'wss://ping-pong-duel.pages.dev/ws';
     if (app.serverLine === 'ecs') return 'wss://searchdelta.online/ws';
     if (isLocalHost) {
@@ -234,7 +236,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '2.6.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '2.7.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -260,6 +262,8 @@
     serverVersion: null,  // 本地服务器版本（心跳 pong 带 ver；用于识别旧服务器）
     serverStaleWarned: false, // 是否已提示过"服务器版本过旧"（只提示一次）
     serverLine: 'auto',   // v2.5:联机服务器线路 'auto'|'cloudflare'|'ecs'（线路一 Cloudflare / 线路二 ECS；仅公网模式生效）
+    rtt: null,            // v2.7.0-fix:心跳 RTT（EMA，ms；pong 处理器计算，供插值滞后/预测纠偏自适应）
+    _inSeq: 0,            // v2.7.0-fix:联机输入帧序号（客户端自增，服务器按序去重，防乱序/重放）
     engine: null,
     net: null,
     matchTeams: null,   // 本局双方队伍 [{id,name,color,accent}, ...]（本地/人机/AI 观战；联机不设置）

@@ -113,9 +113,6 @@
     setNoCrowd: document.getElementById('setNoCrowd'),
     appVersion: document.getElementById('appVersion'),
     frameRate: document.getElementById('frameRate'),
-    setPublicServerUrl: document.getElementById('setPublicServerUrl'), // 审计 #8:公网联机服务器地址(手机端战绩同步)
-    btnSavePublicServerUrl: document.getElementById('btnSavePublicServerUrl'),
-    publicServerUrlStatus: document.getElementById('publicServerUrlStatus'),
     serverLine: document.getElementById('setServerLine'), // v2.5:联机服务器线路（线路一 Cloudflare / 线路二 ECS）
     fpsMeter: document.getElementById('fpsMeter'),
     serveDot: document.getElementById('serveDot'),
@@ -217,6 +214,8 @@
       return 'wss://ping-pong-duel.pages.dev/ws';
     }
     // 公网模式：线路选择优先（v2.5 线路一 Cloudflare / 线路二 ECS），未选时按平台默认
+    // v2.7.0-fix:已回退 DO 分片（原按每客户端随机 ?k= 路由到不同 DO 实例 → guest 无法加入 host 房间，
+    // 实测"房间不存在"；分片需"房间码级路由"设计留待后续）。统一走全局 game-room 实例，与 v2.6 一致。
     if (app.serverLine === 'cloudflare') return 'wss://ping-pong-duel.pages.dev/ws';
     if (app.serverLine === 'ecs') return 'wss://searchdelta.online/ws';
     if (isLocalHost) {
@@ -237,7 +236,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '2.6.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '2.7.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -262,8 +261,9 @@
     lanInfo: null,        // GET /api/info 返回的局域网联机信息（房主等待面板显示用）
     serverVersion: null,  // 本地服务器版本（心跳 pong 带 ver；用于识别旧服务器）
     serverStaleWarned: false, // 是否已提示过"服务器版本过旧"（只提示一次）
-    publicServerUrl: '',  // 审计 #8:公网联机服务器地址(手机端战绩同步,设置面板填写;ws:// 或 http://)
     serverLine: 'auto',   // v2.5:联机服务器线路 'auto'|'cloudflare'|'ecs'（线路一 Cloudflare / 线路二 ECS；仅公网模式生效）
+    rtt: null,            // v2.7.0-fix:心跳 RTT（EMA，ms；pong 处理器计算，供插值滞后/预测纠偏自适应）
+    _inSeq: 0,            // v2.7.0-fix:联机输入帧序号（客户端自增，服务器按序去重，防乱序/重放）
     engine: null,
     net: null,
     matchTeams: null,   // 本局双方队伍 [{id,name,color,accent}, ...]（本地/人机/AI 观战；联机不设置）
@@ -308,7 +308,7 @@
     plans: [],            // 装扮方案(最多 8):[{ name, trail, splash }]
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
     bonus: { hard: false, hell: false }, // 首次通关奖励已领标记(人机击败困难+50/地狱+100,一次性)
-    fxShow: { trail: true, splash: true }, // AI 观战暂停面板:尾影/撞击特效显示开关(仅观战生效)
+    fxShow: { trail: true, splash: true }, // v2.7.0：特效显示开关（设置面板 尾影/撞击特效，全局生效并记忆，所有模式通用）
   };
 
   // ---------- 工具 ----------
@@ -393,14 +393,6 @@
     }
   } catch (e) { /* ignore */ }
   if (ui.frameRate) ui.frameRate.value = String(app.quality.frameRate);
-
-  // ---------- 公网联机服务器地址（审计 #8：手机端战绩跨设备同步；设置面板填写，localStorage 记忆） ----------
-  const PUBLIC_SERVER_URL_KEY = 'ppd_public_server_url';
-  try {
-    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(PUBLIC_SERVER_URL_KEY) : null;
-    if (v) app.publicServerUrl = String(v).trim();
-  } catch (e) { /* ignore */ }
-  if (ui.setPublicServerUrl) ui.setPublicServerUrl.value = app.publicServerUrl;
 
   // ---------- 联机服务器线路（v2.5：线路一 Cloudflare / 线路二 ECS；localStorage 记忆） ----------
   const SERVER_LINE_KEY = 'ppd_server_line';

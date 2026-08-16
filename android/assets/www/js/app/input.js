@@ -41,6 +41,20 @@
     }
   }
 
+  // P0-3：联机时立即把当前按键状态上行（失焦清零/回前台补发共用）。
+  // 失焦后浏览器 rAF 暂停，loop 的输入发送会停摆——若不主动补发，
+  // 服务器会保留失焦前的旧按键继续移动（回前台错位、角色"自己走动"）。
+  function sendOnlineKeys() {
+    if (PPD.app.mode !== 'online' || !PPD.app.net || !PPD.app.net.connected) return;
+    const k = PPD.app.keys || {};
+    const mask = (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.pu ? 4 : 0) | (k.sm ? 8 : 0) |
+                 (k.f ? 16 : 0) | (k.b ? 32 : 0) | (k.crouch ? 64 : 0) | (k.run ? 128 : 0);
+    // v2.7.0-fix:输入帧序号（与 loop 发送共用同一计数器，保证会话内单调不减）
+    const seq = (PPD.app._inSeq = (PPD.app._inSeq || 0) + 1);
+    PPD.app.net.send({ t: 'in', k: mask, seq });
+    PPD.app._lastKeysSent = mask; // 与 loop 发送节流同步，避免下一帧重复发同一掩码
+  }
+
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); return; }
     if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -58,7 +72,15 @@
     PPD.app.keyP1 = { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 };
     PPD.app.keyP2 = { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 };
     PPD.app.keys = { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 };
+    // P0-3：失焦立即把全 0 上行，复位服务器输入（防旧按键残留继续走）
+    sendOnlineKeys();
   });
+  // P0-3：回前台补发当前键状态（失焦清键后浏览器不重发 keydown，长按键需主动同步）
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) sendOnlineKeys();
+    });
+  }
 
   // 联机模式：任一键组/触控按钮都控制自己的角色
   function syncKeys() {
@@ -82,6 +104,9 @@
       if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
       if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
       syncKeys();
+      // v2.7.0-fix:释放后立即上行（不等下一帧 loop 的 changed 检测）——服务器 1s 输入超时前就收到
+      // crouch=0，避免"本地已释放、服务器仍蹲 / 服务器超时清零、本地仍显示蹲"的短暂分叉
+      if (PPD.sendOnlineKeys) PPD.sendOnlineKeys();
     }
   }, 200);
 
@@ -326,9 +351,6 @@
       if (PPD.ui.pauseAiNameA) PPD.ui.pauseAiNameA.value = PPD.app.names[0] || '甲 AI';
       if (PPD.ui.pauseAiNameB) PPD.ui.pauseAiNameB.value = PPD.app.names[1] || '乙 AI';
       syncTuneSliders();
-      // v2.0:AI 观战暂停同步尾影/撞击特效开关(仅观战生效,AI 不受玩家装扮影响)
-      if (PPD.ui.setTrailFx) PPD.ui.setTrailFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.trail);
-      if (PPD.ui.setSplashFx) PPD.ui.setSplashFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.splash);
     } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.app.aiGameType !== 'endless' && PPD.isHellCleared()) {
       // 人机 + 地狱已通关：暂停面板变为「电脑 AI 数值调控」（滑杆即时生效）
       PPD.show(PPD.ui.pauseAIVsAI, false);
@@ -439,6 +461,8 @@
         } else {
           PPD.app.net.send({ t: 'in', k });
         }
+        // P2-3：直发后同步节流标记，避免下一帧 loop 因 changed 重复发同一掩码
+        PPD.app._lastKeysSent = k;
       }
     }
     // 短暂保持按键状态，确保引擎/服务器检测到一次按下边沿
