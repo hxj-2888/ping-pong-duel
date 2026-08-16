@@ -140,7 +140,7 @@ export class RoomCore {
       clients: [null, null],
       names: ['', ''],
       lastSnap: '',
-      lastStep: 0, // 初始为 0：首次 stepRoom 的 dt 被 clamp 到 0.05，保证首帧即步进
+      lastStep: Date.now(), // P2-1：初始为当前时刻——旧值 0 会让首次 stepRoom 把 (now-0) 累进 accTime 并补 0.5s/30 帧（开局引擎时间快进半秒，与注释不符）；改为从当前时刻起算，首拍即按真实经过步进
       lastSeen: [Date.now(), Date.now()], // 每席位最近消息时刻（Alarm 断线清扫依据）
       lastBroadcastAt: 0, // 最近广播时刻（Alarm 兜底广播依据，保证 ≥2Hz 数据流）
       skins: [null, null], // 联机皮肤同步(v2.0):双方装配的装扮,随 room/state 广播给对手

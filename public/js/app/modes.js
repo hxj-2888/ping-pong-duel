@@ -149,6 +149,21 @@
     PPD.app.snapA = PPD.app.snapB = null;
     PPD.app.lastPhase = -1;
     PPD.app.engine = null;
+    // P0-2 进房时序：清跨会话残留的快照缓冲/插值时钟/预测——
+    // 房主建房等待期间服务器一直在广播 state（缓冲早已填满、时钟锚在旧引擎时间），
+    // 进入对局瞬间 snapB 被清空会闪"等待服务器数据…"，且旧缓冲/时钟会让首帧插值错乱。
+    PPD.app.snapBuf = null;
+    PPD.app.interpClock = null;
+    PPD.app._interpLast = null;
+    PPD.app.interpGap = null;
+    PPD.app.interpLagged = false;
+    PPD.app.pred = null; // 本地玩家预测状态随新对局重建
+    // P2-2：重置按键状态，避免上一局/菜单残留的按住键带入新对局
+    const ZERO_KEYS = { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, crouch: 0, run: 0 };
+    PPD.app.keyP1 = { ...ZERO_KEYS };
+    PPD.app.keyP2 = { ...ZERO_KEYS };
+    PPD.app.keys = { ...ZERO_KEYS };
+    PPD.app._lastKeysSent = -1;
     PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.gameScreen, true);
     PPD.show(PPD.ui.overlay, false);
