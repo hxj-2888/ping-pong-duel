@@ -190,7 +190,10 @@
       <button id="btnSettingsGame" class="tool-btn" title="设置">⚙</button>
       <button id="btnPause" class="tool-btn">暂停</button>
       <button id="btnExit" class="tool-btn">退出</button>
-      <span id="fpsMeter" class="fps-meter" title="估测帧数（v2.4 显示真实渲染帧率，受浏览器/系统刷新率限制）">60</span>
+      <div class="stat-stack">
+        <span id="fpsMeter" class="fps-meter" title="估测帧数（v2.4 显示真实渲染帧率，受浏览器/系统刷新率限制）">60</span>
+        <span id="pingMeter" class="ping-meter" style="display:none" title="网络延迟（心跳 RTT 均值）">— ms</span>
+      </div>
     </div>
     <!-- 暂停面板 -->
     <div id="pausePanel" class="pause-panel" style="display:none">
@@ -310,8 +313,8 @@
     <div class="settings-card">
       <h2>设置</h2>
       <label class="toggle-label">
-        <input type="checkbox" id="setShowHitRanges" disabled>
-        判定范围虚线（球高 / 进箱提示 · 击败困难解锁）
+        <input type="checkbox" id="setShowHitRanges">
+        判定范围虚线（球高 / 进箱提示）
       </label>
       <label class="toggle-label">
         <input type="checkbox" id="setMusic" checked>
