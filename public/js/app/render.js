@@ -240,13 +240,13 @@
       score: engine.score,
       server: engine.server,
       pointReason: engine.pointReason,
-      // 撞击特效:AI 观战可被暂停面板开关关闭;其他模式用玩家装备特效照常
-      fx: (isAivai && !fxShow.splash) ? [] : PPD.app.fx,
+      // 撞击特效：设置面板「撞击特效」开关全局生效（v2.7.0）
+      fx: (!fxShow.splash) ? [] : PPD.app.fx,
       fan: PPD.app.fan,
       servePath: servePath(engine),
-      // 尾影:AI 观战不受玩家装扮(默认色)且可被暂停面板开关隐藏
+      // 尾影：设置面板「尾影特效」开关全局生效（v2.7.0）；观战 AI 不受玩家装扮（默认色）
       trailStyle: isAivai ? null : (PPD.app.equip.trail || null),
-      trailHidden: isAivai && !fxShow.trail,
+      trailHidden: !fxShow.trail,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
       density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
@@ -295,8 +295,9 @@
       score: snap.sc,
       server: snap.sv,
       pointReason: snap.pr,
-      fx: PPD.app.fx,
+      fx: (PPD.app.fxShow && !PPD.app.fxShow.splash) ? [] : PPD.app.fx, // v2.7.0 撞击特效开关全局生效
       fan: PPD.app.fan,
+      trailHidden: !(PPD.app.fxShow && PPD.app.fxShow.trail), // v2.7.0 尾影特效开关全局生效
       trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
@@ -361,8 +362,9 @@
       score: sb.sc,
       server: sb.sv,
       pointReason: sb.pr,
-      fx: PPD.app.fx,
+      fx: (PPD.app.fxShow && !PPD.app.fxShow.splash) ? [] : PPD.app.fx, // v2.7.0 撞击特效开关全局生效
       fan: PPD.app.fan,
+      trailHidden: !(PPD.app.fxShow && PPD.app.fxShow.trail), // v2.7.0 尾影特效开关全局生效
       trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）

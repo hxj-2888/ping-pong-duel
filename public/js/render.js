@@ -816,6 +816,10 @@
 
   // 撞击溅射粒子(增强 v2.0)：中心冲击闪光 + 双层粒子(亮火花 + 暗尾粒)。
   // v2.4：粒子数手机端减半（6）/桌面 8；低画质仅主冲击波纹；装备尾影时粒子用同色系（SPLASH_RGB 匹配）。
+  // v2.7.0：特效质量随画质分级——高=全额(14)、中=大部分(8)、低=少量(4)，低画质不再完全关闭粒子（手机端再减半）。
+  function fxTier() {
+    return (root && root.PPD && root.PPD.app && root.PPD.app.quality && root.PPD.app.quality.mode) || 'high';
+  }
   function drawSplash(ctx, p, k, low, trailStyle) {
     // 中心冲击闪光：短促的白亮圈(仅前 40% 生命周期,随后被飞溅粒子覆盖)
     if (k < 0.45) {
@@ -826,8 +830,10 @@
       ctx.arc(p.x, p.y, fr, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (low) return; // 低画质：只保留主冲击波纹，不画粒子
-    const n = isTouchNow() ? 6 : 8; // 手机端粒子数减半（预算 v2.4）
+    // v2.7.0：低画质不再完全关闭粒子，改为少量（保留撞击观感）
+    const tier = fxTier();
+    const base = tier === 'high' ? 14 : tier === 'medium' ? 8 : 4;
+    const n = isTouchNow() ? Math.max(2, Math.round(base / 2)) : base;
     const rgb = SPLASH_RGB[trailStyle] || null; // 与装备尾影配色匹配；未装备默认橙红渐变
     for (let i = 0; i < n; i++) {
       const seed = (i * 0.618 + p.x * 0.0371) % 1;
@@ -866,7 +872,8 @@
     for (let s = 0; s < SEGS; s++) {
       const k0 = s / SEGS, k1 = (s + 1) / SEGS;
       const midK = (k0 + k1) / 2;
-      ctx.strokeStyle = `${color}${(0.5 * midK).toFixed(3)})`;
+      // v2.7.0 尾影削弱：透明度 0.65→0.55（对应本实现 0.5→0.42）
+      ctx.strokeStyle = `${color}${(0.42 * midK).toFixed(3)})`;
       let started = false;
       let bandW = 1.2;
       ctx.beginPath();
@@ -881,18 +888,23 @@
         if (!pa || !pb) continue;
         if (!started) { ctx.moveTo(pa.x, pa.y); started = true; }
         ctx.lineTo(pb.x, pb.y);
-        // 线宽取本段内最大投影缩放（stroke 时统一生效）
-        const w = Math.max(1.2, 0.022 * Math.max(pa.s, pb.s) * (0.35 + 0.65 * midK));
+        // v2.7.0 尾影削弱：主线宽 1.6→1.4（系数 0.022→0.019）
+        const w = Math.max(1.2, 0.019 * Math.max(pa.s, pb.s) * (0.35 + 0.65 * midK));
         if (w > bandW) bandW = w;
       }
       if (started) { ctx.lineWidth = bandW; ctx.stroke(); }
     }
-    // 粒子：低画质关闭（仅保留主轨迹）；仅装备尾影附带
-    if (!low && TRAIL_COLORS[trailStyle]) drawTrailParticles(ctx, cam, trail, time, color);
+    // v2.7.0：粒子随画质分级（高逐点/中隔点/低隔4点），低画质不再完全关闭；仅装备尾影附带
+    if (TRAIL_COLORS[trailStyle]) drawTrailParticles(ctx, cam, trail, time, color, low);
   }
 
-  function drawTrailParticles(ctx, cam, trail, time, color) {
-    const step = isTouchNow() ? 4 : 2; // 手机端粒子数减半（v2.4）
+  function drawTrailParticles(ctx, cam, trail, time, color, low) {
+    // v2.7.0 分级：高=逐点(1)、中=隔点(2，手机 4)、低=隔4点(4)；粒子半径/亮度回调（尾影削弱）
+    const tier = fxTier();
+    let step;
+    if (low || tier === 'low') step = 4;
+    else if (tier === 'high') step = 1;
+    else step = isTouchNow() ? 4 : 2;
     for (let i = 1; i < trail.length; i += step) {
       const b = trail[i];
       const age = time - b.t;
@@ -905,8 +917,9 @@
       const d = (0.5 + (i % 3) * 0.6) * k * 0.014 * p.s;
       const px = p.x + Math.cos(ang) * d;
       const py = p.y + Math.sin(ang) * d;
-      const r = Math.max(0.8, 0.010 * p.s * k * (0.7 + (i % 4) * 0.3));
-      ctx.fillStyle = `${color}${(0.7 * k).toFixed(3)})`;
+      // v2.7.0 尾影削弱：粒子半径/亮度回调（半径系数 0.010→0.0085、alpha 0.7→0.6）
+      const r = Math.max(0.7, 0.0085 * p.s * k * (0.65 + (i % 4) * 0.25));
+      ctx.fillStyle = `${color}${(0.6 * k).toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();

@@ -31,13 +31,10 @@
       try { localStorage.setItem(CAREER_KEY, JSON.stringify(slim.slice(-Math.floor(CAREER_MAX / 2)))); } catch (e2) { /* ignore */ }
     }
   }
-  // 手机端可同步的服务器 HTTP 基址：从「公网联机服务器地址」推导（ws://IP:8765 → http://IP:8765）；
-  // 未配置返回 null（仅存本地）。桌面端返回同源 ''（走原后端路径）。
+  // v2.7.0：公网联机服务器地址已移除——桌面端走同源后端('')；手机端(file:// 无后端)仅存本地(null)。
   function serverBase() {
     if (!isMobileOffline) return '';
-    const addr = (PPD.app.publicServerUrl || '').trim();
-    if (!addr) return null;
-    return addr.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
+    return null;
   }
 
   // 保存一条通关记录（人机玩家获胜时由 hud.js 调用）。
