@@ -316,6 +316,25 @@
           if (me.cq === 0 && PPD.app.keys && PPD.app.keys.crouch === 0 && PPD.app.pred.crouch > 0.3) {
             PPD.app.pred.crouch = 0;
           }
+          // v2.7.2-fix:蹲姿分叉自愈——本地认为按住蹲（keys.crouch=1）但服务器快照持续站立
+          //（cq<0.2）超 1.2s：说明蹲输入在服务器侧从未生效（keyup 丢失后本地一直上行 crouch=1
+          // 但旧服务器不认 k 位 6、或输入断流后服务器已超时清零），强制本地释放并上行。
+          // 消除"自己看蹲、对方看走、速度按走"的持久分叉；健康服务器按住 Ctrl 时 cq 会升到 1，
+          // 不会误触发（引擎 crouch 纯跟随输入，无强制站立场景）。
+          if (PPD.app.keys && PPD.app.keys.crouch === 1 && (me.cq || 0) < 0.2) {
+            if (!PPD.app._crouchDisagreeAt) {
+              PPD.app._crouchDisagreeAt = performance.now();
+            } else if (performance.now() - PPD.app._crouchDisagreeAt > 1200) {
+              if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
+              if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
+              PPD.app.keys.crouch = 0;
+              PPD.app.pred.crouch = 0;
+              PPD.app._crouchDisagreeAt = 0;
+              if (PPD.sendOnlineKeys) PPD.sendOnlineKeys();
+            }
+          } else {
+            PPD.app._crouchDisagreeAt = 0;
+          }
           PPD.app.pred.t = performance.now();
         }
       }
