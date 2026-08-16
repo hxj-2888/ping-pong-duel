@@ -238,17 +238,6 @@
             </div>
             <button id="tuneResetB" class="tune-reset" type="button">重置 ×1</button>
           </div>
-          <div class="tune-side" style="max-width:460px;margin:0 auto;">
-            <label class="ai-label">推演特效（仅模拟推演生效，AI 不受玩家装扮影响）</label>
-            <label class="toggle-label">
-              <input type="checkbox" id="setTrailFx" checked>
-              尾影特效
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" id="setSplashFx" checked>
-              球台撞击特效
-            </label>
-          </div>
         </div>
         <!-- 人机对战：击败地狱后解锁「电脑 AI 数值调控」（暂停面板滑杆，即时生效） -->
         <div id="pauseAITune" class="pause-aivai" style="display:none">
@@ -332,6 +321,16 @@
         <input type="checkbox" id="setSound" checked>
         游戏音效
       </label>
+      <!-- v2.7.0：特效开关移入设置——全局生效并记忆（localStorage），所有模式通用（原暂停面板的推演特效区块已移除） -->
+      <label class="ai-label">特效（全局生效，所有模式通用）</label>
+      <label class="toggle-label">
+        <input type="checkbox" id="setTrailFx" checked>
+        尾影特效
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="setSplashFx" checked>
+        球台撞击特效
+      </label>
       <label class="tune-row">音乐音量 <input id="setMusicVol" type="range" min="0" max="100" step="5" value="30"><b>30%</b></label>
       <label class="tune-row">音效音量 <input id="setSfxVol" type="range" min="0" max="100" step="5" value="50"><b>50%</b></label>
       <label class="toggle-label">画质
@@ -354,17 +353,6 @@
       </label>
       <!-- v2.4：帧率说明——无上限档显示真实渲染帧率；实际帧率受浏览器/系统刷新率限制（部分手机浏览器/WebView 固定 60Hz） -->
       <div class="settings-note">帧率显示真实渲染值；实际受浏览器/系统刷新率限制（部分手机浏览器固定 60Hz），手机高画质已自动限幅 DPR 以释放性能</div>
-      <!-- 审计 #8:公网联机服务器地址(设置面板)。手机端(APK file:// 页面无同源后端)战绩默认存本地,
-           填写自建服务器地址后异步同步到该服务器(跨设备共享,兑现 README/使用说明/MainActivity 承诺);
-           格式 ws://IP:8765 或 http://IP:8765(本地联机/战绩同步共用) -->
-      <label class="tune-row">公网联机服务器地址（手机端战绩同步用）
-        <input id="setPublicServerUrl" type="text" placeholder="如 ws://192.168.1.100:8765"
-          style="flex:1;min-width:120px;padding:5px 7px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#e8eefb">
-      </label>
-      <label class="tune-row" style="justify-content:flex-start">
-        <button id="btnSavePublicServerUrl" type="button" style="padding:4px 14px">保存</button>
-        <span id="publicServerUrlStatus" style="font-size:11px;color:#7fd0a8"></span>
-      </label>
       <div class="app-version">版本 <span id="appVersion"></span></div>
       <button id="btnSettingsClose" class="btn primary">完成</button>
     </div>

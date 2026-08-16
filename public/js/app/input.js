@@ -346,9 +346,6 @@
       if (PPD.ui.pauseAiNameA) PPD.ui.pauseAiNameA.value = PPD.app.names[0] || '甲 AI';
       if (PPD.ui.pauseAiNameB) PPD.ui.pauseAiNameB.value = PPD.app.names[1] || '乙 AI';
       syncTuneSliders();
-      // v2.0:AI 观战暂停同步尾影/撞击特效开关(仅观战生效,AI 不受玩家装扮影响)
-      if (PPD.ui.setTrailFx) PPD.ui.setTrailFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.trail);
-      if (PPD.ui.setSplashFx) PPD.ui.setSplashFx.checked = !!(PPD.app.fxShow && PPD.app.fxShow.splash);
     } else if (PPD.app.paused && PPD.app.mode === 'ai' && PPD.app.aiGameType !== 'endless' && PPD.isHellCleared()) {
       // 人机 + 地狱已通关：暂停面板变为「电脑 AI 数值调控」（滑杆即时生效）
       PPD.show(PPD.ui.pauseAIVsAI, false);
