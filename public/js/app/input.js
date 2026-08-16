@@ -49,7 +49,9 @@
     const k = PPD.app.keys || {};
     const mask = (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.pu ? 4 : 0) | (k.sm ? 8 : 0) |
                  (k.f ? 16 : 0) | (k.b ? 32 : 0) | (k.crouch ? 64 : 0) | (k.run ? 128 : 0);
-    PPD.app.net.send({ t: 'in', k: mask });
+    // v2.7.0-fix:输入帧序号（与 loop 发送共用同一计数器，保证会话内单调不减）
+    const seq = (PPD.app._inSeq = (PPD.app._inSeq || 0) + 1);
+    PPD.app.net.send({ t: 'in', k: mask, seq });
     PPD.app._lastKeysSent = mask; // 与 loop 发送节流同步，避免下一帧重复发同一掩码
   }
 
@@ -102,6 +104,9 @@
       if (PPD.app.keyP1) PPD.app.keyP1.crouch = 0;
       if (PPD.app.keyP2) PPD.app.keyP2.crouch = 0;
       syncKeys();
+      // v2.7.0-fix:释放后立即上行（不等下一帧 loop 的 changed 检测）——服务器 1s 输入超时前就收到
+      // crouch=0，避免"本地已释放、服务器仍蹲 / 服务器超时清零、本地仍显示蹲"的短暂分叉
+      if (PPD.sendOnlineKeys) PPD.sendOnlineKeys();
     }
   }, 200);
 

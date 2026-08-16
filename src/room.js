@@ -14,7 +14,9 @@ const STORAGE_KEY = 'rooms';
 const RECORDS_KEY = 'records'; // 通关记录（全局单实例，无 TTL 永久保存）
 const DIAG_KEY = 'diag'; // 诊断日志（驱逐恢复排查）
 const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
-const ALARM_MS = 100; // Alarm 安全 tick 间隔：与 10Hz 广播地板一致，空闲期也稳定 10Hz 数据流
+// v2.7.0-fix:Alarm 安全 tick 间隔 100→50（v2.7 从 v2.1 的 50 改大到 100，空闲期广播地板掉到 10Hz，
+// 是公网实测快照率 11.5~18Hz 低于设计 20Hz 的成因之一）；恢复 50ms 保 20Hz 数据流地板
+const ALARM_MS = 50;
 
 // 追加诊断日志（最多 50 条）
 async function diag(ctx, s) {

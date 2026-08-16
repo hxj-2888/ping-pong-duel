@@ -21,6 +21,8 @@ export default {
     }
 
     // 仅 WebSocket 升级请求转发给 DO（避免无效请求计入 DO 费用）
+    // v2.7.0-fix:已回退 DO 分片——按每客户端随机 ?k= 路由会让 host/guest 落到不同实例导致
+    // "房间不存在"（实测）；统一走全局实例（v2.6 行为）。分片需"房间码级路由"设计，留待后续。
     if (request.headers.get('Upgrade') === 'websocket') {
       const id = env.GAME_ROOM.idFromName('global');
       const stub = env.GAME_ROOM.get(id);

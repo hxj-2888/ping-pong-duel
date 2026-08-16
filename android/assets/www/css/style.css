@@ -84,13 +84,18 @@ input:focus { border-color: var(--blue); }
 .records-panel .rec-title { color: #ffd166; font-weight: 700; letter-spacing: 1px; font-size: 12px; margin-bottom: 2px; }
 .records-panel .rec-stats { color: #ffd166; font-size: 12px; margin-bottom: 2px; }
 .records-panel .rec-item { color: #9fb1cf; }
-/* 个人生涯（主框内小行）：点击展开整页 */
-.records-mini {
-  cursor: pointer; padding: 4px 0; font-size: 12px; color: #ffd166;
-  border-top: 1px dashed rgba(255,255,255,0.14); margin-top: 2px;
-  text-align: center; transition: 0.15s;
+/* 个人生涯（昵称下方蓝色独立方块）：点击展开整页（v2.2 自主菜单底部黄字移入） */
+.records-block {
+  cursor: pointer; padding: 12px 14px; font-size: 13px; color: #dcebff;
+  text-align: center; border-radius: 12px; transition: 0.15s;
+  background: linear-gradient(135deg, rgba(47,111,224,0.38), rgba(58,134,255,0.20));
+  border: 1px solid rgba(90,150,255,0.55);
 }
-.records-mini:hover { color: #fff; }
+.records-block:hover {
+  background: linear-gradient(135deg, rgba(47,111,224,0.52), rgba(58,134,255,0.30));
+  color: #fff;
+}
+.records-block.disabled { opacity: 0.75; cursor: not-allowed; }
 
 /* 个人生涯单开页面（全屏整页：标题/统计/分页列表） */
 .career-panel {
@@ -117,8 +122,7 @@ input:focus { border-color: var(--blue); }
 .career-page-label { color: #b9c6dd; font-size: 13px; }
 .career-pager .btn { min-width: 84px; }
 
-/* 养成系统（v1.8.0：积分 + 能力训练 + 特效兑换） */
-.menu-points { text-align: center; color: #ffd166; font-size: 13px; padding: 4px 0; }
+/* 养成系统（v1.8.0：能力训练 + 特效兑换）——主菜单积分黄字已移除（v2.2），积分在训练/装扮页显示 */
 .training-h { color: #ffd166; font-size: 14px; margin: 8px 0 4px; letter-spacing: 1px; }
 .training-list { display: flex; flex-direction: column; gap: 6px; }
 .t-item, .s-item {
@@ -451,6 +455,9 @@ canvas#game { touch-action: none; }
 }
 .settings-card h2 { color: #ffd166; letter-spacing: 3px; margin: 0; }
 .settings-card .toggle-label { justify-content: flex-start; font-size: 14px; }
+/* v2.4：设置面板说明文字 + 禁用勾选框置灰（虚线需击败困难解锁） */
+.settings-note { font-size: 11.5px; color: #7f90ad; line-height: 1.7; }
+.toggle-label input:disabled { opacity: 0.45; cursor: not-allowed; }
 .pause-panel {
   position: fixed; inset: 0; z-index: 40;
   display: flex; align-items: center; justify-content: center;
@@ -570,6 +577,28 @@ canvas#game { touch-action: none; }
 }
 .team-pick .team-name::placeholder { color: #7f90ad; }
 
+/* 合并单栏（v2.2）：人机电脑 / 模拟推演甲乙 —— 难度 + 旗帜 + 队名 同一栏 */
+.pick-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.pick-tag {
+  flex: none; min-width: 34px; text-align: center;
+  font-size: 14px; font-weight: 700; color: #cfe0ff;
+}
+.pick-row select {
+  background: rgba(0,0,0,0.3); border: 1px solid var(--line); color: #eef2f8;
+  border-radius: 10px; padding: 7px 6px; font-size: 13px; outline: none; cursor: pointer;
+}
+.pick-row select:focus { border-color: var(--blue); }
+.pick-diff { flex: none; width: 96px; }
+.pick-team { flex: none; width: 88px; }
+.pick-row .team-name {
+  flex: 1; min-width: 0; padding: 7px 9px; font-size: 13px;
+  text-transform: none; letter-spacing: 0;
+}
+.pick-row .team-name::placeholder { color: #7f90ad; }
+.pick-row .team-flag { width: 18px; height: 12px; }
+
 /* 旗帜图标（CSS 绘制：旗杆 + 队色旗面 + 饰条；颜色由 teams.js 写入 --flag-color/--flag-accent） */
 .team-flag {
   position: relative; display: inline-block; flex: none;
@@ -621,3 +650,136 @@ canvas#game { touch-action: none; }
   text-shadow: 0 0 24px rgba(255,209,102,0.5);
 }
 .ti-tag { margin-top: 44px; font-size: 14px; letter-spacing: 6px; color: #8fa3c8; }
+
+/* ===== 赛后回放 / 无尽人机 / 发球倒计时合并样式 ===== */
+.btn.danger { border-color: rgba(255, 90, 90, 0.55); color: #ffb4b4; }
+.btn.danger:hover { background: rgba(255, 80, 80, 0.18); border-color: rgba(255, 120, 120, 0.8); }
+.btn.danger:disabled { opacity: 0.45; cursor: not-allowed; transform: none; background: rgba(255,255,255,0.06); }
+.btn.small.danger { color: #ffb4b4; border-color: rgba(255, 90, 90, 0.45); }
+
+/* 合并页标签栏（v2.2：战绩记录 / 历史回放） */
+.career-tabs {
+  display: flex; gap: 8px; flex: none;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 8px;
+}
+.career-tab-btn {
+  flex: 1; padding: 8px 10px; font-size: 14px; cursor: pointer;
+  color: #8fa3c8; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line); border-radius: 10px; transition: 0.15s;
+}
+.career-tab-btn:hover { background: rgba(255,255,255,0.12); color: #eef2f8; }
+.career-tab-btn.active {
+  color: #fff; font-weight: 600;
+  background: linear-gradient(90deg, #2f6fe0, #3a86ff);
+  border-color: transparent;
+}
+/* 标签体：flex 列布局，内部列表独立滚动（战绩分页 + 回放列表共用卡片高度） */
+.career-tab-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.history-header-actions { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.history-delete-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid rgba(255, 90, 90, 0.35);
+  background: rgba(255, 70, 70, 0.09); border-radius: 12px;
+}
+.history-delete-hint { color: #ffc0c0; font-size: 12.5px; }
+.history-list {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+  font-size: 13px; color: #9fb1cf; line-height: 1.7;
+}
+.history-item {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.07); border-radius: 10px;
+}
+.history-item.selectable { cursor: pointer; }
+.history-item.selected {
+  background: rgba(255, 90, 90, 0.12);
+  border-color: rgba(255, 120, 120, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 120, 0.25);
+}
+.history-check {
+  flex: none; width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.28); background: rgba(0,0,0,0.18);
+  color: #ffd166; font-size: 16px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.history-check.checked { background: rgba(255, 90, 90, 0.3); border-color: #ff7777; color: #fff; }
+.history-main { flex: 1 1 240px; min-width: 0; color: #d7e2f2; }
+.history-main b { color: #ffd166; }
+.history-sub { width: 100%; font-size: 11.5px; color: #7f90ad; }
+.history-view { flex: none; }
+.history-note { text-align: center; font-size: 11.5px; color: #7f90ad; }
+
+.endless-panel {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
+}
+.endless-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  width: min(680px, 94vw); max-height: 88vh;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 24px 28px; overflow: hidden;
+}
+.endless-tip { text-align: center; font-size: 12.5px; color: #9fb1cf; line-height: 1.6; }
+.endless-list {
+  flex: 1; overflow-y: auto; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px; padding: 2px;
+}
+.endless-level { width: 100%; padding: 12px 8px; }
+
+.replay-panel {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, rgba(8,12,22,0.88) 0%, rgba(8,12,22,0.45) 70%, transparent 100%);
+  pointer-events: none;
+}
+.replay-title {
+  max-width: 94vw; font-size: 13px; color: #cfe0ff; font-weight: 600;
+  background: rgba(10,15,26,0.72); border: 1px solid var(--line);
+  border-radius: 12px; padding: 6px 14px; pointer-events: auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.replay-controls {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  width: min(760px, 96vw);
+  background: rgba(10,15,26,0.82); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px 14px; pointer-events: auto;
+}
+.replay-controls .btn { padding: 8px 12px; font-size: 13px; flex: none; }
+.replay-controls input[type="range"] {
+  flex: 1; min-width: 120px; padding: 0; accent-color: var(--blue);
+  background: transparent; border: none;
+}
+.replay-time { font-size: 12px; color: #b9c6dd; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.replay-status {
+  max-width: 94vw; font-size: 12px; color: #ffd166; text-align: center;
+  min-height: 16px; pointer-events: auto; text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+#replayConfirmCancel { width: 100%; }
+
+#serveTimer {
+  position: fixed; left: 50%; top: 200px; transform: translateX(-50%);
+  z-index: 6; pointer-events: none; text-align: center;
+  font-weight: 800; letter-spacing: 2px; font-size: 18px; color: #ffd166;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+  white-space: nowrap; max-width: 94vw;
+}
+#serveTimer.warning {
+  color: #ff5f5f;
+  animation: serveWarnPulse 0.65s ease-in-out infinite;
+}
+@keyframes serveWarnPulse {
+  0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+  50% { opacity: 0.55; transform: translateX(-50%) scale(1.06); }
+}
+
+@media (max-width: 720px) {
+  #serveTimer { top: 316px; font-size: 16px; letter-spacing: 1px; }
+}

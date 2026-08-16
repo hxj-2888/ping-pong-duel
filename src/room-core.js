@@ -15,8 +15,8 @@ const TICK_HZ = 60; // 物理模拟固定步长：不要调小！
 // 节省 CPU 靠的是下面的广播节流，而不是降低物理步长。
 const BROADCAST_HZ = 20; // 快照广播速率：物理仍 60Hz 内部步进，广播节流到 20Hz（省带宽/CPU）。
 // 20Hz 是公网手感的关键：插值窗口 50ms、对手渲染更平滑；CPU 开销远低于输入消息量，实测无压力。
-// 客户端 net.js 的 INTERP_MS 必须与 1000/BROADCAST_HZ 一致（50ms）。
-const BROADCAST_MS = 1000 / BROADCAST_HZ; // 100ms：相邻快照间隔，客户端据此插值平滑
+// 客户端 net.js 用实测帧间隔（interpGap）自适应插值滞后，无需与 BROADCAST_MS 硬同步。
+const BROADCAST_MS = 1000 / BROADCAST_HZ; // v2.7.0-fix:50ms：相邻快照间隔（原注释误写 100ms），客户端据此插值平滑
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混 I/L/O/0/1
 
 // 校验并规整客户端上报的装扮(联机皮肤同步):只接受白名单 id,防注入。
@@ -87,33 +87,44 @@ export class RoomCore {
     else if (att.room && msg.t === 'in') {
       const room = this.rooms.get(att.room);
       if (room && att.side >= 0) {
-        // 输入位掩码 k（客户端压缩：8 键 → 1 数，位 0=l 1=r 2=pu 3=sm 4=f 5=b 6=crouch 7=run）；
-        // 兼容旧客户端发 i 对象（未升级端仍可玩）
-        let l = 0, r = 0, f = 0, b = 0, pu = 0, sm = 0, c = 0, rn = 0;
-        if (typeof msg.k === 'number') {
-          l = (msg.k & 1) ? 1 : 0;
-          r = (msg.k & 2) ? 1 : 0;
-          pu = (msg.k & 4) ? 1 : 0;
-          sm = (msg.k & 8) ? 1 : 0;
-          f = (msg.k & 16) ? 1 : 0;
-          b = (msg.k & 32) ? 1 : 0;
-          c = (msg.k & 64) ? 1 : 0;
-          rn = (msg.k & 128) ? 1 : 0;
-        } else {
-          const i = msg.i || {};
-          l = i.l ? 1 : 0; r = i.r ? 1 : 0; f = i.f ? 1 : 0; b = i.b ? 1 : 0;
-          pu = i.pu ? 1 : 0; sm = i.sm ? 1 : 0; c = i.c ? 1 : 0; rn = i.rn ? 1 : 0;
+        // v2.7.0-fix:输入帧序号（per-connection 水印挂在 ws 上）：丢弃乱序/重放帧
+        //（仍走下方 stepRoom 推进引擎）；无 seq 的旧客户端照常处理（兼容）
+        let stale = false;
+        if (typeof msg.seq === 'number') {
+          const last = ws._inSeq || 0;
+          if (msg.seq <= last) stale = true;
+          else ws._inSeq = msg.seq;
         }
-        TT.setInput(room.engine, att.side, {
-          l, r, f, b, pu, sm,
-          lb: c && pu, // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导，无需新按键）
-          crouch: c, run: rn,
-        });
-        // 鼠标/手指瞄准：目标落点（世界坐标）随输入帧上报，服务端求解发球方案并随快照返回
-        if (Array.isArray(msg.a) && msg.a.length === 2) {
-          const ax = Number(msg.a[0]), az = Number(msg.a[1]);
-          if (Number.isFinite(ax) && Number.isFinite(az)) {
-            TT.setServeAim(room.engine, att.side, ax, az);
+        if (!stale) {
+          // 输入位掩码 k（客户端压缩：8 键 → 1 数，位 0=l 1=r 2=pu 3=sm 4=f 5=b 6=crouch 7=run）；
+          // 兼容旧客户端发 i 对象（未升级端仍可玩）
+          let l = 0, r = 0, f = 0, b = 0, pu = 0, sm = 0, c = 0, rn = 0;
+          if (typeof msg.k === 'number') {
+            l = (msg.k & 1) ? 1 : 0;
+            r = (msg.k & 2) ? 1 : 0;
+            pu = (msg.k & 4) ? 1 : 0;
+            sm = (msg.k & 8) ? 1 : 0;
+            f = (msg.k & 16) ? 1 : 0;
+            b = (msg.k & 32) ? 1 : 0;
+            c = (msg.k & 64) ? 1 : 0;
+            rn = (msg.k & 128) ? 1 : 0;
+          } else {
+            const i = msg.i || {};
+            l = i.l ? 1 : 0; r = i.r ? 1 : 0; f = i.f ? 1 : 0; b = i.b ? 1 : 0;
+            pu = i.pu ? 1 : 0; sm = i.sm ? 1 : 0; c = i.c ? 1 : 0; rn = i.rn ? 1 : 0;
+          }
+          TT.setInput(room.engine, att.side, {
+            l, r, f, b, pu, sm,
+            lb: c && pu, // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导，无需新按键）
+            crouch: c, run: rn,
+          });
+          room.lastInputAt[att.side] = this._now(); // v2.7.0-fix:输入超时判定的最后输入时刻（stale 帧不刷新）
+          // 鼠标/手指瞄准：目标落点（世界坐标）随输入帧上报，服务端求解发球方案并随快照返回
+          if (Array.isArray(msg.a) && msg.a.length === 2) {
+            const ax = Number(msg.a[0]), az = Number(msg.a[1]);
+            if (Number.isFinite(ax) && Number.isFinite(az)) {
+              TT.setServeAim(room.engine, att.side, ax, az);
+            }
           }
         }
       }
@@ -142,6 +153,7 @@ export class RoomCore {
       lastSnap: '',
       lastStep: Date.now(), // P2-1：初始为当前时刻——旧值 0 会让首次 stepRoom 把 (now-0) 累进 accTime 并补 0.5s/30 帧（开局引擎时间快进半秒，与注释不符）；改为从当前时刻起算，首拍即按真实经过步进
       lastSeen: [Date.now(), Date.now()], // 每席位最近消息时刻（Alarm 断线清扫依据）
+      lastInputAt: [Date.now(), Date.now()], // v2.7.0-fix:每席位最后输入时刻（1s 输入超时清零依据，与 server.js 对齐）
       lastBroadcastAt: 0, // 最近广播时刻（Alarm 兜底广播依据，保证 ≥2Hz 数据流）
       skins: [null, null], // 联机皮肤同步(v2.0):双方装配的装扮,随 room/state 广播给对手
     };
@@ -222,14 +234,26 @@ export class RoomCore {
     // 消息驱动下同一时间窗口会被多次调用（2 客户端各 60Hz 输入 + Alarm 每 200ms），
     // 绝不能"每消息至少一帧"——那会把游戏时间跑成 2 倍速（双方操作越快游戏越快）。
     // 累计器保证游戏时间始终贴近墙钟 1x：无论消息多密集/稀疏都按真实时间差推进。
-    room.accTime = Math.min(0.5, (room.accTime || 0) + (now - room.lastStep) / 1000);
-    room.lastStep = now;
-    // 上限：长时间无消息（DO 休眠/网络中断）只追 0.5s，避免恢复时瞬间追赶爆炸
-    let n = 0;
-    while (room.accTime >= step && n < 60) {
-      TT.step(room.engine, step);
-      room.accTime -= step;
-      n++;
+    // v2.7.1-fix:人满前冻结引擎推进（问题3：开房间等待期就开始比赛）。
+    // 仅 1 人在房（等待对手）时不推进物理、不累时间——避免等待期引擎空转触发发球/计时，
+    // 对手加入时引擎仍停在开局状态，双方从同一起跑线开始。仍重置 lastStep/accTime，
+    // 保证人满后从当前时刻起算（不补等待期的"欠账"）。
+    const full = room.slots[0] && room.slots[1];
+    if (!full) {
+      room.lastStep = now;
+      room.accTime = 0;
+    } else {
+      // v2.7.0-fix:追赶上限 0.5s→2.0s——断流/卡顿 >0.5s 后游戏时间不再永久落后墙钟
+      //（恢复后最多一次补齐 2s，避免极端情况下瞬间追赶爆炸）
+      room.accTime = Math.min(2.0, (room.accTime || 0) + (now - room.lastStep) / 1000);
+      room.lastStep = now;
+      // 上限：长时间无消息（DO 休眠/网络中断）只追 2.0s，避免恢复时瞬间追赶爆炸
+      let n = 0;
+      while (room.accTime >= step && n < 60) {
+        TT.step(room.engine, step);
+        room.accTime -= step;
+        n++;
+      }
     }
     // 快照广播节流：物理仍 60Hz 步进，但快照最多每 BROADCAST_MS（20Hz=50ms）发一次。
     // 省 3 倍带宽/序列化 CPU（相对 60Hz）；客户端对相邻快照做插值平滑（见 render.js 的 interp 逻辑）。
@@ -240,6 +264,14 @@ export class RoomCore {
       room.lastSnap = data;
       room.lastBroadcastAt = now;
       for (const c of room.clients) if (c) this.send(c, data);
+    }
+    // v2.7.0-fix:输入超时（与 server.js 对齐）——客户端静默 >1s 未发输入 → 清零该席位输入
+    //（防蹲姿/移动残留：断线、后台 rAF 冻结、keyup 丢失等场景，服务器不再保持陈旧姿态广播给对手）
+    for (let i = 0; i < 2; i++) {
+      if (room.slots[i] && room.clients[i] && now - (room.lastInputAt[i] || now) > 1000) {
+        TT.setInput(room.engine, i, { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lb: 0, crouch: 0, run: 0 });
+        room.lastInputAt[i] = now;
+      }
     }
     // 双方都空则删房
     if (!room.slots[0] && !room.slots[1]) this.rooms.delete(room.code);
@@ -370,6 +402,7 @@ export class RoomCore {
         lastSnap: r.lastSnap || '',
         lastStep: r.lastStep || 0,
         lastSeen: [now, now], // 从当前时刻起算活跃：避免清扫器误杀恢复中的孤儿连接
+        lastInputAt: [now, now], // v2.7.0-fix:恢复后输入超时从当前时刻起算（等旧连接重挂补发输入）
         lastBroadcastAt: 0,   // 恢复后立即允许兜底广播（首拍即补发快照）
       });
     }
