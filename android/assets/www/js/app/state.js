@@ -237,7 +237,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '2.7.2',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '2.7.3',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -303,7 +303,7 @@
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
     // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 装扮方案 + 能力训练等级（localStorage 持久化,网页版禁用）
-    points: 9999,         // 积分余额(ppd_points)；开发者默认 9999 方便测试养成（已有本地数据时以本地为准）
+    points: 0,            // 积分余额(ppd_points)；初始 0，靠对战/首次通关奖励赚取（已有本地数据时以本地为准）
     owned: { trail: [], splash: false }, // 持有库存(兑换入库存,不自动装配)；v2.1 特效分离:仅尾影/溅射
     equip: { trail: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)；球衣/拍面恒=队服(旗帜队色)
     plans: [],            // 装扮方案(最多 8):[{ name, trail, splash }]
