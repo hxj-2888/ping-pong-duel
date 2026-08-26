@@ -18,6 +18,8 @@ rem   %TEMP%\ppd_apk_build, then copy the APK back.
 rem Sign note (2026-08-08): persistent keystore at android\release.keystore
 rem   so every build shares the same signature -> users can install over old
 rem   versions without uninstalling first.
+rem Sign security (2026-08-26): passwords are no longer hardcoded; read from
+rem   env KEYSTORE_PASS / KEY_PASS or prompted. release.keystore is gitignored.
 rem ============================================================
 setlocal
 set "SDK=C:\Users\ASUS\AppData\Local\Android\Sdk"
@@ -73,12 +75,17 @@ echo [6/7] zipalign...
 echo [7/7] sign...
 rem Persistent keystore (android\release.keystore): same signature every build,
 rem so users can install over old versions without uninstalling.
+rem Passwords must NOT be hardcoded: read from env KEYSTORE_PASS / KEY_PASS,
+rem prompted if unset. If this keystore was ever distributed, treat it as leaked;
+rem delete release.keystore and rebuild with a new password (users reinstall).
+if "%KEYSTORE_PASS%"=="" set /p KEYSTORE_PASS=Keystore pass (KEYSTORE_PASS):
+if "%KEY_PASS%"=="" set /p KEY_PASS=Key pass (KEY_PASS):
 if not exist "%~dp0release.keystore" (
   keytool -genkeypair -keystore "%~dp0release.keystore" -alias ppd -keyalg RSA -keysize 2048 ^
-    -validity 10000 -storepass ppd123456 -keypass ppd123456 -dname "CN=PPD, OU=PPD, O=PPD, L=CN, S=CN, C=CN" -noprompt
+    -validity 10000 -storepass "%KEYSTORE_PASS%" -keypass "%KEY_PASS%" -dname "CN=PPD, OU=PPD, O=PPD, L=CN, S=CN, C=CN" -noprompt
 )
-call "%BT%\apksigner.bat" sign --ks "%~dp0release.keystore" --ks-pass pass:ppd123456 ^
-  --key-pass pass:ppd123456 --v1-signing-enabled false --out "%OUT%\PingPongDuel.apk" "%OUT%\aligned.apk" || goto :err
+call "%BT%\apksigner.bat" sign --ks "%~dp0release.keystore" --ks-pass pass:%KEYSTORE_PASS% ^
+  --key-pass pass:%KEY_PASS% --v1-signing-enabled false --out "%OUT%\PingPongDuel.apk" "%OUT%\aligned.apk" || goto :err
 
 rem copy the APK back to the source folder
 copy /Y "%OUT%\PingPongDuel.apk" "%~dp0PingPongDuel.apk" >nul || goto :err
