@@ -62,23 +62,30 @@ jobs:
       - name: Install 7-Zip
         run: sudo apt-get update -q && sudo apt-get install -y -q p7zip-full
 
-      # 签名三件套（Secrets）齐全才构建；缺失则跳过并走 Release 回退
-      - name: Restore keystore
-        id: keystore
+      # 签名三件套（Secrets）齐全才构建；任一缺失则跳过并走 Release 回退
+      - name: Check signing secrets
+        id: secrets
         env:
           PPD_KEYSTORE_B64: ${{ secrets.PPD_KEYSTORE_B64 }}
+          PPD_KEYSTORE_PASS: ${{ secrets.PPD_KEYSTORE_PASS }}
+          PPD_KEY_PASS: ${{ secrets.PPD_KEY_PASS }}
         run: |
-          if [ -z "$PPD_KEYSTORE_B64" ]; then
+          if [ -z "$PPD_KEYSTORE_B64" ] || [ -z "$PPD_KEYSTORE_PASS" ] || [ -z "$PPD_KEY_PASS" ]; then
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "⚠ 签名 Secrets 未配置（PPD_KEYSTORE_B64/PPD_KEYSTORE_PASS/PPD_KEY_PASS），跳过 APK 构建"
+            echo "⚠ 签名 Secrets 未配齐（PPD_KEYSTORE_B64 / PPD_KEYSTORE_PASS / PPD_KEY_PASS），跳过 APK 构建"
           else
-            echo "$PPD_KEYSTORE_B64" | base64 -d > android/release.keystore
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Restore keystore
+        if: steps.secrets.outputs.present == 'true'
+        env:
+          PPD_KEYSTORE_B64: ${{ secrets.PPD_KEYSTORE_B64 }}
+        run: echo "$PPD_KEYSTORE_B64" | base64 -d > android/release.keystore
+
       - name: Build signed APK
         id: build
-        if: steps.keystore.outputs.present == 'true'
+        if: steps.secrets.outputs.present == 'true'
         env:
           KEYSTORE_PASS: ${{ secrets.PPD_KEYSTORE_PASS }}
           KEY_PASS: ${{ secrets.PPD_KEY_PASS }}
