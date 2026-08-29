@@ -13,10 +13,23 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
+const net = require('net');
 
 const SERVER = path.join(__dirname, '..', 'server.js');
-const PORT = 8901;
-const URL = `ws://127.0.0.1:${PORT}`;
+// 动态取空闲端口：固定端口会被机器上的常驻程序占用（实测本机 8901 被 douyin_tray.exe
+// 占用导致测试误报"连接失败"），listen(0) 由系统分配后再释放给服务器使用
+function freePort() {
+  return new Promise((res, rej) => {
+    const s = net.createServer();
+    s.listen(0, '127.0.0.1', () => {
+      const p = s.address().port;
+      s.close(() => res(p));
+    });
+    s.on('error', rej);
+  });
+}
+let PORT = 0;
+let URL = '';
 
 function wsClient() {
   return new Promise((resolve, reject) => {
@@ -72,6 +85,8 @@ async function waitSnapCond(A, cond, timeout = 3000) {
 }
 
 async function main() {
+  PORT = await freePort();
+  URL = `ws://127.0.0.1:${PORT}`;
   const child = spawn(process.execPath, [SERVER], {
     env: { ...process.env, PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe'],

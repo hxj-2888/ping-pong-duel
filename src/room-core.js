@@ -141,9 +141,25 @@ export class RoomCore {
   }
 
   // ---------- 房间逻辑（镜像 server.js） ----------
+  // 审计 #13:create/join 限速(镜像本地 server.js rateLimited):按连接滚动 60s 窗口,
+  // create ≤8 次 / join ≤30 次,超限拒绝——正常客户端(含断线重连、本地测试)远低于此,
+  // 枚举房间码/刷房占 DO 存储的行为被挡。驱逐恢复后计数清零,可接受。
+  _rateLimited(ws, kind, limit) {
+    const now = this._now();
+    const rec = ws._rate || (ws._rate = {});
+    rec[kind] = (rec[kind] || []).filter((t) => now - t < 60000);
+    if (rec[kind].length >= limit) return true;
+    rec[kind].push(now);
+    return false;
+  }
+
   handleCreate(ws, msg, att) {
     if (att.room) return;
+    if (this._rateLimited(ws, 'create', 8)) { this.send(ws, { t: 'error', e: '操作过于频繁，请稍后再试' }); return; }
     const code = this.newRoomCode();
+    // 审计 #13:碰撞耗尽兜底不再回退固定码 'ABCD'(不查重会被 rooms.set 顶掉活房)——
+    // 返回 null 时报错重试。50 次碰撞概率≈0,纯防御性分支。
+    if (!code) { this.send(ws, { t: 'error', e: '创建失败，请重试' }); return; }
     const room = {
       code,
       engine: TT.createEngine(),
@@ -170,6 +186,7 @@ export class RoomCore {
 
   handleJoin(ws, msg, att) {
     if (att.room) return;
+    if (this._rateLimited(ws, 'join', 30)) { this.send(ws, { t: 'error', e: '操作过于频繁，请稍后再试' }); return; }
     const code = String(msg.room || '').toUpperCase().trim();
     const room = this.rooms.get(code);
     if (!room) { this.send(ws, { t: 'error', e: '房间不存在' }); return; }
@@ -218,7 +235,8 @@ export class RoomCore {
       }
       if (!this.rooms.has(code)) return code;
     }
-    return 'ABCD';
+    // 审计 #13:50 次碰撞后不回退固定码 'ABCD'(不查重会顶掉活房),由 handleCreate 报错重试
+    return null;
   }
 
   // ---------- 模拟推进 + 快照广播（消息驱动，按真实时间差追赶固定步长） ----------
@@ -231,7 +249,7 @@ export class RoomCore {
     const now = this._now();
     const step = 1 / TICK_HZ; // 固定 60Hz 步长（与本地 server.js 一致）
     // 累计器：把"距上次调用的真实经过时间"累积起来，凑满一帧才步进。
-    // 消息驱动下同一时间窗口会被多次调用（2 客户端各 60Hz 输入 + Alarm 每 200ms），
+    // 消息驱动下同一时间窗口会被多次调用（2 客户端各 60Hz 输入 + Alarm 每 50ms），
     // 绝不能"每消息至少一帧"——那会把游戏时间跑成 2 倍速（双方操作越快游戏越快）。
     // 累计器保证游戏时间始终贴近墙钟 1x：无论消息多密集/稀疏都按真实时间差推进。
     // v2.7.1-fix:人满前冻结引擎推进（问题3：开房间等待期就开始比赛）。
@@ -257,7 +275,7 @@ export class RoomCore {
     }
     // 快照广播节流：物理仍 60Hz 步进，但快照最多每 BROADCAST_MS（20Hz=50ms）发一次。
     // 省 3 倍带宽/序列化 CPU（相对 60Hz）；客户端对相邻快照做插值平滑（见 render.js 的 interp 逻辑）。
-    // 空闲期（Alarm 每 100ms 调用本函数）广播降到 10Hz 地板，仍够看门狗判定与等待面板刷新。
+    // 空闲期由 Alarm 每 50ms 调用本函数，广播保 20Hz 地板（ALARM_MS=50，v2.7.0-fix 恢复），足够看门狗判定与等待面板刷新。
     if (now - room.lastBroadcastAt >= BROADCAST_MS) {
       const snap = TT.snapshot(room.engine);
       const data = JSON.stringify({ t: 'state', s: snap, n: room.names, my: -1, skins: room.skins });
@@ -279,7 +297,7 @@ export class RoomCore {
 
   // ---------- Alarm 兜底：推进 + 断线清扫（配合 room.js 的 alarm 定时调用） ----------
   // 消息驱动 tick 在"客户端停发消息"时会停摆（半死连接/后台节流/DO 驱逐），
-  // Alarm 每拍调用本组方法：推进物理、兜底广播（10Hz 地板）、清理死连接与僵尸席位。
+  // Alarm 每拍调用本组方法：推进物理、兜底广播（20Hz 地板）、清理死连接与僵尸席位。
 
   // 释放某席位（断线事件丢失后的僵尸占位）：清空并通知对手
   freeSlot(room, side, now) {
@@ -337,7 +355,7 @@ export class RoomCore {
     const sweep = this.sweepStale(now);
     this._notes = [];
     for (const room of this.rooms.values()) {
-      this.stepRoom(room); // 内含 10Hz 广播地板
+      this.stepRoom(room); // 内含 20Hz 广播地板
     }
     // stepRoom/broadcast 可能已删空房，兜底清理
     for (const [code, room] of this.rooms) {

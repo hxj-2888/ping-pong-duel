@@ -34,3 +34,5 @@ android/release.keystore
 # 测试/运行日志输出
 *.log
 test-out*.txt
+# local packaging staging (node runtime + old apks) - never commit
+乒乓对决_安装包/

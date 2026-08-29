@@ -59,7 +59,7 @@ node server.js
   - 困难：反应快、追位准，高球必扣杀，**接球率约 97.5%**（刻意漏球 <3%），可反击扣杀
   - 地狱：反应/站位/扣杀全面拉满，**0% 刻意漏球**（观战与人机对战一致，完全不再漏球，强版展示）；扣杀激进（smashY 0.95，2~7 扣/局），可反击扣杀；差距全在时机把控与技巧（高吊/刁钻射球/低平快球）
   - **电脑 AI 数值调控**：击败地狱难度后，人机对战的暂停面板变为 4 项 AI 参数滑杆（反应/接球率/攻击性/敏捷，即时生效）——可自定对手机器人强度
-  - **个人生涯**：人机对战 / 本地双人对战 / 联机对局每局结束自动记录胜负（后端留最近 60 条）——本地版写入 `records.json`、网页版/桌面公网写入 Cloudflare Durable Object（`GET/POST/DELETE /api/records`，CORS 兼容；DELETE 需 `?token=` 匹配 RECORDS_TOKEN 维护用）；主菜单内「个人生涯」小方框显示总场次/胜率摘要，点击展开整页分页战绩列表（10 条/页：模式 · 胜/负 · 难度 · 比分 · 时间 · 玩家名），无后端/离线时静默不打扰；**手机版（安卓 APK，file:// 页面无同源后端）本地优先**：战绩先写手机本地 localStorage（卸载/清数据会清空），在设置填服务器地址后异步同步到该服务器（跨设备共享）
+  - **个人生涯**：人机对战 / 本地双人对战 / 联机对局每局结束自动记录胜负（后端留最近 60 条）——本地版写入 `records.json`、网页版/桌面公网写入 Cloudflare Durable Object（`GET/POST/DELETE /api/records`，CORS 兼容；DELETE 需 `?token=` 匹配 RECORDS_TOKEN 维护用）；主菜单内「个人生涯」小方框显示总场次/胜率摘要，点击展开整页分页战绩列表（10 条/页：模式 · 胜/负 · 难度 · 比分 · 时间 · 玩家名），无后端/离线时静默不打扰；**手机版（安卓 APK，file:// 页面无同源后端）仅存本地**：战绩写入手机本地 localStorage（卸载/清数据会清空；远程服务器同步功能已在 v2.7.0 移除）
 - **本地双人对战**：同一键盘分屏对战，各看各的半场视角。
 - **模拟推演（AI vs AI）**：主页可分别设定**甲/乙 AI 难度**（简单/中等/困难/地狱，地狱需先在人机模式击败困难解锁），同栏选择**甲/乙 旗帜色与队名**；进入后双方 AI 自动发球、对打、计分；比赛页右上角可**暂停**，暂停面板中可**调整甲/乙 AI 难度**（即时生效）、**微调 4 项 AI 参数**（反应 / 接球率 / 攻击性 / 移动敏捷，滑杆 ×0.5~×1.5 乘到难度基准上，netInfo 出现 ⚙ 表示已微调），或**返回主页面**；观战视角自动跟随。
 - **创建联机房间**：生成 4 位房间码；对方在另一台电脑输入房间码加入。
@@ -95,29 +95,33 @@ node server.js
 
 ```text
 ping-pong-duel/
-├── server.js            # WebSocket 联机服务器 + 静态文件服务（零依赖）
+├── server.js            # 本地/局域网联机服务器 + 静态文件服务（零依赖，手写 RFC6455 WebSocket）
+├── desktop-launcher.js  # 桌面启动器（自动拉起/重启旧服务器，读取 /api/info 版本）
 ├── package.json
-├── README.md
-├── public/
+├── public/              # 前端 + Cloudflare Pages 发布目录
 │   ├── index.html       # 菜单 / 游戏界面
-│   ├── css/style.css
-│   ├── audio/applause.wav  # 真实掌声录音（得分音效）
+│   ├── download.html    # 安卓 APK 下载页
+│   ├── _worker.js       # Pages 高级模式：静态页 + /ws 反代到 game-room DO
+│   ├── manifest.webmanifest / sw.js  # PWA 清单与离线兜底
+│   ├── css/  audio/     # 样式 / 真实掌声 applause.wav 与 BGM music.mp4
 │   └── js/
-│       ├── engine.js    # 共享物理引擎：尺寸、弹道、规则、计分（浏览器+Node 通用）
-│       ├── render.js    # 轻量 3D 渲染器：球台、球网、观众席、乒乓球
-│       ├── characters.js# 火柴人物理骨架：2-Bone IK、惯性、注视、挥拍动量         
-│       ├── ai.js        # 人机对手：落点预测、追球、推/扣决策、自动发球
-│       ├── network.js   # 联机客户端
-│       ├── audio.js     # WebAudio 音效合成（无外部资源）
-│       └── main.js      # 游戏循环 / 输入 / HUD
-├── tools/
-│   ├── preview.html     # 静态场景预览页（开发者用）
-│   └── shot.js          # 无头浏览器截图工具：node tools/shot.js
-└── test/
-    ├── net-test.js      # 联机自动化测试（真实 WebSocket 双客户端）
-    ├── engine-stress.js # 物理引擎压力/回合测试
-    ├── ai-test.js       # 人机对手：发球/回球/移动/比赛推进/难度
-    └── browser-smoke.js # 前端 DOM/Canvas 冒烟测试（本地+联机流程）
+│       ├── engine.js + engine/  # 共享物理引擎（UMD，6 子模块；与 src/engine 字节级镜像）
+│       ├── render.js    # 轻量 3D 渲染器：球台/球网/坐姿观众席/特效/发球轨迹
+│       ├── characters.js# 火柴人物理骨架（2-Bone IK + 弹簧阻尼惯性）
+│       ├── ai.js        # 人机对手（四档难度 + 无限档，纯逻辑可 Node 直测）
+│       ├── audio.js     # WebAudio 音效合成 + 真实音频加载
+│       ├── network.js   # 联机客户端（握手重试/输入缓存/身份过滤）
+│       └── app/         # 业务层 13 模块（IIFE + window.PPD 共享命名空间）：
+│                        #   state(中枢) main modes loop input hud render net
+│                        #   records teams dressup replay training
+├── src/                 # Cloudflare Worker（公网联机）
+│   ├── index.js         # Worker 入口：/api/* 与 WS 升级 → GameRoom DO
+│   ├── room.js          # GameRoom Durable Object（Hibernation API + storage 持久化）
+│   ├── room-core.js     # 房间核心逻辑（纯逻辑，Node 可直测，与 server.js 房间语义镜像）
+│   └── engine/          # 引擎 ESM 镜像（与 public/js/engine 逐字节一致，tools/check-engine-sync.js 守护）
+├── android/             # 安卓 APK 工程（WebView 壳；build.cmd 无 Gradle 流水线 aapt2+d8+7-Zip）
+├── test/                # 42 个测试（引擎/物理边界/联机/DO/AI/观众席渲染/浏览器冒烟）
+└── tools/               # 截图/对局模拟/引擎同步校验/自动同步/打包等开发工具
 ```
 
 ## 测试
