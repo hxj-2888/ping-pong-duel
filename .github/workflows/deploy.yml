@@ -1,10 +1,12 @@
-# ===== GitHub Actions — Cloudflare Pages 自动部署（乒乓对决）=====
+# ===== GitHub Actions — 自动构建 APK + Cloudflare Pages 部署（乒乓对决）=====
 # 触发: push 到 main（或手动 workflow_dispatch）
-# 效果: 部署静态站(public/) + 联机 DO Worker(game-room) 到 Cloudflare
-# 依赖 GitHub Secrets（与 delta-force-price-query / portfolio 相同值）:
-#   CF_API_TOKEN     Cloudflare API Token（Pages + Workers Scripts Edit 权限）
-#   CF_ACCOUNT_ID    Cloudflare 账户 ID
-# APK 不入库（.gitignore），部署时从 GitHub Release v3.0.0 拉回随 Pages 分发。
+# 流水线: 语法检查 → 构建 APK（CI 打包最新版）→ Pages 部署 → Release 刷新 → 冒烟验证
+# 依赖 GitHub Secrets:
+#   CF_API_TOKEN / CF_ACCOUNT_ID      Cloudflare（Pages + Workers Scripts Edit）
+#   PPD_KEYSTORE_B64                  android/release.keystore 的 base64（签名密钥）
+#   PPD_KEYSTORE_PASS / PPD_KEY_PASS  签名密码
+# 签名三件套未配置时：构建 job 跳过，部署回退到 Release 里的既有 APK，流水线保持绿。
+# APK 文件名固定 PingPongDuel-v300.apk（download.html 依赖），内容随每次构建刷新。
 
 name: deploy
 
@@ -40,17 +42,79 @@ jobs:
           node --check server.js
           node --check desktop-launcher.js
 
+  # ===== CI 打包最新版 APK =====
+  build-apk:
+    name: Build APK
+    needs: check
+    runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.build.outputs.built }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install 7-Zip
+        run: sudo apt-get update -q && sudo apt-get install -y -q p7zip-full
+
+      # 签名三件套（Secrets）齐全才构建；缺失则跳过并走 Release 回退
+      - name: Restore keystore
+        id: keystore
+        env:
+          PPD_KEYSTORE_B64: ${{ secrets.PPD_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$PPD_KEYSTORE_B64" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "⚠ 签名 Secrets 未配置（PPD_KEYSTORE_B64/PPD_KEYSTORE_PASS/PPD_KEY_PASS），跳过 APK 构建"
+          else
+            echo "$PPD_KEYSTORE_B64" | base64 -d > android/release.keystore
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build signed APK
+        id: build
+        if: steps.keystore.outputs.present == 'true'
+        env:
+          KEYSTORE_PASS: ${{ secrets.PPD_KEYSTORE_PASS }}
+          KEY_PASS: ${{ secrets.PPD_KEY_PASS }}
+        run: |
+          chmod +x android/build.sh
+          android/build.sh
+          echo "built=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        if: steps.build.outputs.built == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingPongDuel-apk
+          path: PingPongDuel.apk
+          if-no-files-found: error
+
   # ===== Cloudflare Pages 静态站（public/，生产分支 main）=====
   deploy-pages:
     name: Cloudflare Pages (production)
-    needs: check
+    needs: build-apk
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # APK 走 GitHub Release 分发，部署前拉回 public/ 供下载页直链
-      - name: Pull APK from GitHub Release
+      # 优先用本次 CI 构建的 APK；构建被跳过时回退 Release 既有包
+      - name: Download CI-built APK
+        continue-on-error: true
+        if: needs.build-apk.outputs.built == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: PingPongDuel-apk
+          path: public/
+
+      - name: Fallback to Release APK
+        if: needs.build-apk.outputs.built != 'true'
         run: |
           curl -fsSL --retry 3 -o public/PingPongDuel-v300.apk \
             "https://github.com/${{ github.repository }}/releases/download/v3.0.0/PingPongDuel-v300.apk"
@@ -62,6 +126,28 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           command: pages deploy public --project-name=ping-pong-duel --branch=main --commit-hash=${{ github.sha }}
+
+  # ===== 用最新 APK 刷新 GitHub Release（保持备用下载源同步）=====
+  publish-release:
+    name: Refresh Release APK
+    needs: build-apk
+    if: needs.build-apk.outputs.built == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download CI-built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: PingPongDuel-apk
+          path: .
+
+      - name: Upload to Release v3.0.0 (clobber)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv PingPongDuel.apk PingPongDuel-v300.apk
+          gh release upload v3.0.0 PingPongDuel-v300.apk --repo "${{ github.repository }}" --clobber
 
   # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
   # 需要 Token 含 Account → Workers Scripts → Edit 权限（2026-08-29 起已配置）
