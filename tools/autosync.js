@@ -21,16 +21,21 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 
+// 下游本机目录统一由环境变量推导（源码不含本机用户名路径）
+const HOME = process.env.USERPROFILE || '';
+const LOCALAPP = process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local');
+const DESKTOP = path.join(HOME, 'Desktop');
+
 // 下游副本（dir 相对 ROOT 或绝对路径）；stripPub=true 的目标其 public/ 前缀剥掉（APK 资产根即 www）
 const TARGETS = [
   { dir: 'android/assets/www', pub: true, stripPub: true },                      // APK 资产：public/X → www/X
   { dir: 'dist/installer/package/乒乓对决_安装包/game', pub: true, root: true, extra: true, android: true },
   { dir: '%PKG%/game', pub: true, root: true, extra: true, android: true },
   { dir: 'dist/ecs', pub: true, ecs: true },                                     // ECS：仅 public + package.json
-  { dir: 'C:/Users/ASUS/AppData/Local/PingPongDuel', pub: true, root: true, extra: true, android: true },
-  { dir: 'C:/Users/ASUS/AppData/Local/Programs/PingPongDuel', pub: true, root: true, extra: true },
-  { dir: 'C:/Users/ASUS/Desktop/乒乓对决', pub: true, root: true, extra: true, android: true },
-  { dir: 'C:/Users/ASUS/Desktop/乒乓对决_安装包/game', pub: true, root: true, extra: true, android: true },
+  { dir: path.join(LOCALAPP, 'PingPongDuel'), pub: true, root: true, extra: true, android: true },
+  { dir: path.join(LOCALAPP, 'Programs', 'PingPongDuel'), pub: true, root: true, extra: true },
+  { dir: path.join(DESKTOP, '乒乓对决'), pub: true, root: true, extra: true, android: true },
+  { dir: path.join(DESKTOP, '乒乓对决_安装包', 'game'), pub: true, root: true, extra: true, android: true },
 ];
 
 const ROOT_FILES = ['server.js', 'desktop-launcher.js', 'package.json', 'icon.ico', '使用说明.txt', '修改记录.md', '合并说明.md', '启动乒乓对决.vbs', 'wrangler.toml', 'wrangler.room.toml', 'README.md'];
