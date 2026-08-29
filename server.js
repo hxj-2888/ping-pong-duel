@@ -91,7 +91,12 @@ function localIfaces() {
 function isPrivateRequester(req) {
   const PRIVATE = /^(127\.|::1$|localhost$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/;
   const host = String(req.headers.host || '').split(':')[0].toLowerCase();
-  if (host && PRIVATE.test(host)) return true;
+  // ★ 有 Host 头时只依据 Host 判定，不再回退 remoteAddress：
+  //   经 nginx 反代时 remoteAddress 恒为 127.0.0.1，若同时回退判断会把公网请求误判为内网，
+  //   导致 /api/info 对公网继续泄露服务器内网 IP（M5 收敛失效）。
+  //   Host 是客户端实际访问的地址，正是判定"来访者身处内网还是公网"的正确依据。
+  if (host) return PRIVATE.test(host);
+  // 无 Host 头的罕见情况（HTTP/1.0、部分探测请求）才回退到 socket 远端地址
   const ra = String((req.socket && req.socket.remoteAddress) || '').toLowerCase().replace(/^::ffff:/, '');
   return PRIVATE.test(ra);
 }
