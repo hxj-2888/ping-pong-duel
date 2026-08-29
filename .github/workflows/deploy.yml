@@ -1,0 +1,95 @@
+# ===== GitHub Actions — Cloudflare Pages 自动部署（乒乓对决）=====
+# 触发: push 到 main（或手动 workflow_dispatch）
+# 效果: 部署静态站(public/) + 联机 DO Worker(game-room) 到 Cloudflare
+# 依赖 GitHub Secrets（与 delta-force-price-query / portfolio 相同值）:
+#   CF_API_TOKEN     Cloudflare API Token（Pages + Workers Scripts Edit 权限）
+#   CF_ACCOUNT_ID    Cloudflare 账户 ID
+# APK 不入库（.gitignore），部署时从 GitHub Release v3.0.0 拉回随 Pages 分发。
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ===== 质量门禁: 全部 JS 语法检查 =====
+  check:
+    name: Syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax check all JS
+        run: |
+          find src public/js test tools -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --check server.js
+          node --check desktop-launcher.js
+
+  # ===== Cloudflare Pages 静态站（public/，生产分支 main）=====
+  deploy-pages:
+    name: Cloudflare Pages (production)
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # APK 走 GitHub Release 分发，部署前拉回 public/ 供下载页直链
+      - name: Pull APK from GitHub Release
+        run: |
+          curl -fsSL --retry 3 -o public/PingPongDuel-v300.apk \
+            "https://github.com/${{ github.repository }}/releases/download/v3.0.0/PingPongDuel-v300.apk"
+          ls -l public/PingPongDuel-v300.apk
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy public --project-name=ping-pong-duel --branch=main --commit-hash=${{ github.sha }}
+
+  # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
+  deploy-room:
+    name: Deploy game-room Worker
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy game-room (Durable Object)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy --config wrangler.room.toml
+
+  # ===== 部署后冒烟验证 =====
+  smoke-test:
+    name: Post-deploy smoke test
+    needs: deploy-pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: 首页
+        run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/"
+
+      - name: 下载页
+        run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/download.html"
+
+      - name: APK 直链
+        run: curl -fsSL --max-time 60 -r 0-1024 "https://ping-pong-duel.pages.dev/PingPongDuel-v300.apk" -o /dev/null
