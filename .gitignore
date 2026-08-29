@@ -37,3 +37,6 @@ android/release.keystore
 test-out*.txt
 # local packaging staging (node runtime + old apks) - never commit
 乒乓对决_安装包/
+
+# retired keystores (never commit)
+android/release.keystore.old-*
