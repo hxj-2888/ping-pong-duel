@@ -22,7 +22,7 @@ rem Sign security (2026-08-26): passwords are no longer hardcoded; read from
 rem   env KEYSTORE_PASS / KEY_PASS or prompted. release.keystore is gitignored.
 rem ============================================================
 setlocal
-set "SDK=C:\Users\ASUS\AppData\Local\Android\Sdk"
+set "SDK=%LOCALAPPDATA%\Android\Sdk"
 set "BT=%SDK%\build-tools\34.0.0"
 set "PLAT=%SDK%\platforms\android-34\android.jar"
 set "SZ=C:\Program Files\7-Zip\7z.exe"
@@ -51,7 +51,7 @@ echo [2/7] link manifest + resources (no -A assets: added by 7-Zip in [5/7])...
 "%BT%\aapt2.exe" link -o "%OUT%\unsigned.apk" -I "%PLAT%" ^
   --manifest "%ROOT%AndroidManifest.xml" -R "%OUT%\res.zip" --auto-add-overlay ^
   --java "%OUT%\gen" --min-sdk-version 24 --target-sdk-version 34 ^
-  --version-code 22 --version-name 2.7.3 || goto :err
+  --version-code 23 --version-name 3.0.0 || goto :err
 
 echo [3/7] compile java...
 javac -encoding UTF-8 -source 1.8 -target 1.8 -classpath "%PLAT%" -d "%OUT%\classes" ^
