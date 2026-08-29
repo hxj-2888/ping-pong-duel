@@ -140,7 +140,9 @@ const server = http.createServer((req, res) => {
       'Cache-Control': 'no-cache',
       'Access-Control-Allow-Origin': '*',
     });
-    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: localIps(), ifaces: localIfaces(), hostname: os.hostname() }));
+    // ★ 安全收敛: 不再返回 hostname(含 Windows 用户名) 与完整网卡清单(ifaces)，
+    //   仅保留客户端房主面板必需的 ips + port，减少内网拓扑与个人身份泄露面
+    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: localIps() }));
     return;
   }
 
