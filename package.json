@@ -1,7 +1,7 @@
 {
   "name": "ping-pong-duel",
-  "version": "3.0.0",
-  "androidVersionCode": 23,
+  "version": "3.0.1",
+  "androidVersionCode": 24,
   "description": "双人联机乒乓球游戏 · ITTF 标准尺寸 · 火柴人物理骨架 · 观众席欢呼 · 发球瞄准/跑步/蹲下 · 零依赖",
   "main": "server.js",
   "scripts": {
