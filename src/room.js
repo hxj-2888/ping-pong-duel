@@ -148,7 +148,7 @@ export class GameRoom extends DurableObject {
 
   // ---------- Alarm 兜底驱动 ----------
   // 消息驱动 tick 在客户端停发消息时会停摆（半死连接/后台节流/驱逐），表现为"进房间后卡死"。
-  // Alarm 每 200ms 唤醒一次：推进物理 + 兜底广播（≥2Hz 快照）+ 断线/僵尸席位清扫。
+  // Alarm 每 50ms 唤醒一次：推进物理 + 兜底广播（≥2Hz 快照）+ 断线/僵尸席位清扫。
   // 有房间存活时自我续期；全部房间空后停止（不钉住 DO 计费）。
   _armAlarm() {
     if (this._alarmPending) return;

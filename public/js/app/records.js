@@ -12,8 +12,8 @@
   function apiBase() { return ''; }
 
   // ---------- 手机端本地生涯（安卓 APK 为 file:// 页面，无同源后端） ----------
-  // 本地优先（local-first）：战绩先写 localStorage（手机本地，卸载/清数据会清空，见说明书），
-  // 若在「设置→公网联机服务器地址」填了 http://电脑IP:8765 之类地址，再异步尽力同步（跨设备共享）。
+  // 仅本地（v2.7.0 起移除「公网联机服务器地址」同步功能）：战绩写入 localStorage
+  //（手机本地，卸载/清数据会清空）。
   const CAREER_KEY = 'ppd_career';
   const CAREER_MAX = 500; // 本地最多保留 500 条，超限裁剪最旧
   const isMobileOffline = typeof location !== 'undefined' && location.protocol === 'file:';
