@@ -1,13 +1,9 @@
-# ===== GitHub Actions — 自动构建 APK + Cloudflare Pages 部署（乒乓对决）=====
-# 触发: push 到 main（或手动 workflow_dispatch）
-# 流水线: 语法检查 → 构建 APK（CI 打包最新版）→ Pages 部署 → Release 刷新 → 冒烟验证
-# 依赖 GitHub Secrets:
-#   CF_API_TOKEN / CF_ACCOUNT_ID      Cloudflare（Pages + Workers Scripts Edit）
-#   PPD_KEYSTORE_B64                  android/release.keystore 的 base64（签名密钥）
-#   PPD_KEYSTORE_PASS / PPD_KEY_PASS  签名密码
-# 签名三件套未配置时：构建 job 跳过，部署回退到 Release 里的既有 APK，流水线保持绿。
-# APK 文件名固定 PingPongDuel-v300.apk（download.html 依赖），内容随每次构建刷新。
-
+﻿# ===== GitHub Actions 鈥?鑷姩鏋勫缓 APK + Cloudflare Pages 閮ㄧ讲锛堜箳涔撳鍐筹級=====
+# 瑙﹀彂: push 鍒?main锛堟垨鎵嬪姩 workflow_dispatch锛?# 娴佹按绾? 璇硶妫€鏌?鈫?鏋勫缓 APK锛圕I 鎵撳寘鏈€鏂扮増锛夆啋 Pages 閮ㄧ讲 鈫?Release 鍒锋柊 鈫?鍐掔儫楠岃瘉
+# 渚濊禆 GitHub Secrets:
+#   CF_API_TOKEN / CF_ACCOUNT_ID      Cloudflare锛圥ages + Workers Scripts Edit锛?#   PPD_KEYSTORE_B64                  android/release.keystore 鐨?base64锛堢鍚嶅瘑閽ワ級
+#   PPD_KEYSTORE_PASS / PPD_KEY_PASS  绛惧悕瀵嗙爜
+# 绛惧悕涓変欢濂楁湭閰嶇疆鏃讹細鏋勫缓 job 璺宠繃锛岄儴缃插洖閫€鍒?Release 閲岀殑鏃㈡湁 APK锛屾祦姘寸嚎淇濇寔缁裤€?# APK 鏂囦欢鍚嶅浐瀹?PingPongDuel-v300.apk锛坉ownload.html 渚濊禆锛夛紝鍐呭闅忔瘡娆℃瀯寤哄埛鏂般€?
 name: deploy
 
 on:
@@ -23,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  # ===== 质量门禁: 全部 JS 语法检查 =====
+  # ===== 璐ㄩ噺闂ㄧ: 鍏ㄩ儴 JS 璇硶妫€鏌?=====
   check:
     name: Syntax check
     runs-on: ubuntu-latest
@@ -34,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Syntax check all JS
         run: |
@@ -42,7 +38,7 @@ jobs:
           node --check server.js
           node --check desktop-launcher.js
 
-      # 本地可跑的测试套件（无外网依赖：本地起服 / 纯逻辑 / 桩）——联网冒烟类（ws-live 等）不进 CI
+      # 鏈湴鍙窇鐨勬祴璇曞浠讹紙鏃犲缃戜緷璧栵細鏈湴璧锋湇 / 绾€昏緫 / 妗╋級鈥斺€旇仈缃戝啋鐑熺被锛坵s-live 绛夛級涓嶈繘 CI
       - name: Run local test suite
         run: |
           for t in net-test http-robustness-test join-wait-test records-test restart-persist seq-test \
@@ -56,7 +52,7 @@ jobs:
             echo "::endgroup::"
           done
 
-  # ===== CI 打包最新版 APK =====
+  # ===== CI 鎵撳寘鏈€鏂扮増 APK =====
   build-apk:
     name: Build APK
     needs: check
@@ -76,7 +72,7 @@ jobs:
       - name: Install 7-Zip
         run: sudo apt-get update -q && sudo apt-get install -y -q p7zip-full
 
-      # 签名三件套（Secrets）齐全才构建；任一缺失则跳过并走 Release 回退
+      # 绛惧悕涓変欢濂楋紙Secrets锛夐綈鍏ㄦ墠鏋勫缓锛涗换涓€缂哄け鍒欒烦杩囧苟璧?Release 鍥為€€
       - name: Check signing secrets
         id: secrets
         env:
@@ -86,7 +82,7 @@ jobs:
         run: |
           if [ -z "$PPD_KEYSTORE_B64" ] || [ -z "$PPD_KEYSTORE_PASS" ] || [ -z "$PPD_KEY_PASS" ]; then
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "⚠ 签名 Secrets 未配齐（PPD_KEYSTORE_B64 / PPD_KEYSTORE_PASS / PPD_KEY_PASS），跳过 APK 构建"
+            echo "鈿?绛惧悕 Secrets 鏈厤榻愶紙PPD_KEYSTORE_B64 / PPD_KEYSTORE_PASS / PPD_KEY_PASS锛夛紝璺宠繃 APK 鏋勫缓"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
@@ -116,7 +112,7 @@ jobs:
           path: PingPongDuel.apk
           if-no-files-found: error
 
-  # ===== Cloudflare Pages 静态站（public/，生产分支 main）=====
+  # ===== Cloudflare Pages 闈欐€佺珯锛坧ublic/锛岀敓浜у垎鏀?main锛?====
   deploy-pages:
     name: Cloudflare Pages (production)
     needs: build-apk
@@ -125,8 +121,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 优先用本次 CI 构建的 APK；构建被跳过时回退 Release 既有包
-      - name: Download CI-built APK
+      # 浼樺厛鐢ㄦ湰娆?CI 鏋勫缓鐨?APK锛涙瀯寤鸿璺宠繃鏃跺洖閫€ Release 鏃㈡湁鍖?      - name: Download CI-built APK
         continue-on-error: true
         if: needs.build-apk.outputs.built == 'true'
         uses: actions/download-artifact@v4
@@ -148,7 +143,7 @@ jobs:
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           command: pages deploy public --project-name=ping-pong-duel --branch=main --commit-hash=${{ github.sha }}
 
-  # ===== 用最新 APK 刷新 GitHub Release（保持备用下载源同步）=====
+  # ===== 鐢ㄦ渶鏂?APK 鍒锋柊 GitHub Release锛堜繚鎸佸鐢ㄤ笅杞芥簮鍚屾锛?====
   publish-release:
     name: Refresh Release APK
     needs: build-apk
@@ -170,9 +165,8 @@ jobs:
           mv PingPongDuel.apk PingPongDuel-v300.apk
           gh release upload v3.0.0 PingPongDuel-v300.apk --repo "${{ github.repository }}" --clobber
 
-  # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
-  # 需要 Token 含 Account → Workers Scripts → Edit 权限（2026-08-29 起已配置）
-  deploy-room:
+  # ===== 鑱旀満 DO 瀹夸富 Worker锛坓ame-room锛屾簮鐮?src/锛?====
+  # 闇€瑕?Token 鍚?Account 鈫?Workers Scripts 鈫?Edit 鏉冮檺锛?026-08-29 璧峰凡閰嶇疆锛?  deploy-room:
     name: Deploy game-room Worker
     needs: check
     runs-on: ubuntu-latest
@@ -187,17 +181,16 @@ jobs:
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           command: deploy --config wrangler.room.toml
 
-  # ===== 部署后冒烟验证 =====
+  # ===== 閮ㄧ讲鍚庡啋鐑熼獙璇?=====
   smoke-test:
     name: Post-deploy smoke test
     needs: deploy-pages
     runs-on: ubuntu-latest
     steps:
-      - name: 首页
+      - name: 棣栭〉
         run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/"
 
-      - name: 下载页
-        run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/download.html"
+      - name: 涓嬭浇椤?        run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/download.html"
 
-      - name: APK 直链
+      - name: APK 鐩撮摼
         run: curl -fsSL --max-time 60 -r 0-1024 "https://ping-pong-duel.pages.dev/PingPongDuel-v300.apk" -o /dev/null
