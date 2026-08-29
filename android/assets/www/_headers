@@ -1,6 +1,6 @@
 # Cloudflare Pages 自定义响应头：APK 强制以附件下载并给出 ASCII 文件名，
 # 避免下载管理器/微信浏览器把中文文件名搞坏导致"无效安装包"
-# 文件名带版本号：手机下载管理器保存为 PingPongDuel-v270.apk，不会误装旧文件
+# 文件名带版本号：手机下载管理器保存为 PingPongDuel-v300.apk，不会误装旧文件
 # 全站静态资源一律回源校验（no-cache），杜绝边缘缓存对普通请求提供旧版（JS/CSS 改动频繁）
 /*
   Cache-Control: no-cache, must-revalidate
@@ -11,8 +11,8 @@
   Cache-Control: no-cache, no-store, must-revalidate
 /download*
   Cache-Control: no-cache, no-store, must-revalidate
-# 审计 #17：public 只保留当前版本 APK（PingPongDuel-v270.apk），历史版本 APK 已全部清理
-# （旧版 v150~v260、PingPongDuel.apk、乒乓对决.apk 不再随站点发布）
-/PingPongDuel-v270.apk
+# 审计 #17：public 只保留当前版本 APK（PingPongDuel-v300.apk），历史版本 APK 已全部清理
+# 注意：文件名随版本更新——发布新 APK 时此处路径/filename 必须同步改（v270 漂移曾致规则失效）
+/PingPongDuel-v300.apk
   Cache-Control: no-cache, no-store, must-revalidate
-  Content-Disposition: attachment; filename="PingPongDuel-v270.apk"
+  Content-Disposition: attachment; filename="PingPongDuel-v300.apk"
