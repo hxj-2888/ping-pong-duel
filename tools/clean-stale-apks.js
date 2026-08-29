@@ -10,16 +10,20 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const KEEP = 'PingPongDuel-v172.apk';
+const KEEP = 'PingPongDuel-v300.apk';
 
-// 与 autosync.js TARGETS 中含 public 的目标一致（android 资产不内嵌 APK,跳过）
+// 与 autosync.js TARGETS 中含 public 的目标一致（android 资产不内嵌 APK,跳过）；
+// 本机目录由环境变量推导，源码不含用户名路径
+const HOME = process.env.USERPROFILE || '';
+const LOCALAPP = process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local');
+const DESKTOP = path.join(HOME, 'Desktop');
 const TARGETS = [
   'dist/installer/package/乒乓对决_安装包/game',
   '%PKG%/game',
-  'C:/Users/ASUS/AppData/Local/PingPongDuel',
-  'C:/Users/ASUS/AppData/Local/Programs/PingPongDuel',
-  'C:/Users/ASUS/Desktop/乒乓对决',
-  'C:/Users/ASUS/Desktop/乒乓对决_安装包/game',
+  path.join(LOCALAPP, 'PingPongDuel'),
+  path.join(LOCALAPP, 'Programs', 'PingPongDuel'),
+  path.join(DESKTOP, '乒乓对决'),
+  path.join(DESKTOP, '乒乓对决_安装包', 'game'),
 ];
 
 let removed = 0;
