@@ -55,6 +55,27 @@ function sanitizeRecord(b) {
   return { id: ts + '_' + Math.random().toString(36).slice(2, 8), name, mode, winner, score: sc, difficulty, ts };
 }
 
+// 审计 M3(2026-08-29):POST /api/records 写入限流（按 CF-Connecting-IP，滚动 60s 窗口）。
+// 与本地 server.js 同策略：DELETE 已有 RECORDS_TOKEN 保护，POST 原本对公网完全开放，
+// 任何人可循环写入，60 条上限(RECORDS_CAP)会被垃圾数据挤满、真实战绩被顶掉。
+// 默认 20 条/分钟/IP；Map 附带过期清理，避免随 IP 数无界增长。
+const RECORDS_POST_LIMIT = 20;
+const recordsPostHits = new Map();
+function recordsPostLimited(request) {
+  const now = Date.now();
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const hits = (recordsPostHits.get(ip) || []).filter((t) => now - t < 60000);
+  if (hits.length >= RECORDS_POST_LIMIT) { recordsPostHits.set(ip, hits); return true; }
+  hits.push(now);
+  recordsPostHits.set(ip, hits);
+  if (recordsPostHits.size > 1000) {
+    for (const [k, v] of recordsPostHits) {
+      if (!v.length || now - v[v.length - 1] > 60000) recordsPostHits.delete(k);
+    }
+  }
+  return false;
+}
+
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -90,6 +111,12 @@ export class GameRoom extends DurableObject {
       return new Response(JSON.stringify({ ok: true, records: list.slice(0, limit) }), { headers: cors });
     }
     if (request.method === 'POST') {
+      // 审计 M3:公网可写接口加限流，防刷垃圾战绩顶掉真实记录（见 recordsPostLimited）
+      if (recordsPostLimited(request)) {
+        return new Response(JSON.stringify({ ok: false, e: '写入过于频繁，请稍后再试' }), {
+          status: 429, headers: Object.assign({ 'Retry-After': '60' }, cors),
+        });
+      }
       let body;
       try { body = await request.json(); } catch (e) {
         return new Response(JSON.stringify({ ok: false, e: 'bad json' }), { status: 400, headers: cors });

@@ -18,10 +18,15 @@
        cd /root/ppd
        bash 部署到ECS.sh
   3. 到「阿里云控制台 → 本实例 → 安全组」→ 添加入方向规则：
-       协议 TCP，端口 8765，授权对象 0.0.0.0/0（所有人可连）
+       协议 TCP，端口 8765
+       授权对象：优先只填玩家所在网段（如 1.2.3.4/32）；确实无法收窄时才用
+                 0.0.0.0/0，并请务必完成下面「六、HTTPS + nginx 反代」，
+                 否则服务器长期明文裸奔、且可被任意第三方网站跨站连入刷房。
 
 三、验证
-  - 本机： curl -s http://127.0.0.1:8765/api/info   （返回 ok 与 IP 列表）
+  - 本机： curl -s http://127.0.0.1:8765/api/info   （返回 ok、版本与局域网 IP 列表）
+  - 外部： curl -s http://ECS公网IP:8765/api/info   （ips 为空数组是预期行为——
+          安全收敛后公网来源不再返回服务器内网 IP，不是故障）
   - 外部： 手机/电脑浏览器打开  http://ECS公网IP:8765
            → 主菜单「创建联机房间」/「加入房间」（4 位房间码）即可对战
 
@@ -38,5 +43,58 @@
   - 外部连不上：99% 是安全组没放行 8765（控制台操作），或系统防火墙。
   - 想换端口：编辑 /etc/systemd/system/pingpong-duel.service 的
     Environment=PORT=8765 后 systemctl restart pingpong-duel，并同步放行新端口。
-  - 换域名/HTTPS：把域名解析到 ECS，用 nginx + certbot 反代 8765（可后续加）。
   - 5Mbps 带宽：每场对局约 0.2Mbps，可支撑 ~20 场同时在线，够用。
+
+六、HTTPS + nginx 反代（强烈推荐，ECS 线路必须）
+   网页版是 https 页面，浏览器禁止它连 ws:// 明文（混合内容，构造即抛错），
+   所以 ECS 线路必须走 wss:// —— 用 nginx 终止 TLS 后反代本机 8765。
+
+   1) 域名解析到 ECS，申请证书：
+        sudo dnf install -y nginx certbot python3-certbot-nginx
+        sudo certbot --nginx -d searchdelta.online
+
+   2) nginx 站点配置（/etc/nginx/conf.d/ppd.conf）：
+        server {
+            listen 443 ssl http2;
+            server_name searchdelta.online;
+            ssl_certificate     /etc/nginx/ssl/searchdelta.online_bundle.crt;
+            ssl_certificate_key /etc/nginx/ssl/searchdelta.online.key;
+
+            location / {
+                proxy_pass http://127.0.0.1:8765;
+                proxy_http_version 1.1;
+                # ★ WebSocket 升级三件套，缺一不可（否则握手 400/立刻断开）
+                proxy_set_header Upgrade    $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                # ★ 必须传原始 Host，server.js 据此做同源判定
+                proxy_set_header Host       $host;
+                # ★ 保留 Origin，不要清空它：server.js 靠它做 CSWSH 防护与白名单放行
+                proxy_set_header Origin     $http_origin;
+                proxy_set_header X-Real-IP  $remote_addr;
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
+            }
+        }
+
+   3) 配置跨源联机白名单（关键，不配就会「拉不了手」）：
+      编辑 /etc/systemd/system/pingpong-duel.service，加入一行：
+        Environment=WS_ALLOWED_ORIGINS=https://searchdelta.online,https://ping-pong-duel.pages.dev
+      然后：
+        sudo systemctl daemon-reload && sudo systemctl restart pingpong-duel
+
+      ★ 为什么必须配：客户端 ECS 线路固定连 wss://searchdelta.online/ws，
+        而玩家很可能是从 Cloudflare 托管的 https://ping-pong-duel.pages.dev
+        打开游戏后再切到 ECS 线路的——此时 Origin 是 pages.dev、Host 是
+        searchdelta.online，二者天然不相等，只按同源判定会在握手阶段就被拒，
+        表现为「联机连不上 / 反复重连」（即"拉不了手"）。
+      ★ 旧的做法是在 nginx 里写 proxy_set_header Origin ""; 来绕过校验，
+        但那等于把 CSWSH 防护整个关掉（任何网站都能连你的服务器刷房），
+        现改为白名单放行，安全与可用性兼得，请一并移除那行配置。
+
+   4) 验证握手（应从 101 变成正常连接）：
+        curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
+             -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+             -H "Origin: https://ping-pong-duel.pages.dev" \
+             https://searchdelta.online/ws
+        期望：HTTP/1.1 101 Switching Protocols（白名单命中 → 放行）
+        若返回连接被立即关闭，说明白名单未生效，检查 systemd 的 Environment 是否已加载。

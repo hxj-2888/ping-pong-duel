@@ -19,6 +19,19 @@ const BROADCAST_HZ = 20; // 快照广播速率：物理仍 60Hz 内部步进，�
 const BROADCAST_MS = 1000 / BROADCAST_HZ; // v2.7.0-fix:50ms：相邻快照间隔（原注释误写 100ms），客户端据此插值平滑
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混 I/L/O/0/1
 
+// 审计 M2(2026-08-29):房间总数上限。全局单 DO(idFromName('global'))承载全部房间，
+// 每个房间持有 engine 对象并每 2s 全量序列化进 DO storage；rooms 原本无容量上限，
+// 攻击者用多 IP/多连接持续 create 即可撑爆单 DO 的内存与存储配额，
+// 影响所有在线对局（全局单实例放大了危害）。正常并发远低于此（2 人 1 房），500 留足余量。
+const MAX_ROOMS = 500;
+
+// 审计 M4(2026-08-29):联机玩家名过滤，与本地 server.js / room.js 的 sanitizeRecord 对齐。
+// 名字随 room / state 广播给对手；HUD 用 textContent 渲染（当前安全），
+// 但不清洗等于把 XSS 载荷存下来广播，未来渲染方式一改就会被引爆。
+function sanitizeName(s, fallback) {
+  return String(s || fallback).replace(/[<>]/g, '').slice(0, 12);
+}
+
 // 校验并规整客户端上报的装扮(联机皮肤同步):只接受白名单 id,防注入。
 // v2.1 特效分离:装扮仅 尾影/溅射 特效;球衣与拍面恒=队服(旗帜队色),球拍/上衣装扮已删除
 function sanitizeSkin(s) {
@@ -156,6 +169,8 @@ export class RoomCore {
   handleCreate(ws, msg, att) {
     if (att.room) return;
     if (this._rateLimited(ws, 'create', 8)) { this.send(ws, { t: 'error', e: '操作过于频繁，请稍后再试' }); return; }
+    // 审计 M2:全局房间数达上限直接拒绝新建（防多 IP 持续 create 撑爆单 DO 内存/存储）
+    if (this.rooms.size >= MAX_ROOMS) { this.send(ws, { t: 'error', e: '服务器繁忙，请稍后再试' }); return; }
     const code = this.newRoomCode();
     // 审计 #13:碰撞耗尽兜底不再回退固定码 'ABCD'(不查重会被 rooms.set 顶掉活房)——
     // 返回 null 时报错重试。50 次碰撞概率≈0,纯防御性分支。
@@ -175,7 +190,7 @@ export class RoomCore {
     };
     room.slots[0] = true;
     room.clients[0] = ws;
-    room.names[0] = String(msg.name || '玩家1').slice(0, 12);
+    room.names[0] = sanitizeName(msg.name, '玩家1');
     room.lastSeen[0] = this._now();
     room.skins[0] = sanitizeSkin(msg.skin);
     this.setAtt(ws, { room: code, side: 0, name: room.names[0] });
@@ -207,7 +222,7 @@ export class RoomCore {
     } else if (room.slots[0] && room.slots[1]) {
       this.send(ws, { t: 'error', e: '房间已满' }); return;
     }
-    const name = String(msg.name || '玩家2').slice(0, 12);
+    const name = sanitizeName(msg.name, '玩家2');
     room.slots[side] = true;
     // 接管被判定为已死的旧连接：主动关闭，避免其后续消息重新挂载干扰
     if (room.clients[side] && room.clients[side] !== ws) {
