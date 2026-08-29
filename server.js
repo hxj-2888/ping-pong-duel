@@ -203,7 +203,9 @@ const server = http.createServer((req, res) => {
 
   if (urlPath === '/') urlPath = '/index.html';
   const filePath = path.normalize(path.join(ROOT, urlPath));
-  if (!filePath.startsWith(ROOT)) {
+  // 审计低危:startsWith(ROOT) 前缀检查可被 "public" 前缀兄弟目录绕过(如 public-evil),
+  // 改用 path.relative 判定是否真正越出根目录
+  if (path.relative(ROOT, filePath).startsWith('..')) {
     res.writeHead(403); res.end('Forbidden'); return;
   }
   fs.readFile(filePath, (err, data) => {
@@ -316,8 +318,10 @@ function newRoomCode() {
     for (let i = 0; i < 4; i++) code += chars[crypto.randomInt(chars.length)];
     if (!rooms.has(code)) return code;
   }
-  return 'ABCD';
-}
+  // 审计 #13:50 次碰撞(31^4≈92 万组合,概率≈0)后不再回退固定码 'ABCD'——
+  // 固定码不查重会被 rooms.set 顶掉活房;返回 null 由 create 报错重试
+  return null;
+  }
 
 function broadcast(room, msg) {
   const data = JSON.stringify(msg);
@@ -390,6 +394,15 @@ function handleMessage(room, client, msg) {
 server.on('upgrade', (req, socket) => {
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
+  // 审计低危:WS 升级无 Origin 校验(CSWSH)——恶意网页可跨站发起 WebSocket 连本地服务器刷房。
+  // 规则:浏览器同源页面 Origin 须与 Host 头同 host;安卓 APK(file:// 页面)的 Origin 为
+  // file:/null、curl 等非浏览器客户端无 Origin,一律放行——不影响局域网联机与安卓端。
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null' && !/^file:/i.test(origin)) {
+    let ohost = null;
+    try { ohost = new URL(origin).host; } catch (e) { /* 非法 Origin 视为不匹配 */ }
+    if (ohost !== req.headers.host) { socket.destroy(); return; }
+  }
   const accept = crypto.createHash('sha1')
     .update(key + WS_GUID).digest('base64');
   socket.write(
@@ -402,7 +415,7 @@ server.on('upgrade', (req, socket) => {
   // 攒批会额外增加最多 ~40ms 延迟（公网明显）；实时游戏宁可多发小包也不要延迟。
   try { socket.setNoDelay(true); } catch (e) { /* ignore */ }
 
-  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), alive: true, lastSeen: Date.now(), lastInputAt: Date.now(), lastInSeq: 0, fragState: { fragOp: -1, fragParts: [] } };
+  const client = { ws: socket, room: null, side: -1, name: '', buf: Buffer.alloc(0), lastSeen: Date.now(), lastInputAt: Date.now(), lastInSeq: 0, fragState: { fragOp: -1, fragParts: [] } };
   socket.on('data', (chunk) => {
     // 审计 #6:任何数据到达都视为连接存活(僵尸清扫据此判定失联)
     client.lastSeen = Date.now();
@@ -436,7 +449,6 @@ server.on('upgrade', (req, socket) => {
   });
   socket.on('error', () => { /* ignore */ });
   socket.on('close', () => {
-    client.alive = false;
     // 审计 #6:断线不立即释放席位、不通知对手——进入重连宽限期(镜像 room-core handleClose):
     // 席位保留、名字保留,玩家宽限期内重连(带 side)对局无缝恢复;宽限到期由清扫器释放并
     // 通知对手,避免一次网络抖动就把整局打崩成"对手已离开"。
@@ -444,14 +456,34 @@ server.on('upgrade', (req, socket) => {
   });
 });
 
+// 审计 #13:create/join 无速率限制 → 公网/局域网可枚举房间码、刷房占资源。
+// 按连接限速(滚动 60s 窗口):create ≤8 次、join ≤30 次——正常客户端(含断线重连、
+// 本地测试脚本)远低于此,超限多为枚举/刷房行为,拒绝并提示。DO 侧 room-core 有镜像
+// 实现 _rateLimited,两端语义一致。
+function rateLimited(client, kind, limit) {
+  const now = Date.now();
+  const rec = client.msgRate || (client.msgRate = {});
+  rec[kind] = (rec[kind] || []).filter((t) => now - t < 60000);
+  if (rec[kind].length >= limit) return true;
+  rec[kind].push(now);
+  return false;
+}
+
 function handleClientMessage(client, msg) {
   if (msg.t === 'create') {
     stats.create++;
+    if (rateLimited(client, 'create', 8)) {
+      send(client, { t: 'error', e: '操作过于频繁，请稍后再试' });
+      return;
+    }
     // 审计 #2:连接先建房 A 再 create/join 房 B → 房 A 的 room.clients 残留引用永不清理
     // (主循环只删双空房,A 永久 60Hz 空转;且同 ws 同时收 A、B 两个房间广播互相污染)。
     // 进入任何新房前先退出旧房(与 room-core 对齐)。
     if (client.room) leaveRoom(client);
     const code = newRoomCode();
+    // 审计 #13:碰撞耗尽兜底不再回退固定码 'ABCD'(不查重会被 rooms.set 顶掉活房,
+    // 原房间双方卡死)——返回 null 时报错重试。50 次碰撞概率≈0,纯防御性分支。
+    if (!code) { send(client, { t: 'error', e: '创建失败，请重试' }); return; }
     const room = {
       code,
       engine: TT.createEngine(),
@@ -472,6 +504,10 @@ function handleClientMessage(client, msg) {
   }
   if (msg.t === 'join') {
     stats.join++;
+    if (rateLimited(client, 'join', 30)) {
+      send(client, { t: 'error', e: '操作过于频繁，请稍后再试' });
+      return;
+    }
     // 审计 #2:同上,先退旧房再进新房,防房间永久泄漏与双房间广播互相污染
     if (client.room) leaveRoom(client);
     const code = String(msg.room || '').toUpperCase().trim();
