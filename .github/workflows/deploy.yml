@@ -64,9 +64,12 @@ jobs:
           command: pages deploy public --project-name=ping-pong-duel --branch=main --commit-hash=${{ github.sha }}
 
   # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
+  # 需要 Token 含 Account → Workers Scripts → Edit 权限；只有 Pages 权限的 Token 会在此失败，
+  # 设为 continue-on-error：静态站/下载照常部署，Worker 更新需手动或升级 Token 权限后重跑。
   deploy-room:
     name: Deploy game-room Worker
     needs: check
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
