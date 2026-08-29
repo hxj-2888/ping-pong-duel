@@ -398,6 +398,7 @@ export class RoomCore {
         engine: room.engine,
         slots: room.slots,
         names: room.names,
+        skins: room.skins, // 联机皮肤随房间持久化（restore 不补会丢装扮）
         lastSnap: room.lastSnap,
         lastStep: room.lastStep,
       });
@@ -417,6 +418,9 @@ export class RoomCore {
         slots: r.slots,
         clients: [null, null],
         names: r.names || ['', ''],
+        // skins 必须兜底初始化：旧格式存档/字段缺失时 handleJoin 写 room.skins[side] 会 TypeError，
+        // 表现为"DO 驱逐恢复后加入房间即失败"（2026-08-29 修复，do-persist 覆盖）
+        skins: r.skins || [null, null],
         lastSnap: r.lastSnap || '',
         lastStep: r.lastStep || 0,
         lastSeen: [now, now], // 从当前时刻起算活跃：避免清扫器误杀恢复中的孤儿连接

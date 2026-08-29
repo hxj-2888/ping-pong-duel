@@ -42,6 +42,20 @@ jobs:
           node --check server.js
           node --check desktop-launcher.js
 
+      # 本地可跑的测试套件（无外网依赖：本地起服 / 纯逻辑 / 桩）——联网冒烟类（ws-live 等）不进 CI
+      - name: Run local test suite
+        run: |
+          for t in net-test http-robustness-test join-wait-test records-test restart-persist seq-test \
+                   ws-frame-limit-test ws-reconnect-test ws-skin-test broadcast-floor-test lan-path-test \
+                   engine-stress physics-boundary-test ai-test crowd-anim-cache-test crowd-anim-cycle-test \
+                   crowd-count-consistency-test crowd-resize-consistency-test crowd-team-consistency-test \
+                   smash-counter-test serve-deadzone-test replay-codec-test training-test input-mask-test \
+                   do-smoke do-alarm do-persist net-retry-test serve-path-online browser-smoke; do
+            echo "::group::test/$t.js"
+            node "test/$t.js"
+            echo "::endgroup::"
+          done
+
   # ===== CI 打包最新版 APK =====
   build-apk:
     name: Build APK
