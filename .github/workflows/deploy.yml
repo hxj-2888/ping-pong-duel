@@ -113,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PingPongDuel-apk
-          path: PingPongDuel.apk
+          path: android/PingPongDuel.apk
           if-no-files-found: error
 
   # ===== Cloudflare Pages 静态站（public/，生产分支 main）=====
@@ -161,13 +161,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: PingPongDuel-apk
-          path: .
+          path: android/
 
       - name: Upload to Release v3.0.0 (clobber)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mv PingPongDuel.apk PingPongDuel-v300.apk
+          mv android/PingPongDuel.apk PingPongDuel-v300.apk
           gh release upload v3.0.0 PingPongDuel-v300.apk --repo "${{ github.repository }}" --clobber
 
   # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
