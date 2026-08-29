@@ -17,12 +17,24 @@ const RECORDS_CAP = 60; // 个人生涯：后端留最近 60 条战绩
 // v2.7.0-fix:Alarm 安全 tick 间隔 100→50（v2.7 从 v2.1 的 50 改大到 100，空闲期广播地板掉到 10Hz，
 // 是公网实测快照率 11.5~18Hz 低于设计 20Hz 的成因之一）；恢复 50ms 保 20Hz 数据流地板
 const ALARM_MS = 50;
+// 安全上限（审计 2026-08-29）：
+//   - 单 IP 并发连接 ≤8（防单点连接洪水挤占全局单 DO）
+//   - 单连接消息速率：突发 400 条、持续 120 条/秒（正常客户端输入 ≤60Hz，只打击滥用）
+const MAX_SOCKETS_PER_IP = 8;
+const RATE_CAP = 400;
+const RATE_REFILL_PER_SEC = 120;
+
+// 诊断日志里的 4 位房间码统一脱敏：/api/diag 公开可读（审计 M1），
+// 排障需要的形状信息（事件类型/side/数量）保留，房间码一律打码
+function maskCodes(s) {
+  return s.replace(/room=[A-Z0-9]{4}/g, 'room=****').replace(/\b[A-Z0-9]{4}(?=#)/g, '****');
+}
 
 // 追加诊断日志（最多 50 条）
 async function diag(ctx, s) {
   try {
     const arr = (await ctx.storage.get(DIAG_KEY)) || [];
-    arr.push(Date.now() + ' ' + s);
+    arr.push(maskCodes(Date.now() + ' ' + s));
     if (arr.length > 50) arr.splice(0, arr.length - 50);
     await ctx.storage.put(DIAG_KEY, arr);
   } catch (e) { /* ignore */ }
@@ -68,7 +80,8 @@ export class GameRoom extends DurableObject {
       return new Response(JSON.stringify({ ok: false, e: 'not found' }), { status: 404, headers: cors });
     }
     if (url.pathname === '/api/diag') {
-      const arr = (await this.ctx.storage.get(DIAG_KEY)) || [];
+      // 读取时再脱敏一次：历史版本写入的条目可能仍含房间码
+      const arr = ((await this.ctx.storage.get(DIAG_KEY)) || []).map(maskCodes);
       return new Response(JSON.stringify({ ok: true, diag: arr }), { headers: cors });
     }
     if (request.method === 'GET') {
@@ -178,15 +191,43 @@ export class GameRoom extends DurableObject {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    // 单 IP 并发连接上限（审计 M2）：全局单 DO，防单点连接洪水
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    let perIp = 0;
+    for (const s of this.ctx.getWebSockets()) {
+      try {
+        const a = s.deserializeAttachment ? s.deserializeAttachment() : null;
+        if (a && a.ip === ip) perIp++;
+      } catch (e) { /* 附件缺失按不计入 */ }
+    }
+    if (perIp >= MAX_SOCKETS_PER_IP) {
+      return new Response('too many connections from this IP', { status: 429 });
+    }
     // 用 Hibernation API 接受连接：空闲可休眠，不钉住 DO 计费
     this.ctx.acceptWebSocket(server);
     // 初始无归属（create/join 后由 webSocketMessage 设置 attachment）
-    server.serializeAttachment({ room: null, side: -1, name: '' });
+    server.serializeAttachment({ room: null, side: -1, name: '', ip });
     return new Response(null, { status: 101, webSocket: client });
   }
 
   // ---------- 消息处理（委托 RoomCore） ----------
   async webSocketMessage(ws, raw) {
+    // 消息速率上限（审计 M2）：令牌桶，突发 400 / 持续 120 条每秒；超限直接断开（1008 策略违规）。
+    // 限流状态放内存 WeakMap——休眠唤醒后重置，滥用者重新积累也只有突发额度。
+    if (!this._rate) this._rate = new WeakMap();
+    const now = Date.now();
+    let bucket = this._rate.get(ws);
+    if (!bucket) {
+      bucket = { tokens: RATE_CAP, ts: now };
+      this._rate.set(ws, bucket);
+    }
+    bucket.tokens = Math.min(RATE_CAP, bucket.tokens + ((now - bucket.ts) / 1000) * RATE_REFILL_PER_SEC);
+    bucket.ts = now;
+    if (bucket.tokens < 1) {
+      try { ws.close(1008, 'rate limit'); } catch (e) { /* already closed */ }
+      return;
+    }
+    bucket.tokens -= 1;
     await this._load();
     const att = ws.deserializeAttachment() || {};
     const notes = this.core.handleMessage(ws, raw, att) || [];

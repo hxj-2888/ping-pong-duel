@@ -38,9 +38,17 @@ Get-ChildItem -Path $stage -File -Force | ForEach-Object {
 $leak = Get-ChildItem -Path $stage -Recurse -File -Force |
   Where-Object { $_.Name -match '\.(png|wav|mp4|apk|keystore|jks|key|pem|ico|zip|log)$' }
 if ($leak) { Write-Host ('ERR: binary/resource files left: ' + ($leak.FullName -join ', ')); exit 1 }
-$leakText = Get-ChildItem -Path $stage -Recurse -File -Force |
-  Select-String -Pattern 'hexiangjie694|@gmail\.com'
-if ($leakText) { Write-Host ('ERR: personal info found: ' + (($leakText | ForEach-Object { $_.Path + ':' + $_.LineNumber }) -join ', ')); exit 1 }
+# personal-info scan patterns come from an optional external file (one regex per line),
+# so this repo never embeds the very strings it is scanning for
+$patternFile = Join-Path $env:USERPROFILE '.ppd_leak_patterns.txt'
+if (Test-Path $patternFile) {
+  $patterns = Get-Content $patternFile -ErrorAction SilentlyContinue | Where-Object { $_.Trim() }
+  if ($patterns) {
+    $leakText = Get-ChildItem -Path $stage -Recurse -File -Force |
+      Select-String -Pattern $patterns
+    if ($leakText) { Write-Host ('ERR: personal info found: ' + (($leakText | ForEach-Object { $_.Path + ':' + $_.LineNumber }) -join ', ')); exit 1 }
+  }
+}
 
 # 5) pack (.NET ZipFile; entry names use '/' separators)
 if (Test-Path $out) { Remove-Item $out -Force }
