@@ -75,9 +75,15 @@ echo [6/7] zipalign...
 echo [7/7] sign...
 rem Persistent keystore (android\release.keystore): same signature every build,
 rem so users can install over old versions without uninstalling.
-rem Passwords must NOT be hardcoded: read from env KEYSTORE_PASS / KEY_PASS,
-rem prompted if unset. If this keystore was ever distributed, treat it as leaked;
+rem Passwords must NOT be hardcoded: read from gitignored root .env (KEYSTORE_PASS / KEY_PASS),
+rem then env, then prompted. If this keystore was ever distributed, treat it as leaked;
 rem delete release.keystore and rebuild with a new password (users reinstall).
+if "%KEYSTORE_PASS%"=="" for /f "usebackq tokens=1,* delims==" %%a in ("%~dp0..\.env") do (
+  if /i "%%a"=="KEYSTORE_PASS" set "KEYSTORE_PASS=%%b"
+)
+if "%KEY_PASS%"=="" for /f "usebackq tokens=1,* delims==" %%a in ("%~dp0..\.env") do (
+  if /i "%%a"=="KEY_PASS" set "KEY_PASS=%%b"
+)
 if "%KEYSTORE_PASS%"=="" set /p KEYSTORE_PASS=Keystore pass (KEYSTORE_PASS):
 if "%KEY_PASS%"=="" set /p KEY_PASS=Key pass (KEY_PASS):
 if not exist "%~dp0release.keystore" (
