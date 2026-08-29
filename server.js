@@ -30,6 +30,26 @@ const WS_MAX_FRAME = 64 * 1024;
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 15 * 1000;
 const ZOMBIE_MS = Number(process.env.ZOMBIE_MS) || 30 * 1000;
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+// 跨源联机白名单（ECS 对齐真实游戏接口，2026-08-29）：
+// 客户端的 ECS 线路地址固定为 wss://searchdelta.online/ws（见 state.js getServerUrl），
+// 而玩家很可能是从 Cloudflare 托管的页面 https://ping-pong-duel.pages.dev 打开游戏后再
+// 切到 ECS 线路的——此时 Origin 是 pages.dev、Host 是 searchdelta.online，
+// 二者天然不相等。若只按"Origin.host === Host"校验，这类跨源联机会在握手阶段就被
+// socket.destroy()，表现为「联机拉不了手（握手失败/反复重连）」。
+// 此前 ECS 上的临时解法是在 nginx 里 proxy_set_header Origin ""（清空 Origin 绕过校验），
+// 但那会一并废掉 CSWSH 防护（任何网站都能连你的服务器刷房），故改为显式白名单：
+// 在 ECS 上配置 WS_ALLOWED_ORIGINS 列出所有合法的联机页面来源即可，安全与可用性兼得。
+// 例：Environment=WS_ALLOWED_ORIGINS=https://searchdelta.online,https://ping-pong-duel.pages.dev
+// 条目可写完整 origin（https://a.com）也可只写主机（a.com / a.com:8080），
+// 内部统一归一成 host 再比对（URL.host 不含协议与端口以外的部分）。
+const WS_ALLOWED_ORIGINS = String(process.env.WS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => {
+    const t = s.trim().toLowerCase();
+    if (!t) return '';
+    try { return new URL(t).host; } catch (e) { return t; } // 无协议的裸主机名：原样保留
+  })
+  .filter(Boolean);
 // 协议版本：客户端/桌面启动器据此识别"旧服务器"（旧版不解析 k 位掩码输入，
 // 会导致客户端连上但输入全部被丢弃 → 进房后双方卡死）。版本号取 package.json + -local。
 const VERSION = require('./package.json').version + '-local';
@@ -61,6 +81,19 @@ function localIfaces() {
     }
   } catch (e) { /* ignore */ }
   return out;
+}
+
+// 审计 2026-08-29（M5 修复）：判定请求是否来自本机/局域网（私有地址段）。
+// /api/info 会返回服务器全部非回环 IPv4（含内网 IP 与 Radmin VPN 虚拟网卡地址）。
+// 公网部署场景（ECS 8765 + 安全组 0.0.0.0/0）下，任何人访问该接口即可拿到内网拓扑。
+// 判定取 Host 头与 socket 远端地址二者之一：经 nginx 反代时 remoteAddress 恒为 127.0.0.1，
+// 只看远端地址会把公网请求误判为内网，因此必须以 Host 头为准。
+function isPrivateRequester(req) {
+  const PRIVATE = /^(127\.|::1$|localhost$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/;
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+  if (host && PRIVATE.test(host)) return true;
+  const ra = String((req.socket && req.socket.remoteAddress) || '').toLowerCase().replace(/^::ffff:/, '');
+  return PRIVATE.test(ra);
 }
 
 // 诊断统计：每 10s 打印一次（有活动才打印），排查"进房卡死"时确认输入到底有没有到达服务器
@@ -99,6 +132,14 @@ function sanitizeRecord(b) {
 
 // 校验并规整客户端上报的装扮(联机皮肤同步):只接受白名单 id,防注入。
 // v2.1 特效分离:装扮仅 尾影/溅射 特效;球衣与拍面恒=队服(旗帜队色),球拍/上衣装扮已删除
+// 审计 M4(2026-08-29):联机玩家名过滤，与 sanitizeRecord 及公网 DO 端(room-core.js)对齐。
+// 联机名字会随 room / state 广播给对手；HUD 当前用 textContent 渲染（安全），
+// 但名字不清洗等于把 XSS 载荷存下来广播，未来渲染方式一改就会被引爆。
+// 与战绩名一致剔除 < > 并截断 12 字符（联机名上限比战绩名的 20 更严）。
+function sanitizeName(s, fallback) {
+  return String(s || fallback).replace(/[<>]/g, '').slice(0, 12);
+}
+
 function sanitizeSkin(s) {
   if (!s || typeof s !== 'object') return null;
   const ok = { trail: null, splash: false };
@@ -117,6 +158,29 @@ function saveRecords(list) {
     fs.writeFileSync(tmp, JSON.stringify(list, null, 1), 'utf8');
     fs.renameSync(tmp, RECORDS_FILE);
   } catch (e) { /* ignore */ }
+}
+
+// 审计 M3(2026-08-29):POST /api/records 写入限流（按来源 IP，滚动 60s 窗口）。
+// DELETE 已有 RECORDS_TOKEN 保护（未配置则拒绝），但 POST 原本完全无鉴权：
+// 任何人可循环写入，60 条上限(RECORDS_CAP)会被垃圾数据挤满、真实战绩被顶掉。
+// 默认 20 条/分钟/IP（正常玩家一局才写 1 条，绰绰有余）；
+// 设为 0 关闭限流（纯内网联机/本地调试场景）。Map 附带过期清理，避免随 IP 数无界增长。
+const RECORDS_POST_LIMIT = Number(process.env.RECORDS_POST_LIMIT ?? 20);
+const recordsPostHits = new Map();
+function recordsPostLimited(req) {
+  if (!RECORDS_POST_LIMIT) return false;
+  const now = Date.now();
+  const ip = String((req.socket && req.socket.remoteAddress) || 'unknown');
+  const hits = (recordsPostHits.get(ip) || []).filter((t) => now - t < 60000);
+  if (hits.length >= RECORDS_POST_LIMIT) { recordsPostHits.set(ip, hits); return true; }
+  hits.push(now);
+  recordsPostHits.set(ip, hits);
+  if (recordsPostHits.size > 1000) {
+    for (const [k, v] of recordsPostHits) {
+      if (!v.length || now - v[v.length - 1] > 60000) recordsPostHits.delete(k);
+    }
+  }
+  return false;
 }
 
 // ---------- 静态文件 ----------
@@ -142,7 +206,10 @@ const server = http.createServer((req, res) => {
     });
     // ★ 安全收敛: 不再返回 hostname(含 Windows 用户名) 与完整网卡清单(ifaces)，
     //   仅保留客户端房主面板必需的 ips + port，减少内网拓扑与个人身份泄露面
-    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: localIps() }));
+    // ★ 审计 M5(2026-08-29):公网来源不再返回局域网 IP——房主面板只在本地/局域网场景
+    //   才需要展示"对方请打开 http://IP:端口"，公网部署一律返回空列表
+    //   （客户端已有降级：空列表显示"未检测到局域网地址"提示，且公网模式本就不显示该面板）。
+    res.end(JSON.stringify({ ok: true, version: VERSION, port: PORT, ips: isPrivateRequester(req) ? localIps() : [] }));
     return;
   }
 
@@ -163,6 +230,12 @@ const server = http.createServer((req, res) => {
       return;
     }
     if (req.method === 'POST') {
+      // 审计 M3:公网可写接口加限流，防刷垃圾战绩顶掉真实记录（见 recordsPostLimited）
+      if (recordsPostLimited(req)) {
+        res.writeHead(429, Object.assign({ 'Retry-After': '60' }, cors));
+        res.end(JSON.stringify({ ok: false, e: '写入过于频繁，请稍后再试' }));
+        return;
+      }
       let raw = '';
       req.on('data', (c) => { raw += c; if (raw.length > 8192) req.destroy(); });
       req.on('end', () => {
@@ -403,7 +476,16 @@ server.on('upgrade', (req, socket) => {
   if (origin && origin !== 'null' && !/^file:/i.test(origin)) {
     let ohost = null;
     try { ohost = new URL(origin).host; } catch (e) { /* 非法 Origin 视为不匹配 */ }
-    if (ohost !== req.headers.host) { socket.destroy(); return; }
+    // 放行条件（满足其一）：
+    //   1) 同源：Origin.host === Host（玩家直接打开本服务器页面，最常见场景）
+    //   2) 白名单：Origin.host 在 WS_ALLOWED_ORIGINS 中（网页版托管在别的域名、跨源连本机）
+    // 未命中一律断开——保留 CSWSH 防护，杜绝任意网站跨站连本地服务器刷房。
+    const ohostL = ohost ? ohost.toLowerCase() : '';
+    const hostL = String(req.headers.host || '').toLowerCase();
+    if (!ohostL || (ohostL !== hostL && !WS_ALLOWED_ORIGINS.includes(ohostL))) {
+      socket.destroy();
+      return;
+    }
   }
   const accept = crypto.createHash('sha1')
     .update(key + WS_GUID).digest('base64');
@@ -497,7 +579,7 @@ function handleClientMessage(client, msg) {
       lastTick: 0,
     };
     rooms.set(code, room);
-    client.room = room; client.side = 0; client.name = String(msg.name || '玩家1').slice(0, 12);
+    client.room = room; client.side = 0; client.name = sanitizeName(msg.name, '玩家1');
     room.clients[0] = client;
     room.lastSeen[0] = Date.now();
     room.skins[0] = sanitizeSkin(msg.skin);
@@ -534,7 +616,7 @@ function handleClientMessage(client, msg) {
       send(client, { t: 'error', e: '房间已满' });
       return;
     }
-    client.room = room; client.name = String(msg.name || '玩家2').slice(0, 12);
+    client.room = room; client.name = sanitizeName(msg.name, '玩家2');
     // 优先落位到请求的 side(接管成功则空出);否则按现有占位分配
     client.side = (wantSide >= 0 && !room.clients[wantSide]) ? wantSide : (room.clients[0] ? 1 : 0);
     room.clients[client.side] = client;
