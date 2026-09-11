@@ -214,10 +214,19 @@ jobs:
 
       # ★ 必须校验响应体真的是 APK：文件缺失时 SPA 回退会返回 200 + HTML，
       #   仅用 curl -f 只看状态码，历史上因此长期漏检（下载按钮指向网页）。
+      #   刚部署完 CDN 边缘尚未收敛，故带重试。
       - name: APK 直链（校验确为 APK，而非 SPA 回退 HTML）
         run: |
-          curl -fsSL --max-time 60 -r 0-511 "https://ping-pong-duel.pages.dev/PingPongDuel-v301.apk" -o /tmp/apk-head.bin
-          if [ "$(head -c 2 /tmp/apk-head.bin)" != "PK" ]; then
-            echo "APK 直链未返回 APK（拿到的是 SPA 回退 HTML）"; exit 1
-          fi
-          echo "APK 直链正常（PK 头校验通过）"; ls -l /tmp/apk-head.bin
+          url="https://ping-pong-duel.pages.dev/PingPongDuel-v301.apk"
+          for i in $(seq 1 12); do
+            if curl -fsSL --max-time 30 -H 'Cache-Control: no-cache' -r 0-511 "$url" -o /tmp/apk-head.bin \
+               && [ "$(head -c 2 /tmp/apk-head.bin)" = "PK" ]; then
+              echo "APK 直链正常（PK 头校验通过，第 $i 次尝试）"
+              ls -l /tmp/apk-head.bin
+              exit 0
+            fi
+            echo "第 $i 次未就绪（CDN 传播中），10s 后重试"
+            sleep 10
+          done
+          echo "APK 直链未返回 APK（拿到的是 SPA 回退 HTML）"
+          exit 1
