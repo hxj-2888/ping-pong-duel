@@ -58,16 +58,146 @@
     if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
   }
   PPD.closeNetPanel = closeNetPanel;
+
+  // ---------- 一级主行动按钮（G1/G3）：无战局保留系统，用“快速开始” ----------
+  // 副标题实时显示当前局前配置摘要（模式 · 队伍 · 难度），随局前设置区联动。
+  // 点击行为与「自定义常规单机」一致（复用 PPD.startAI），不新增系统。
+  function setupConfigSummary() {
+    let team = '';
+    const nameInput = PPD.ui.teamMeName;
+    if (nameInput && nameInput.value.trim()) team = nameInput.value.trim();
+    else if (PPD.ui.teamMe && PPD.ui.teamMe.selectedIndex >= 0) {
+      team = PPD.ui.teamMe.options[PPD.ui.teamMe.selectedIndex].textContent || '';
+    }
+    let diff = '';
+    if (PPD.ui.aiLevel && PPD.ui.aiLevel.selectedIndex >= 0) {
+      diff = PPD.ui.aiLevel.options[PPD.ui.aiLevel.selectedIndex].textContent || '';
+    }
+    return { team: team || '我的队伍', diff: diff || '中等' };
+  }
+  function refreshPrimaryAction() {
+    if (!PPD.ui.primaryActionText) return;
+    // G1：固定为“快速开始”——不使用暗示存档的“继续/恢复/载入”措辞
+    PPD.ui.primaryActionText.textContent = '快速开始';
+    if (PPD.ui.primaryActionDesc) {
+      const c = setupConfigSummary();
+      PPD.ui.primaryActionDesc.textContent = '常规单机 · ' + c.team + ' · ' + c.diff;
+    }
+  }
+  if (PPD.ui.btnPrimaryAction) {
+    PPD.ui.btnPrimaryAction.addEventListener('click', () => {
+      PPD.GameAudio.ensure();
+      PPD.GameAudio.ui();
+      PPD.startAI(); // 直接使用当前局前配置开局，不跳二次确认页
+    });
+  }
+
+  // ---------- 局前设置（G3）：默认折叠为一行可点摘要，改动实时同步主按钮副标题 ----------
+  function refreshSetupSummary() {
+    const el = PPD.ui.setupSummaryText;
+    if (!el) return;
+    const c = setupConfigSummary();
+    el.innerHTML = '我的队伍 <b>' + c.team + '</b> · <b>' + c.diff + '难度</b> · 修改';
+  }
+  if (PPD.ui.btnSetupToggle && PPD.ui.setupGroup) {
+    PPD.ui.btnSetupToggle.addEventListener('click', () => {
+      const open = PPD.ui.btnSetupToggle.getAttribute('aria-expanded') === 'true';
+      PPD.ui.btnSetupToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      if (open) PPD.ui.setupGroup.setAttribute('hidden', '');
+      else PPD.ui.setupGroup.removeAttribute('hidden');
+    });
+    // 摘要与主按钮副标题随队伍/难度/队名变化实时刷新
+    [PPD.ui.teamMe, PPD.ui.aiLevel, PPD.ui.teamMeName].forEach((elx) => {
+      if (!elx) return;
+      elx.addEventListener('change', () => { refreshSetupSummary(); refreshPrimaryAction(); });
+      elx.addEventListener('input', () => { refreshSetupSummary(); refreshPrimaryAction(); });
+    });
+    refreshSetupSummary();
+  }
+  PPD.refreshPrimaryAction = refreshPrimaryAction;
+  PPD.refreshSetupSummary = refreshSetupSummary;
+
+  // ---------- E3 统一控件 ----------
+  // ② 滑条：把当前值写进 --val，驱动轨道“左侧主色填充 / 右侧 20% 白”
+  function syncRangeFill(el) {
+    if (!el || el.type !== 'range') return;
+    const min = Number(el.min) || 0;
+    const max = Number(el.max) || 100;
+    const v = Number(el.value) || 0;
+    const pct = max > min ? ((v - min) / (max - min)) * 100 : 0;
+    el.style.setProperty('--val', String(pct));
+  }
+  PPD.syncRangeFill = syncRangeFill;
+  // 全站滑条：交互时同步填充与右侧数值（一次委托，覆盖设置页与暂停面板）
+  // 事件委托依赖 document.addEventListener；无该能力的宿主（如测试沙箱）自动跳过。
+  if (document && typeof document.addEventListener === 'function') {
+    document.addEventListener('input', (ev) => {
+      const el = ev.target;
+      if (!el || el.type !== 'range') return;
+      syncRangeFill(el);
+      const row = el.closest ? el.closest('.tune-row') : null;
+      const out = row ? row.querySelector('b') : null;
+      if (out) {
+        const isMultiplier = (out.textContent || '').indexOf('×') === 0;
+        out.textContent = isMultiplier ? '×' + (Number(el.value) / 100).toFixed(2) : el.value + '%';
+      }
+    }, true);
+  }
+  function initRangeFills(root) {
+    (root || document).querySelectorAll('input[type="range"]').forEach(syncRangeFill);
+  }
+  PPD.initRangeFills = initRangeFills;
+
+  // ③ 分段选择器：由既有 <select> 的选项生成，双向同步；原 select 保留供既有逻辑读写
+  function buildSegmented() {
+    document.querySelectorAll('.segmented-host').forEach((host) => {
+      const id = host.getAttribute('data-segmented-for');
+      const sel = document.getElementById(id);
+      if (!sel || host.dataset.built) return;
+      host.dataset.built = '1';
+      const seg = document.createElement('span');
+      seg.className = 'segmented';
+      const render = () => {
+        seg.innerHTML = '';
+        Array.from(sel.options).forEach((opt) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'seg-btn' + (opt.value === sel.value ? ' active' : '');
+          // 段标签取选项文字首段（去掉括号补充），保持控件紧凑
+          b.textContent = String(opt.textContent || '').replace(/（[^）]*）/g, '').trim() || opt.value;
+          b.addEventListener('click', () => {
+            if (sel.value === opt.value) return;
+            sel.value = opt.value;
+            // 走既有 change 监听：画质/帧率的应用逻辑完全复用，未新增系统
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            render();
+          });
+          seg.appendChild(b);
+        });
+      };
+      render();
+      host.appendChild(seg);
+      sel.addEventListener('change', render); // 外部回填 value 时同步选中态
+    });
+  }
+  buildSegmented();
+  PPD.buildSegmented = buildSegmented;
+
   // ---------- 无尽人机：主页入口 / 关卡页 / AI 观战动态选项 ----------
+  // 仅更新按钮的文案子节点（.btn-main），保留图标与功能说明。
+  function setBtnAIText(text) {
+    const el = PPD.ui.btnAI;
+    const main = el.querySelector ? el.querySelector('.btn-main') : null;
+    if (main) main.textContent = text;
+    else el.textContent = text; // 兜底：结构异常时按旧行为整体替换
+  }
   function refreshAIEntries() {
     if (!PPD.ui.btnAI) return;
-    if (PPD.isHellCleared()) {
-      PPD.ui.btnAI.textContent = '常规单机';
-      if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, true);
-    } else {
-      PPD.ui.btnAI.textContent = '人机对战（单机）';
-      if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, false);
-    }
+    // G2：主按钮已是常规单机的主入口，此处固定为“自定义常规单机”以明确两者差异
+    setBtnAIText('自定义常规单机');
+    if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, PPD.isHellCleared());
+    refreshPrimaryAction();
+    refreshSetupSummary();
   }
 
   function syncEndlessAIOptions() {
@@ -479,6 +609,8 @@
   // 主页滚动已改用浏览器原生滚动条（自定义右端滑动条已移除，见修改记录四十五）
 
   // ---------- 启动 ----------
+  // 滑条填充初值（E3②）：轨道左侧主色填充需 --val，页面打开时先同步一次
+  initRangeFills();
   // 各难度下拉的地狱选项：按解锁状态全量同步（人机 + AI 观战主页/暂停面板）
   PPD.syncHellOptions();
   if (PPD.syncHitRangeToggle) PPD.syncHitRangeToggle(); // v2.4：判定范围虚线解锁态同步（设置面板勾选框禁用）

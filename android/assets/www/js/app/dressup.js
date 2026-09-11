@@ -106,9 +106,24 @@
   }
 
   // ---------- 渲染 ----------
-  function shopItem(nameHtml, btnHtml) {
-    return '<div class="s-item"><div class="t-info">' + nameHtml + '</div><span class="t-btns">' + btnHtml + '</span></div>';
+  // 预览区（E5①/F2①）：尾影用渐变色条示意，溅射用粒子缩略图
+  function previewHtml(kind, id) {
+    const cls = kind === 'splash' ? 'item-preview splash' : 'item-preview trail-' + id;
+    return '<span class="' + cls + '" aria-hidden="true"></span>';
   }
+  // 行卡片：预览 + 主信息 + 右侧操作；状态标记由 stateCls/badge 注入（E4）
+  function shopItem(preview, nameHtml, btnHtml, stateCls, badgeHtml, lockHtml) {
+    return '<div class="s-item state-mark' + (stateCls || '') + '">'
+      + (badgeHtml || '')
+      + preview
+      + '<div class="t-info">' + nameHtml + '</div>'
+      + '<span class="t-btns">' + (lockHtml || '') + btnHtml + '</span>'
+      + '</div>';
+  }
+  const LOCK_ICO = '<span class="lock-ico" aria-hidden="true">'
+    + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    + '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>';
   function ownedItemBtn(type, id, equipped) {
     return equipped
       ? '<button class="btn small" data-action="unequip" data-type="' + type + '">已装配(卸下)</button>'
@@ -121,26 +136,41 @@
     const o = PPD.app.owned, eq = PPD.app.equip;
     const trailHtml = TRAILS.map((x) => {
       const has = (o.trail || []).includes(x.id);
-      return has
-        ? shopItem('<b>' + esc(x.name) + '</b> <span class="t-owned">持有</span>', ownedItemBtn('trail', x.id, eq.trail === x.id))
-        : shopItem('<b>' + esc(x.name) + '</b>', '<button class="btn small" data-action="own" data-type="trail" data-id="' + x.id + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>');
+      if (!has) {
+        // 未持有（E4④）：信息区压暗 + 锁图标 + 悬停提示，兑换入口保持可用
+        return shopItem(previewHtml('trail', x.id), '<b>' + esc(x.name) + '</b>',
+          '<button class="btn small" data-action="own" data-type="trail" data-id="' + x.id
+          + '" data-cost="' + x.cost + '">兑换 ' + x.cost + '</button>',
+          ' state-locked', '', LOCK_ICO + '<span class="lock-hint">兑换后可使用</span>');
+      }
+      const isOn = eq.trail === x.id;
+      return shopItem(previewHtml('trail', x.id),
+        '<b>' + esc(x.name) + '</b>',
+        ownedItemBtn('trail', x.id, isOn),
+        isOn ? ' state-active' : ' state-owned',
+        isOn ? '<span class="state-badge">使用中</span>' : '<span class="state-badge">持有</span>');
     }).join('');
     const splashHtml = o.splash
-      ? shopItem('<b>撞击溅射</b> <span class="t-owned">持有</span>',
+      ? shopItem(previewHtml('splash'),
+          '<b>撞击溅射</b>',
           eq.splash
             ? '<button class="btn small" data-action="splash-unequip">已装配(卸下)</button>'
-            : '<button class="btn small" data-action="splash-equip">装配</button>')
-      : shopItem('<b>撞击溅射</b>', '<button class="btn small" data-action="splash-own">兑换 ' + SPLASH_COST + '</button>');
+            : '<button class="btn small" data-action="splash-equip">装配</button>',
+          eq.splash ? ' state-active' : ' state-owned',
+          eq.splash ? '<span class="state-badge">使用中</span>' : '<span class="state-badge">持有</span>')
+      : shopItem(previewHtml('splash'), '<b>撞击溅射</b>',
+          '<button class="btn small" data-action="splash-own">兑换 ' + SPLASH_COST + '</button>',
+          ' state-locked', '', LOCK_ICO + '<span class="lock-hint">兑换后可使用</span>');
     if (PPD.ui.dressupList) PPD.ui.dressupList.innerHTML =
-      '<h3>尾影特效</h3>' + trailHtml +
-      '<h3>球台撞击特效</h3>' + splashHtml;
+      '<h3 class="sticky-group">尾影特效</h3>' + trailHtml +
+      '<h3 class="sticky-group">球台撞击特效</h3>' + splashHtml;
 
     // 装扮方案列表
     const plansHtml = PPD.app.plans.map((p, i) => {
       const parts = [];
       if (p.trail) { const n = nameOf(TRAILS, p.trail); if (n) parts.push(n); }
       if (p.splash) parts.push('撞击溅射');
-      return '<div class="s-item"><div class="t-info"><b>' + esc(p.name || '未命名') + '</b>' +
+      return '<div class="s-item state-mark"><div class="t-info"><b>' + esc(p.name || '未命名') + '</b>' +
         '<div class="t-desc">' + esc(parts.join(' + ') || '(空)') + '</div></div>' +
         '<span class="t-btns">' +
         '<button class="btn small" data-action="plan-apply" data-idx="' + i + '">应用</button>' +
