@@ -26,69 +26,107 @@
         <p>TABLE TENNIS DUEL · ITTF 标准场地</p>
       </div>
       <div class="menu-card">
-        <label>你的昵称
+        <!-- ① 昵称区：行内可点击编辑（无外框，下划线暗示）+ 铅笔图标 -->
+        <div class="menu-nick">
           <input id="nameInput" maxlength="12" placeholder="球员名字" value="乒乓球手">
-        </label>
-        <!-- 个人生涯：昵称下方蓝色独立方块（点击展开整页；内容渲染见 records.js） -->
-        <div id="recordsPanel" class="records-block">个人生涯 · 加载中…</div>
-        <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（旗帜以颜色命名，系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
-        <div class="team-pick">
-          <label class="ai-label">我的队伍
-            <span class="team-flag" id="teamFlagMe"></span>
-            <select id="teamMe"></select>
-          </label>
-          <input id="teamMeName" class="team-name" maxlength="6" placeholder="队名">
+          <span class="nick-pencil" aria-hidden="true">✎</span>
         </div>
-        <button id="btnLocal" class="btn primary">本地双人对战（分屏）</button>
-        <button id="btnAI" class="btn primary">人机对战（单机）</button>
-        <button id="btnEndless" class="btn primary" style="display:none">♾ 无尽人机</button>
-        <!-- 人机电脑：难度 + 旗帜 + 队名 合并同一栏（电脑对手配置） -->
-        <div class="pick-row">
-          <span class="pick-tag">电脑</span>
-          <select id="aiLevel" class="pick-diff">
-            <option value="0">简单</option>
-            <option value="1" selected>中等</option>
-            <option value="2">困难</option>
-            <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
-          </select>
-          <span class="team-flag" id="teamFlagOpp"></span>
-          <select id="teamOpp" class="pick-team"></select>
-          <input id="teamOppName" class="team-name" maxlength="6" placeholder="队名">
+        <!-- 顶部动态信息（G5）：近 10 场趋势 │ 提升引导 │ 上次战绩，三条横向等宽、1px 竖线分隔。
+             静态结果数据（总场次/胜率）已移入「生涯」二级页。 -->
+        <div id="recordsPanel" class="records-block">
+          <div class="dash-cell" id="dashTrend"></div>
+          <div class="dash-cell" id="dashGuide"></div>
+          <!-- 上次战绩（G4）：仅作战绩展示，不含"继续/再来一局"类操作 -->
+          <div class="dash-cell recent-match" id="recentMatch" hidden>
+            <span class="dash-label">上次战绩</span>
+            <b class="recent-title" id="recentTitle"></b>
+            <span class="recent-meta" id="recentMeta"></span>
+            <button id="btnRecentReplay" class="recent-replay" type="button" hidden>查看回放</button>
+          </div>
+          <div class="dash-cell dash-entry" id="dashEntry"></div>
         </div>
-        <div class="row ai-row">
-          <button id="btnAIVsAI" class="btn primary">模拟推演（AI vs AI）</button>
+
+        <!-- 一级主行动（G1/G7）：琥珀金实心（全站唯一强调色）+ 球拍图标 + 局前配置副标题 -->
+        <button id="btnPrimaryAction" class="btn-primary-action" type="button">
+          <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="9" r="6"/><path d="M14.5 13.5 21 20"/></svg></span>
+          <span class="btn-main" id="primaryActionText">快速开始</span>
+          <span class="btn-desc" id="primaryActionDesc">常规单机</span>
+        </button>
+
+        <!-- 二级：高频模式（青绿实心）——常规单机由上方主按钮承担，此处不再重复 -->
+        <div class="btn-group btn-group-primary">
+          <button id="btnLocal" class="btn primary"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="btn-main">本地双人对战（分屏）</span><span class="btn-desc">同屏两人对打</span></button>
+          <button id="btnNetEntry" class="btn primary"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg></span><span class="btn-main">联机对战</span><span class="btn-desc">房间码联机</span></button>
         </div>
-        <!-- 模拟推演：甲/乙双方 难度 + 旗帜 + 队名 合并同一栏 -->
-        <div class="pick-row">
-          <span class="pick-tag">甲</span>
-          <select id="aiLevelA" class="pick-diff">
-            <option value="0">简单</option>
-            <option value="1" selected>中等</option>
-            <option value="2">困难</option>
-            <option value="3" disabled>地狱 🔒</option>
-          </select>
-          <span class="team-flag" id="teamFlagA"></span>
-          <select id="teamA" class="pick-team"></select>
-          <input id="teamAName" class="team-name" maxlength="6" placeholder="队名">
+
+        <!-- 更多玩法（G2/G6）：主按钮已是常规单机唯一主入口，此处降级为描边样式 -->
+        <div class="group-divider"><span>更多玩法</span></div>
+        <div class="btn-group btn-group-secondary">
+          <!-- G2：常规单机的主入口已上移为主按钮，此处降为三级描边样式（弱于二级描边） -->
+          <button id="btnAI" class="btn tertiary"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1"/><path d="M8 13h.01M16 13h.01"/><path d="M9 17h6"/></svg></span><span class="btn-main">自定义常规单机</span><span class="btn-desc">自选难度与对手</span></button>
+          <button id="btnEndless" class="btn" style="display:none"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15a3 3 0 1 1 0-6c3 0 3 6 6 6s3-6 6-6a3 3 0 1 1 0 6c-3 0-3-6-6-6s-3 6-6 6Z"/></svg></span><span class="btn-main">无尽人机</span><span class="btn-desc">逐级挑战</span></button>
+          <button id="btnAIVsAI" class="btn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="m19 21 2-2"/><path d="M21.5 6.5 18 3h-3"/></svg></span><span class="btn-main">模拟推演（AI vs AI）</span><span class="btn-desc">自动对局演示</span></button>
         </div>
-        <div class="pick-row">
-          <span class="pick-tag">乙</span>
-          <select id="aiLevelB" class="pick-diff">
-            <option value="0">简单</option>
-            <option value="1" selected>中等</option>
-            <option value="2">困难</option>
-            <option value="3" disabled>地狱 🔒</option>
-          </select>
-          <span class="team-flag" id="teamFlagB"></span>
-          <select id="teamB" class="pick-team"></select>
-          <input id="teamBName" class="team-name" maxlength="6" placeholder="队名">
+
+        <!-- 系统（G6）：能力训练与装扮系统属于系统功能，不与玩法混列 -->
+        <div class="group-divider"><span>系统</span></div>
+        <div class="btn-group btn-group-secondary">
+          <button id="btnTraining" class="btn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span><span class="btn-main">能力训练</span><span class="btn-desc">提升球员属性</span></button>
+          <button id="btnDressup" class="btn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2H6a3 3 0 0 0 0 6h2v2a4 4 0 0 0 8 0v-2h2a3 3 0 0 0 0-6h-2V6a4 4 0 0 0-4-4Z"/></svg></span><span class="btn-main">装扮系统</span><span class="btn-desc">外观与方案</span></button>
         </div>
-        <div class="row">
-          <button id="btnNetEntry" class="btn primary">🎮 联机对战</button>
-        </div>
-        <div class="row">
-          <button id="btnTraining" class="btn primary">📈 能力训练</button>
-          <button id="btnDressup" class="btn primary">🎨 装扮系统</button>
+
+        <!-- 局前设置（G3）：默认折叠为一行可点摘要，改动实时同步主按钮副标题 -->
+        <button id="btnSetupToggle" class="setup-summary" type="button" aria-expanded="false" aria-controls="setupGroup">
+          <span class="summary-caret" aria-hidden="true">▸</span>
+          <span class="summary-text" id="setupSummaryText">我的队伍 · 中等难度 · 修改</span>
+        </button>
+        <div id="setupGroup" class="setup-group" hidden>
+          <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（旗帜以颜色命名，系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
+          <div class="team-pick">
+            <label class="ai-label">我的队伍
+              <span class="team-flag" id="teamFlagMe"></span>
+              <select id="teamMe"></select>
+            </label>
+            <input id="teamMeName" class="team-name" maxlength="6" placeholder="队名">
+          </div>
+          <!-- 人机电脑：难度 + 旗帜 + 队名 合并同一栏（电脑对手配置） -->
+          <div class="pick-row">
+            <span class="pick-tag">电脑</span>
+            <select id="aiLevel" class="pick-diff">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
+            </select>
+            <span class="team-flag" id="teamFlagOpp"></span>
+            <select id="teamOpp" class="pick-team"></select>
+            <input id="teamOppName" class="team-name" maxlength="6" placeholder="队名">
+          </div>
+          <!-- 模拟推演：甲/乙双方 难度 + 旗帜 + 队名 合并同一栏 -->
+          <div class="pick-row">
+            <span class="pick-tag">甲</span>
+            <select id="aiLevelA" class="pick-diff">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒</option>
+            </select>
+            <span class="team-flag" id="teamFlagA"></span>
+            <select id="teamA" class="pick-team"></select>
+            <input id="teamAName" class="team-name" maxlength="6" placeholder="队名">
+          </div>
+          <div class="pick-row">
+            <span class="pick-tag">乙</span>
+            <select id="aiLevelB" class="pick-diff">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒</option>
+            </select>
+            <span class="team-flag" id="teamFlagB"></span>
+            <select id="teamB" class="pick-team"></select>
+            <input id="teamBName" class="team-name" maxlength="6" placeholder="队名">
+          </div>
         </div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
@@ -101,11 +139,13 @@
 
   <!-- 联机框（主页「联机对战」入口打开，等同新开页面）：模式切换/建房/加入/房主等待/教程全部收纳 -->
   <div id="netPanel" class="net-panel" style="display:none">
-    <div class="net-card">
-      <div class="net-header">
-        <h2>联机对战</h2>
-        <button id="btnNetBack" class="btn">← 返回主菜单</button>
+    <div class="net-card shell-card">
+      <div class="net-header shell-head">
+        <button id="btnNetBack" class="btn shell-back">← 返回主菜单</button>
+        <h2 class="shell-title">联机对战</h2>
+        <div class="shell-context"></div>
       </div>
+      <div class="shell-body">
       <div style="font-size:12px;color:#e8b64c;margin-bottom:10px;line-height:1.5">⚠ 联机功能持续开发中，当前体验可能较差</div>
       <!-- 操作区（建房进入等待态后整体隐藏：房主无需再输房间号，需求 11） -->
       <div id="netOperate">
@@ -153,6 +193,7 @@
         <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
       </div>
       <div id="netStatus" class="status"></div>
+      </div>
     </div>
   </div>
 
@@ -197,8 +238,13 @@
     </div>
     <!-- 暂停面板 -->
     <div id="pausePanel" class="pause-panel" style="display:none">
-      <div class="pause-card">
-        <h2>已暂停</h2>
+      <div class="pause-card shell-card">
+        <div class="shell-head">
+          <div class="shell-spacer"></div>
+          <h2 class="shell-title">已暂停</h2>
+          <div class="shell-context"></div>
+        </div>
+        <div class="shell-body">
         <!-- 模拟推演：暂停中调整甲/乙双方 AI 难度与参数（即时生效） -->
         <div id="pauseAIVsAI" class="pause-aivai" style="display:none">
           <div class="tune-side">
@@ -255,8 +301,12 @@
             <button id="tuneResetOpp" class="tune-reset" type="button">重置 ×1</button>
           </div>
         </div>
-        <button id="btnResume" class="btn primary">继续游戏</button>
-        <button id="btnPauseExit" class="btn">退出比赛（返回主页面）</button>
+        </div>
+        <div class="shell-foot">
+          <!-- 破坏性操作居左降为文字按钮，与主行动拉开 24px 防误触 -->
+          <button id="btnPauseExit" class="btn foot-danger">退出比赛（返回主页面）</button>
+          <button id="btnResume" class="btn primary foot-main">继续游戏</button>
+        </div>
       </div>
     </div>
     <!-- 对局开场渲染：双方旗帜 + 队名 + VS（渲染结束进入对局；本地/人机/模拟推演生效） -->
@@ -310,65 +360,78 @@
 
   <!-- 设置（主页与比赛页右上角 ⚙ 打开）：判定虚线 / 背景音乐 / 游戏音效 -->
   <div id="settingsPanel" class="settings-panel" style="display:none">
-    <div class="settings-card">
-      <h2>设置</h2>
-      <label class="toggle-label">
-        <input type="checkbox" id="setShowHitRanges">
-        判定范围虚线（球高 / 进箱提示）
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="setMusic" checked>
-        背景音乐
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="setSound" checked>
-        游戏音效
-      </label>
-      <!-- v2.7.0：特效开关移入设置——全局生效并记忆（localStorage），所有模式通用（原暂停面板的推演特效区块已移除） -->
-      <label class="ai-label">特效（全局生效，所有模式通用）</label>
-      <label class="toggle-label">
-        <input type="checkbox" id="setTrailFx" checked>
-        尾影特效
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="setSplashFx" checked>
-        球台撞击特效
-      </label>
-      <label class="tune-row">音乐音量 <input id="setMusicVol" type="range" min="0" max="100" step="5" value="30"><b>30%</b></label>
-      <label class="tune-row">音效音量 <input id="setSfxVol" type="range" min="0" max="100" step="5" value="50"><b>50%</b></label>
-      <label class="toggle-label">画质
-        <select id="quality">
-          <option value="high" selected>高画质</option>
-          <option value="medium">中画质（平衡）</option>
-          <option value="low">低画质（省电流畅）</option>
-        </select>
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="setNoCrowd" checked>
-        关闭环境观众（高/中画质下生效）
-      </label>
-      <label class="toggle-label">帧率
-        <select id="frameRate">
-          <option value="unlimited" selected>无上限（自动匹配刷新率）</option>
-          <option value="60">60</option>
-          <option value="30">30</option>
-        </select>
-      </label>
-      <!-- v2.4：帧率说明——无上限档显示真实渲染帧率；实际帧率受浏览器/系统刷新率限制（部分手机浏览器/WebView 固定 60Hz） -->
-      <div class="settings-note">帧率显示真实渲染值；实际受浏览器/系统刷新率限制（部分手机浏览器固定 60Hz），手机高画质已自动限幅 DPR 以释放性能</div>
-      <div class="app-version">版本 <span id="appVersion"></span></div>
-      <button id="btnSettingsClose" class="btn primary">完成</button>
+    <div class="settings-card shell-card">
+      <div class="shell-head">
+        <div class="shell-spacer"></div>
+        <h2 class="shell-title">设置</h2>
+        <!-- 上下文区：版本号（11px/40% 透明） -->
+        <div class="shell-context"><span class="app-version">版本 <span id="appVersion"></span></span></div>
+      </div>
+      <div class="shell-body">
+        <!-- 画面特效分组 -->
+        <div class="settings-group-title">画面特效</div>
+        <label class="toggle-label">
+          <input type="checkbox" id="setShowHitRanges">
+          判定范围虚线（球高 / 进箱提示）
+        </label>
+        <!-- v2.7.0：特效开关移入设置——全局生效并记忆（localStorage），所有模式通用 -->
+        <label class="toggle-label">
+          <input type="checkbox" id="setTrailFx" checked>
+          尾影特效
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="setSplashFx" checked>
+          球台撞击特效
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="setNoCrowd" checked>
+          关闭环境观众（高/中画质下生效）
+        </label>
+        <div class="settings-group-title">音频</div>
+        <label class="toggle-label">
+          <input type="checkbox" id="setMusic" checked>
+          背景音乐
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="setSound" checked>
+          游戏音效
+        </label>
+        <label class="tune-row">音乐音量 <input id="setMusicVol" type="range" min="0" max="100" step="5" value="30"><b>30%</b></label>
+        <label class="tune-row">音效音量 <input id="setSfxVol" type="range" min="0" max="100" step="5" value="50"><b>50%</b></label>
+        <div class="settings-group-title">性能</div>
+        <!-- 分段选择器由 app/main.js 依据下方 select 的选项生成，select 保留供既有逻辑读写 -->
+        <div class="setting-row">画质 <span class="segmented-host" data-segmented-for="quality"></span>
+          <select id="quality" class="visually-hidden">
+            <option value="high" selected>高画质</option>
+            <option value="medium">中画质（平衡）</option>
+            <option value="low">低画质（省电流畅）</option>
+          </select>
+        </div>
+        <div class="setting-row">帧率 <span class="segmented-host" data-segmented-for="frameRate"></span>
+          <select id="frameRate" class="visually-hidden">
+            <option value="unlimited" selected>无上限（自动匹配刷新率）</option>
+            <option value="60">60</option>
+            <option value="30">30</option>
+          </select>
+        </div>
+        <!-- v2.4：帧率说明——无上限档显示真实渲染帧率；实际帧率受浏览器/系统刷新率限制 -->
+        <div class="settings-note">帧率显示真实渲染值；实际受浏览器/系统刷新率限制（部分手机浏览器固定 60Hz），手机高画质已自动限幅 DPR 以释放性能</div>
+      </div>
+      <div class="shell-foot">
+        <button id="btnSettingsClose" class="btn primary foot-main">完成</button>
+      </div>
     </div>
   </div>
 
   <!-- 说明书（独立全屏页面，等同新开页面；主页/比赛页入口打开。平台分流 data-platform=pc/mobile/both） -->
   <div id="manualPanel" class="manual-panel" style="display:none">
-    <div class="manual-card">
-      <div class="manual-header">
-        <h2>📖 说明书</h2>
-        <button id="btnManualBack" class="btn">← 返回</button>
+    <div class="manual-card shell-card">
+      <div class="manual-header shell-head">
+        <button id="btnManualBack" class="btn shell-back">← 返回</button>
+        <h2 class="shell-title">📖 说明书</h2>
+        <div class="shell-context"></div>
       </div>
-      <div class="manual-scroll" id="manualScroll">
+      <div class="manual-scroll shell-body" id="manualScroll">
         <details class="manual-capsule" data-platform="both">
           <summary>判分与规则</summary>
           <div class="manual-capsule-body">
@@ -422,10 +485,11 @@
   <!-- 个人生涯（单开页面：主菜单小方框点击展开，分页展示战绩记录） -->
   <!-- 个人生涯（合并页：主菜单蓝块点击展开；战绩记录 + 历史回放 两个标签） -->
   <div id="careerPanel" class="career-panel" style="display:none">
-    <div class="career-card">
-      <div class="career-header">
-        <h2>个人生涯</h2>
-        <button id="btnCareerBack" class="btn">← 返回主菜单</button>
+    <div class="career-card shell-card">
+      <div class="career-header shell-head">
+        <button id="btnCareerBack" class="btn shell-back">← 返回主菜单</button>
+        <h2 class="shell-title">个人生涯</h2>
+        <div class="shell-context"></div>
       </div>
       <div class="career-tabs">
         <button id="btnCareerTab" class="career-tab-btn active" type="button">战绩记录</button>
@@ -456,45 +520,65 @@
     </div>
   </div>
 
-  <!-- 能力训练（单开页面：主菜单「能力训练」入口，积分 + 训练升级/降级 + 顶部全部洗点） -->
+  <!-- 能力训练（单开页面：主菜单「能力训练」入口，积分 + 训练升级/降级 + 全部洗点） -->
   <div id="trainingPanel" class="career-panel pure-panel" style="display:none">
-    <div class="career-card">
-      <div class="career-header">
-        <h2>能力训练</h2>
-        <button id="btnTrainingBack" class="btn">← 返回主菜单</button>
+    <div class="career-card shell-card">
+      <div class="career-header shell-head">
+        <button id="btnTrainingBack" class="btn shell-back">← 返回主菜单</button>
+        <h2 class="shell-title">能力训练</h2>
+        <div class="shell-context">
+          <!-- E2 全局资源胶囊：积分常驻右上，等宽数字 + 金币图标 -->
+          <div class="points-capsule" id="trainingPointsCapsule">
+            <svg class="coin-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h5M9.5 14.5h5"/></svg>
+            <span id="trainingPoints">0</span>
+          </div>
+        </div>
       </div>
-      <div id="trainingPoints" class="career-stats">积分：0</div>
-      <div class="training-reset-row">
-        <button id="btnTrainingReset" class="btn small">全部洗点（退还训练积分）</button>
+      <div class="shell-body">
+        <div id="trainingList" class="training-list"></div>
       </div>
-      <div id="trainingList" class="training-list"></div>
+      <div class="shell-foot">
+        <!-- 破坏性操作：降至文字按钮居左，与主行动拉开 24px -->
+        <button id="btnTrainingReset" class="btn foot-danger">全部洗点（退还训练积分）</button>
+      </div>
     </div>
   </div>
 
   <!-- 装扮系统（单开页面：主菜单「装扮系统」入口，外观库存/装配卸下/退款 + 装扮方案） -->
   <div id="dressupPanel" class="career-panel pure-panel" style="display:none">
-    <div class="career-card">
-      <div class="career-header">
-        <h2>装扮系统</h2>
-        <button id="btnDressupBack" class="btn">← 返回主菜单</button>
+    <div class="career-card shell-card">
+      <div class="career-header shell-head">
+        <button id="btnDressupBack" class="btn shell-back">← 返回主菜单</button>
+        <h2 class="shell-title">装扮系统</h2>
+        <div class="shell-context">
+          <div class="points-capsule" id="dressupPointsCapsule">
+            <svg class="coin-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h5M9.5 14.5h5"/></svg>
+            <span id="dressupPoints">0</span>
+          </div>
+        </div>
       </div>
-      <div id="dressupPoints" class="career-stats">积分：0</div>
-      <div id="dressupList" class="training-list"></div>
-      <h3 class="training-h">装扮方案（每类选一组合，至多 8 个）</h3>
-      <div class="plan-form">
-        <input id="planNameInput" type="text" maxlength="12" placeholder="方案名（如：火焰橙）">
-        <button id="btnPlanSave" class="btn small">保存当前装扮为方案</button>
+      <div class="shell-body">
+        <div id="dressupList" class="training-list"></div>
+        <!-- 方案区：独立底部卡片，与上方装扮列表以 1px 分隔线区隔 -->
+        <div class="plan-section">
+          <h3 class="training-h sticky-group">装扮方案（每类选一组合，至多 8 个）</h3>
+          <div class="plan-form">
+            <input id="planNameInput" type="text" maxlength="12" placeholder="方案名（如：火焰橙）">
+            <button id="btnPlanSave" class="btn small">保存当前装扮为方案</button>
+          </div>
+          <div id="planList" class="training-list"></div>
+        </div>
       </div>
-      <div id="planList" class="training-list"></div>
     </div>
   </div>
 
   <!-- 无尽人机关卡选择页：地狱通关后开启，从无尽-1 开始，通关逐级解锁 -->
   <div id="endlessPanel" class="endless-panel" style="display:none">
-    <div class="endless-card">
-      <div class="career-header">
-        <h2>♾ 无尽人机</h2>
-        <button id="btnEndlessBack" class="btn">← 返回主菜单</button>
+    <div class="endless-card shell-card">
+      <div class="career-header shell-head">
+        <button id="btnEndlessBack" class="btn shell-back">← 返回主菜单</button>
+        <h2 class="shell-title">♾ 无尽人机</h2>
+        <div class="shell-context"></div>
       </div>
       <div class="endless-tip">从无尽-1 开始挑战，通关一级解锁下一级。落败会回到无尽-1。</div>
       <div id="endlessList" class="endless-list"></div>

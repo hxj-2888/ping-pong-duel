@@ -20,14 +20,42 @@
     { key: 'hitbox', name: '碰撞箱', per: '+3%', desc: '扩大接球判定范围' },
   ];
 
-  // ---------- 积分 ----------
+  // ---------- 积分（E2：胶囊常驻 + 消耗时递减滚动） ----------
+  let lastShownPoints = null;
+  // 消耗动画：数字 300ms 递减滚动 + 胶囊短暂高亮
+  function rollDownPoints(el, from, to) {
+    const cap = el.closest ? el.closest('.points-capsule') : null;
+    if (cap) {
+      cap.classList.add('is-spending');
+      setTimeout(() => cap.classList.remove('is-spending'), 520);
+    }
+    // rAF 缺失的宿主（测试沙箱）退化为 setTimeout
+    const raf = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame : (fn) => setTimeout(fn, 16);
+    const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const dur = 300;
+    const t0 = now();
+    const step = () => {
+      const k = Math.min(1, (now() - t0) / dur);
+      el.textContent = String(Math.round(from + (to - from) * k));
+      if (k < 1) raf(step);
+      else el.textContent = String(to);
+    };
+    raf(step);
+  }
   function refreshPoints() {
-    const s = '积分：' + (PPD.app.points || 0);
-    if (PPD.ui.trainingPoints) PPD.ui.trainingPoints.textContent = s;
-    if (PPD.ui.dressupPoints) PPD.ui.dressupPoints.textContent = s;
+    const val = PPD.app.points || 0;
+    const spend = lastShownPoints !== null && val < lastShownPoints;
+    const from = lastShownPoints;
+    lastShownPoints = val;
+    [PPD.ui.trainingPoints, PPD.ui.dressupPoints].forEach((el) => {
+      if (!el) return;
+      if (spend && from !== null) rollDownPoints(el, from, val);
+      else el.textContent = String(val);
+    });
     if (PPD.ui.menuPoints) {
       if (PPD.isWebVersion) { PPD.show(PPD.ui.menuPoints, false); } // 网页版禁用养成：不显示积分
-      else { PPD.ui.menuPoints.textContent = s; PPD.show(PPD.ui.menuPoints, true); }
+      else { PPD.ui.menuPoints.textContent = '积分：' + val; PPD.show(PPD.ui.menuPoints, true); }
     }
   }
 
@@ -136,14 +164,22 @@
       const lv = t[it.key] || 0;
       const maxed = lv >= MAX_LEVEL;
       const cost = maxed ? null : LEVEL_COST[lv];
+      // F1①：5 格分段进度指示器（已点亮=主色实心，未点亮=20% 白）
+      const dots = [];
+      for (let i = 0; i < MAX_LEVEL; i++) dots.push('<span class="lv-dot' + (i < lv ? ' on' : '') + '"></span>');
+      // E4③：满级用暖金描边 + 满级徽章；升级入口降为不可点的状态标记，降级入口保留可点
+      const stateCls = maxed ? ' state-mark state-max' : ' state-mark';
+      const badge = maxed ? '<span class="state-badge">★ 满级</span>' : '';
       const down = lv > 0
         ? '<button class="btn small" data-action="downgrade" data-key="' + it.key + '">降级(退' + LEVEL_COST[lv - 1] + ')</button>'
         : '';
       const up = maxed
-        ? '<button class="btn small" disabled>已满级</button>'
+        ? '<span class="state-text-max">已满级</span>'
         : '<button class="btn small" data-action="upgrade" data-key="' + it.key + '">升级 ' + cost + '</button>';
-      return '<div class="t-item">' +
-        '<div class="t-info"><b>' + esc(it.name) + '</b> <span class="t-lv">Lv.' + lv + '/' + MAX_LEVEL + '</span>' +
+      return '<div class="t-item' + stateCls + '">' + badge +
+        '<div class="t-info"><div class="t-name-row"><b>' + esc(it.name) + '</b>' +
+        '<span class="lv-dots">' + dots.join('') + '</span>' +
+        '<span class="t-lv">Lv.' + lv + '/' + MAX_LEVEL + '</span></div>' +
         '<div class="t-desc">每级 ' + it.per + ' · ' + esc(it.desc) + '</div></div>' +
         '<div class="t-btns">' + down + up + '</div>' +
         '</div>';

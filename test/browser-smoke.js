@@ -1015,7 +1015,8 @@ async function main() {
     // 模拟通关地狱（人机击败地狱难度）→ 再暂停：调控块出现
     t.ppd.markHellCleared();
     check('通关地狱标记生效', t.ppd.isHellCleared());
-    check('地狱通关后拆分常规单机与无尽人机', t.elements.get('btnAI').textContent === '常规单机' &&
+    // G2：主按钮「快速开始」是常规单机主入口，此按钮固定为「自定义常规单机」以明确差异
+    check('地狱通关后拆分自定义常规单机与无尽人机', t.elements.get('btnAI').textContent === '自定义常规单机' &&
       t.elements.get('btnEndless').style.display !== 'none');
     check('无尽进度初始为 0（可挑战无尽-1）', t.ppd.getEndlessHighest() === 0);
     t.ppd.advanceEndless(1);
