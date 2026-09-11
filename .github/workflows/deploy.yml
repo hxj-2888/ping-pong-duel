@@ -125,7 +125,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # 优先用本次 CI 构建的 APK；构建被跳过时回退 Release 既有包
+      # 优先用本次 CI 构建的 APK；构建被跳过时回退 Release 既有包。
+      # ★ 必须改名为 PingPongDuel-v301.apk：下载页（download.html）与 _headers
+      #   固定的对外文件名是 v301，而 artifact 解出来是 PingPongDuel.apk。
+      #   不改名则下载链接落到 SPA 回退、返回 200 + HTML，用户下到的是网页。
       - name: Download CI-built APK
         continue-on-error: true
         if: needs.build-apk.outputs.built == 'true'
@@ -134,12 +137,20 @@ jobs:
           name: PingPongDuel-apk
           path: public/
 
+      - name: Rename APK to the published filename
+        if: needs.build-apk.outputs.built == 'true'
+        run: |
+          mv public/PingPongDuel.apk public/PingPongDuel-v301.apk
+          ls -l public/PingPongDuel-v301.apk
+
+      # 构建被跳过时回退 Release 既有包；Release 侧的资产名历史上有 v300/v301 两种，逐一尝试
       - name: Fallback to Release APK
         if: needs.build-apk.outputs.built != 'true'
         run: |
-          curl -fsSL --retry 3 -o public/PingPongDuel-v300.apk \
-            "https://github.com/${{ github.repository }}/releases/download/v3.0.0/PingPongDuel-v300.apk"
-          ls -l public/PingPongDuel-v300.apk
+          base="https://github.com/${{ github.repository }}/releases/download/v3.0.0"
+          curl -fsSL --retry 2 -o public/PingPongDuel-v301.apk "$base/PingPongDuel-v301.apk" \
+            || curl -fsSL --retry 3 -o public/PingPongDuel-v301.apk "$base/PingPongDuel-v300.apk"
+          ls -l public/PingPongDuel-v301.apk
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
@@ -167,8 +178,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mv android/PingPongDuel.apk PingPongDuel-v300.apk
-          gh release upload v3.0.0 PingPongDuel-v300.apk --repo "${{ github.repository }}" --clobber
+          # 资产名与站点对外文件名保持一致（PingPongDuel-v301.apk），
+          # 否则回退路径需要按两种名字试取
+          mv android/PingPongDuel.apk PingPongDuel-v301.apk
+          gh release upload v3.0.0 PingPongDuel-v301.apk --repo "${{ github.repository }}" --clobber
 
   # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
   # 需要 Token 含 Account → Workers Scripts → Edit 权限（2026-08-29 起已配置）
@@ -199,5 +212,12 @@ jobs:
       - name: 下载页
         run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/download.html"
 
-      - name: APK 直链
-        run: curl -fsSL --max-time 60 -r 0-1024 "https://ping-pong-duel.pages.dev/PingPongDuel-v300.apk" -o /dev/null
+      # ★ 必须校验响应体真的是 APK：文件缺失时 SPA 回退会返回 200 + HTML，
+      #   仅用 curl -f 只看状态码，历史上因此长期漏检（下载按钮指向网页）。
+      - name: APK 直链（校验确为 APK，而非 SPA 回退 HTML）
+        run: |
+          curl -fsSL --max-time 60 -r 0-511 "https://ping-pong-duel.pages.dev/PingPongDuel-v301.apk" -o /tmp/apk-head.bin
+          if [ "$(head -c 2 /tmp/apk-head.bin)" != "PK" ]; then
+            echo "APK 直链未返回 APK（拿到的是 SPA 回退 HTML）"; exit 1
+          fi
+          echo "APK 直链正常（PK 头校验通过）"; ls -l /tmp/apk-head.bin
