@@ -164,15 +164,16 @@
 
   // 把三栏内容分别写进各自的单元格（互不挤压）。
   // 单元格引用走 PPD.ui（getElementById），避免依赖 querySelector。
+  // 空内容一律折叠该格，避免留下空白格子（网页版无引导文案/无战绩时会出现）。
   function paintDashboard(trendHtml, guideHtmlStr, entryHtml) {
     const el = PPD.ui.recordsPanel;
     if (!el) return;
     const t = PPD.ui.dashTrend;
     const g = PPD.ui.dashGuide;
     const e = PPD.ui.dashEntry;
-    if (t) t.innerHTML = trendHtml;
-    if (g) g.innerHTML = guideHtmlStr;
-    if (e) e.innerHTML = entryHtml;
+    if (t) { t.innerHTML = trendHtml || ''; t.hidden = !trendHtml; }
+    if (g) { g.innerHTML = guideHtmlStr || ''; g.hidden = !guideHtmlStr; }
+    if (e) { e.innerHTML = entryHtml || ''; e.hidden = !entryHtml; }
     // 宿主缺少单元格引用时（极简宿主）退回整块渲染，保证信息不丢
     if (!t && !g && !e) el.innerHTML = trendHtml + guideHtmlStr + entryHtml;
   }

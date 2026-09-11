@@ -1150,6 +1150,9 @@ input.invalid, input[aria-invalid="true"] {
 }
 .dash-cell:first-child { padding-left: 0; }
 .dash-cell + .dash-cell { border-left: 1px solid var(--line-1); }
+/* 无内容的档位自动折叠，避免留下空白格子（如网页版无引导文案、无战绩时） */
+.dash-cell[hidden] { display: none; }
+.dash-cell[hidden] + .dash-cell { border-left: none; }
 /* 生涯二级入口独占右侧一格，不与动态信息抢等宽 */
 .dash-entry { flex: none; padding-right: 0; align-items: flex-end; }
 .dash-label {
