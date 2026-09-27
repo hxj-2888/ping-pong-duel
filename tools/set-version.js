@@ -86,9 +86,9 @@ function targets(ver, code, short) {
         [(/v\d+\.\d+\.\d+/g), () => `v${ver}`],
         [(/版本 [\d.]+/g), () => `版本 ${ver}`],
         // 期望字节数：从实际 APK 读取（不存在则保留并警告，build 后重跑 --sync）
-        [(/var EXPECTED = \d+/g), (_m, _c, env) => `var EXPECTED = ${env.apkSize != null ? env.apkSize : _m.slice('var EXPECTED = '.length)}`],
-        [(/\d{1,3}(?:,\d{3})+ 字节/g), (_m, _c, env) => env.apkSize != null ? `${env.apkSize.toLocaleString()} 字节` : _m],
-        [(/\d+\.\d+ MB/g), (_m, _c, env) => env.apkSize != null ? `${(env.apkSize / 1048576).toFixed(2)} MB` : _m],
+        [(/var EXPECTED = \d+/g), (_m, _c, _s, env) => `var EXPECTED = ${env.apkSize != null ? env.apkSize : _m.slice('var EXPECTED = '.length)}`],
+        [(/\d{1,3}(?:,\d{3})+ 字节/g), (_m, _c, _s, env) => env.apkSize != null ? `${env.apkSize.toLocaleString()} 字节` : _m],
+        [(/\d+\.\d+ MB/g), (_m, _c, _s, env) => env.apkSize != null ? `${(env.apkSize / 1048576).toFixed(2)} MB` : _m],
       ],
       checks: [
         (c) => ({ ok: c.includes(`PingPongDuel-v${short}.apk`), actual: (c.match(/PingPongDuel-v(\d+)\.apk/) || [])[1], expect: short }),
@@ -139,6 +139,8 @@ for (const t of targets(ver, code, shortOf(ver))) {
     }
   } else {
     // 升版本 / 修复漂移：先 --check 发现的漂移直接由正则全量重写
+    // 注意：replace 回调实参 = (match, p1..pn, offset, string)，捕获组数量随正则变化，
+    // 不能按固定位置传 env——用 rest 收集，fn(m, g1, content, env) 恒定映射。
     let n = c;
     for (const [re, fn] of t.fixes) n = n.replace(re, (m, g1, _o, _s) => fn(m, g1, n, env));
     if (n !== c) { write(p, n); console.log(`FIXED ${t.file}`); }

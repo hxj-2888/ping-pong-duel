@@ -212,7 +212,6 @@
 
   // ---------- 渲染数据归一化 ----------
   function viewModelFromEngine(engine, side) {
-    const isAivai = PPD.app.mode === 'aivai';
     const fxShow = PPD.app.fxShow || {};
     return {
       side,
@@ -244,8 +243,9 @@
       fx: (!fxShow.splash) ? [] : PPD.app.fx,
       fan: PPD.app.fan,
       servePath: servePath(engine),
-      // 尾影：设置面板「尾影特效」开关全局生效（v2.7.0）；观战 AI 不受玩家装扮（默认色）
-      trailStyle: isAivai ? null : (PPD.app.equip.trail || null),
+      // 尾影：设置面板「尾影特效」开关控制显隐（v2.7.0），颜色随玩家装配（2026-09-27 修复：
+      // 原先 aivai 观战强制默认色，与同模式溅射已应用玩家装备的行为不一致）
+      trailStyle: PPD.app.equip.trail || null,
       trailHidden: !fxShow.trail,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
