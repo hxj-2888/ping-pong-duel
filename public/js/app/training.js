@@ -3,7 +3,7 @@
  * 通过共享对象 PPD 访问公共状态与接口。装扮(外观库存/装配/方案)已独立到 app/dressup.js。
  * - 积分：人机按难度(简单1/中等2/困难3/地狱5)+ 胜满负半；本地双人/联机固定 胜3/负1。
  * - 能力训练：移动速度/挥拍延迟/挥拍耗时/碰撞箱，各 5 级；仅本地/人机生效，不同步真人。
- * - 全部洗点：训练归 0 + 所有已购外观退款(调 dressup.refundAllCosmetics)，页面顶部按钮。
+ * - 全部洗点：训练归 0 退回训练积分（外观退款已随 v2.0 移除），页面顶部按钮，执行前二次确认。
  * - 网页版禁用（跟随个人生涯：数据只留本地应用端）。
  * ============================================================ */
 (function () {
@@ -96,11 +96,13 @@
   // ---------- 能力训练（写进引擎玩家对象；仅本地/人机调用） ----------
   function applyTrainingToPlayer(player) {
     if (!player) return;
+    // clamp 到 [0, MAX_LEVEL]：localStorage 被手改超界时防止引擎拿到异常加成
+    const cl = (k) => Math.min(Math.max(PPD.app.training[k] || 0, 0), MAX_LEVEL);
     player.ability = {
-      speed: PPD.app.training.speed || 0,
-      windup: PPD.app.training.windup || 0,
-      dur: PPD.app.training.dur || 0,
-      hitbox: PPD.app.training.hitbox || 0,
+      speed: cl('speed'),
+      windup: cl('windup'),
+      dur: cl('dur'),
+      hitbox: cl('hitbox'),
     };
   }
 
@@ -124,7 +126,8 @@
   function downgrade(key) {
     const item = TRAINING_ITEMS.find((x) => x.key === key);
     if (!item) return;
-    const lv = PPD.app.training[key] || 0;
+    // clamp 到 MAX_LEVEL：存储被手改超界时 LEVEL_COST[lv-1] 会是 undefined → points 变 NaN
+    const lv = Math.min(PPD.app.training[key] || 0, MAX_LEVEL);
     if (lv <= 0) return;
     const back = LEVEL_COST[lv - 1];
     PPD.app.training[key] = lv - 1;
@@ -136,21 +139,59 @@
     PPD.setStatus(item.name + ' 降级，退回 ' + back + ' 积分');
   }
 
+  // 二次确认（复用 overlay 双按钮模式，同 app/replay.js confirmAsync）
+  function confirmReset(title, text, onOk) {
+    if (!PPD || !PPD.ui || !PPD.ui.overlay || !PPD.ui.overlayBtn || !PPD.ui.overlayBtn.parentNode ||
+        typeof document === 'undefined' || !document.createElement) {
+      onOk(); // 宿主缺 overlay（测试沙箱）退化为直接执行
+      return;
+    }
+    const ui = PPD.ui;
+    ui.overlayTitle.textContent = title;
+    ui.overlayText.textContent = text;
+    ui.overlayBtn.textContent = '确定';
+    let cancelBtn = document.getElementById('trainingResetCancel');
+    if (!cancelBtn) {
+      cancelBtn = document.createElement('button');
+      cancelBtn.id = 'trainingResetCancel';
+      cancelBtn.className = 'btn';
+      cancelBtn.textContent = '取消';
+      cancelBtn.style.marginTop = '6px';
+      ui.overlayBtn.parentNode.appendChild(cancelBtn);
+    } else {
+      cancelBtn.style.display = '';
+    }
+    const done = (v) => {
+      ui.overlayBtn.onclick = null;
+      if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.onclick = null; }
+      PPD.show(ui.overlay, false);
+      if (v) onOk();
+    };
+    ui.overlayBtn.onclick = () => done(true);
+    cancelBtn.onclick = () => done(false);
+    PPD.show(ui.overlay, true);
+  }
+
   // 全部洗点:训练归 0 退回训练积分(装扮/外观积分不在训练页洗点,v2.0 已去掉)
   function resetAll() {
     let back = 0;
     for (const it of TRAINING_ITEMS) {
-      const lv = PPD.app.training[it.key] || 0;
+      // clamp 到 MAX_LEVEL：与 downgrade 同因（存储超界 → LEVEL_COST[i] undefined → NaN）
+      const lv = Math.min(PPD.app.training[it.key] || 0, MAX_LEVEL);
       for (let i = 0; i < lv; i++) back += LEVEL_COST[i];
       PPD.app.training[it.key] = 0;
     }
     if (back <= 0) { PPD.setStatus('当前没有可洗点的训练投入'); return; }
-    PPD.app.points += back;
-    if (PPD.savePoints) PPD.savePoints();
-    if (PPD.saveTraining) PPD.saveTraining();
-    refreshPoints();
-    renderTrainingPage();
-    PPD.setStatus('全部洗点完成，退回 ' + back + ' 积分');
+    // 二次确认防误触；训练归 0 与退款移到确认后执行
+    confirmReset('全部洗点', '训练将全部归 0，退回 ' + back + ' 积分。确定执行？', function () {
+      for (const it of TRAINING_ITEMS) PPD.app.training[it.key] = 0;
+      PPD.app.points += back;
+      if (PPD.savePoints) PPD.savePoints();
+      if (PPD.saveTraining) PPD.saveTraining();
+      refreshPoints();
+      renderTrainingPage();
+      PPD.setStatus('全部洗点完成，退回 ' + back + ' 积分');
+    });
   }
 
   // ---------- 面板渲染 ----------
