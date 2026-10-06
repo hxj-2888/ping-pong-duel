@@ -100,19 +100,76 @@
     el.innerHTML = '我的队伍 <b>' + c.team + '</b> · <b>' + c.diff + '难度</b> · 修改';
   }
   if (PPD.ui.btnSetupToggle && PPD.ui.setupGroup) {
-    PPD.ui.btnSetupToggle.addEventListener('click', () => {
-      const open = PPD.ui.btnSetupToggle.getAttribute('aria-expanded') === 'true';
-      PPD.ui.btnSetupToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-      if (open) PPD.ui.setupGroup.setAttribute('hidden', '');
-      else PPD.ui.setupGroup.removeAttribute('hidden');
-    });
-    // 摘要与主按钮副标题随队伍/难度/队名变化实时刷新
-    [PPD.ui.teamMe, PPD.ui.aiLevel, PPD.ui.teamMeName].forEach((elx) => {
-      if (!elx) return;
-      elx.addEventListener('change', () => { refreshSetupSummary(); refreshPrimaryAction(); });
-      elx.addEventListener('input', () => { refreshSetupSummary(); refreshPrimaryAction(); });
-    });
-    refreshSetupSummary();
+      // 竖屏：面板是底部抽屉（CSS transform 弹出），这里同步遮罩态与 aria
+      const closeSetup = () => {
+        PPD.ui.setupGroup.setAttribute('hidden', '');
+        PPD.ui.btnSetupToggle.setAttribute('aria-expanded', 'false');
+        if (PPD.ui.menu && PPD.ui.menu.classList) PPD.ui.menu.classList.remove('setup-open');
+      };
+      PPD.ui.btnSetupToggle.addEventListener('click', () => {
+        const open = PPD.ui.btnSetupToggle.getAttribute('aria-expanded') === 'true';
+        PPD.ui.btnSetupToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+        if (open) { closeSetup(); return; }
+        PPD.ui.setupGroup.removeAttribute('hidden');
+        if (PPD.ui.menu && PPD.ui.menu.classList) PPD.ui.menu.classList.add('setup-open');
+      });
+if (PPD.ui.btnSetupClose) PPD.ui.btnSetupClose.addEventListener('click', closeSetup);
+    // 下滑关闭（方案 §3.3）：按住抽屉标题栏下移超过阈值即关闭
+    const sheetHead = document.querySelector ? document.querySelector('.setup-sheet-head') : null;
+    if (sheetHead && sheetHead.addEventListener && PPD.ui.setupGroup) {
+      const g = PPD.ui.setupGroup;
+      let sy = 0, dy = 0, tracking = false;
+      sheetHead.addEventListener('pointerdown', (ev) => {
+        tracking = true; sy = ev.clientY; dy = 0;
+        if (g.setPointerCapture) { try { g.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } }
+      });
+      sheetHead.addEventListener('pointermove', (ev) => {
+        if (!tracking) return;
+        dy = Math.max(0, ev.clientY - sy);
+        if (g.style) g.style.transform = 'translateY(' + dy + 'px)';
+      });
+      const up = () => {
+        if (!tracking) return;
+        tracking = false;
+        if (g.style) g.style.transform = '';
+        if (dy > 60) closeSetup();
+      };
+      sheetHead.addEventListener('pointerup', up);
+      sheetHead.addEventListener('pointercancel', up);
+    }
+      if (PPD.ui.menu && PPD.ui.menu.addEventListener) {
+        PPD.ui.menu.addEventListener('click', (ev) => {
+          if (!PPD.ui.menu.classList || !PPD.ui.menu.classList.contains('setup-open')) return;
+          const t = ev && ev.target;
+          if (t && t.closest && (t.closest('#setupGroup') || t.closest('#btnSetupToggle'))) return;
+          closeSetup();
+        });
+      }
+      // 摘要与主按钮副标题随队伍/难度/队名变化实时刷新
+      [PPD.ui.teamMe, PPD.ui.aiLevel, PPD.ui.teamMeName].forEach((elx) => {
+        if (!elx) return;
+        elx.addEventListener('change', () => { refreshSetupSummary(); refreshPrimaryAction(); });
+        elx.addEventListener('input', () => { refreshSetupSummary(); refreshPrimaryAction(); });
+      });
+      refreshSetupSummary();
+    }
+  // 首屏宫格（竖屏 2×2）：入口数为奇数时标记最后一个，让它占满整行避免半行空位
+  const MENU_GRID_CELLS = ['btnLocal', 'btnAI', 'btnAIVsAI', 'btnTraining', 'btnDressup', 'btnEndless'];
+  function syncMenuGridLast() {
+    const cells = [];
+    for (const id of MENU_GRID_CELLS) {
+      const el = PPD.$id(id);
+      if (el) cells.push(el);
+    }
+    if (!cells.length) return;
+    let n = 0, last = null;
+    for (const el of cells) {
+      if (el.removeAttribute) el.removeAttribute('data-grid-last');
+      const hidden = !!(el.style && el.style.display === 'none') || el.hidden === true;
+      if (!hidden) { n++; last = el; }
+    }
+    // 偶数个入口正好排满 2 列，不需要通栏；奇数个才让最后一个占满整行
+    if (n % 2 === 1 && last && last.setAttribute) last.setAttribute('data-grid-last', '1');
   }
   PPD.refreshPrimaryAction = refreshPrimaryAction;
   PPD.refreshSetupSummary = refreshSetupSummary;
@@ -160,6 +217,8 @@
       const render = () => {
         seg.innerHTML = '';
         Array.from(sel.options).forEach((opt) => {
+          // 未解锁档位（如地狱）不生成按钮，保持与原 select 的禁用态一致
+          if (opt.disabled) return;
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'seg-btn' + (opt.value === sel.value ? ' active' : '');
@@ -198,7 +257,9 @@
     if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, PPD.isHellCleared());
     refreshPrimaryAction();
     refreshSetupSummary();
+    syncMenuGridLast();   // 无尽人机入口显隐会改变宫格末位，需重算
   }
+  syncMenuGridLast();
 
   function syncEndlessAIOptions() {
     const hell = PPD.isHellCleared();

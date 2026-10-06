@@ -6,7 +6,7 @@
 #   PPD_KEYSTORE_B64                  android/release.keystore 的 base64（签名密钥）
 #   PPD_KEYSTORE_PASS / PPD_KEY_PASS  签名密码
 # 签名三件套未配置时：构建 job 跳过，部署回退到 Release 里的既有 APK，流水线保持绿。
-# APK 文件名固定 PingPongDuel-v300.apk（download.html 依赖），内容随每次构建刷新。
+# APK 对外文件名 = PingPongDuel-v<version 紧凑串>.apk（package.json 真源推导），内容随每次构建刷新。
 
 name: deploy
 
@@ -126,9 +126,19 @@ jobs:
         uses: actions/checkout@v7
 
       # 优先用本次 CI 构建的 APK；构建被跳过时回退 Release 既有包。
-      # ★ 必须改名为 PingPongDuel-v301.apk：下载页（download.html）与 _headers
-      #   固定的对外文件名是 v301，而 artifact 解出来是 PingPongDuel.apk。
-      #   不改名则下载链接落到 SPA 回退、返回 200 + HTML，用户下到的是网页。
+      # ★ 必须改名成对外文件名：artifact 解出来是 PingPongDuel.apk，而下载页
+      #   （download.html）与 _headers 固定的是带版本号的名字。不改名则下载链接
+      #   落到 SPA 回退、返回 200 + HTML，用户下到的是网页。
+      #   文件名从 package.json 真源推导，不再硬编码版本串——硬编码已在 v301
+      #   停留多轮，与实际发布的 v300/v310/v320 全部脱节，导致下载按钮指向空。
+      - name: Resolve published APK filename
+        run: |
+          short=$(node -p "require('./package.json').version.replace(/\./g,'')")
+          echo "APK_NAME=PingPongDuel-v${short}.apk" | tee -a "$GITHUB_ENV"
+          # 与 download.html / _headers 交叉校验：三者必须指向同一个文件名
+          grep -q "$APK_NAME" public/download.html || { echo "::error::download.html 未引用 $APK_NAME"; exit 1; }
+          grep -q "$APK_NAME" public/_headers || { echo "::error::_headers 未引用 $APK_NAME"; exit 1; }
+
       - name: Download CI-built APK
         continue-on-error: true
         if: needs.build-apk.outputs.built == 'true'
@@ -140,17 +150,16 @@ jobs:
       - name: Rename APK to the published filename
         if: needs.build-apk.outputs.built == 'true'
         run: |
-          mv public/PingPongDuel.apk public/PingPongDuel-v301.apk
-          ls -l public/PingPongDuel-v301.apk
+          mv public/PingPongDuel.apk "public/$APK_NAME"
+          ls -l "public/$APK_NAME"
 
-      # 构建被跳过时回退 Release 既有包；Release 侧的资产名历史上有 v300/v301 两种，逐一尝试
+      # 构建被跳过时回退 Release 既有包；Release 侧的资产名随版本变，按当前版本号取
       - name: Fallback to Release APK
         if: needs.build-apk.outputs.built != 'true'
         run: |
           base="https://github.com/${{ github.repository }}/releases/download/v3.0.0"
-          curl -fsSL --retry 2 -o public/PingPongDuel-v301.apk "$base/PingPongDuel-v301.apk" \
-            || curl -fsSL --retry 3 -o public/PingPongDuel-v301.apk "$base/PingPongDuel-v300.apk"
-          ls -l public/PingPongDuel-v301.apk
+          curl -fsSL --retry 3 -o "public/$APK_NAME" "$base/$APK_NAME"
+          ls -l "public/$APK_NAME"
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
@@ -168,6 +177,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download CI-built APK
         uses: actions/download-artifact@v8
         with:
@@ -178,10 +190,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 资产名与站点对外文件名保持一致（PingPongDuel-v301.apk），
-          # 否则回退路径需要按两种名字试取
-          mv android/PingPongDuel.apk PingPongDuel-v301.apk
-          gh release upload v3.0.0 PingPongDuel-v301.apk --repo "${{ github.repository }}" --clobber
+          # 资产名与站点对外文件名保持一致，从 package.json 真源推导
+          short=$(node -p "require('./package.json').version.replace(/\./g,'')")
+          apk="PingPongDuel-v${short}.apk"
+          mv android/PingPongDuel.apk "$apk"
+          gh release upload v3.0.0 "$apk" --repo "${{ github.repository }}" --clobber
 
   # ===== 联机 DO 宿主 Worker（game-room，源码 src/）=====
   # 需要 Token 含 Account → Workers Scripts → Edit 权限（2026-08-29 起已配置）
@@ -206,18 +219,31 @@ jobs:
     needs: deploy-pages
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: 首页
         run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/"
 
       - name: 下载页
         run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/download.html"
 
+      # 冒烟必须校验下载页真实引用的那个文件名：从 download.html 抠出来，
+      # 而不是硬编码——写死版本号会让下载按钮指向空文件时冒烟仍然全绿。
+      - name: 解析下载页引用的 APK 文件名
+        id: apkname
+        run: |
+          name=$(grep -o 'PingPongDuel-v[0-9]\+\.apk' public/download.html | head -1)
+          if [ -z "$name" ]; then echo "::error::download.html 未找到 APK 文件名"; exit 1; fi
+          echo "file=$name" >> "$GITHUB_OUTPUT"
+          echo "download.html 引用：$name"
+
       # ★ 必须校验响应体真的是 APK：文件缺失时 SPA 回退会返回 200 + HTML，
       #   仅用 curl -f 只看状态码，历史上因此长期漏检（下载按钮指向网页）。
       #   刚部署完 CDN 边缘尚未收敛，故带重试。
       - name: APK 直链（校验确为 APK，而非 SPA 回退 HTML）
         run: |
-          url="https://ping-pong-duel.pages.dev/PingPongDuel-v301.apk"
+          url="https://ping-pong-duel.pages.dev/${{ steps.apkname.outputs.file }}"
           for i in $(seq 1 12); do
             if curl -fsSL --max-time 30 -H 'Cache-Control: no-cache' -r 0-511 "$url" -o /tmp/apk-head.bin \
                && [ "$(head -c 2 /tmp/apk-head.bin)" = "PK" ]; then

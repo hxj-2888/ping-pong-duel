@@ -34,6 +34,7 @@
     dashEntry: document.getElementById('dashEntry'),
     btnSetupToggle: document.getElementById('btnSetupToggle'),
     setupGroup: document.getElementById('setupGroup'),
+    btnSetupClose: document.getElementById('btnSetupClose'), // 竖屏：队伍配置抽屉关闭钮
     setupSummaryText: document.getElementById('setupSummaryText'),
     // 局前设置的队伍/队名（主按钮副标题与折叠摘要据此生成）
     teamMe: document.getElementById('teamMe'),
@@ -125,6 +126,11 @@
     tiFlagR: document.getElementById('tiFlagR'),
     tiNameL: document.getElementById('tiNameL'),
     tiNameR: document.getElementById('tiNameR'),
+    // 开场状态区（竖屏）：等宽倒计时数字 + 进度条 + 立即开始/返回主菜单出口
+    tiCount: document.getElementById('tiCount'),
+    tiBar: document.getElementById('tiBar'),
+    tiStart: document.getElementById('tiStart'),
+    tiBack: document.getElementById('tiBack'),
     phaseBanner: document.getElementById('phaseBanner'),
     serveTimer: document.getElementById('serveTimer'),
     pointToast: document.getElementById('pointToast'),
@@ -133,6 +139,9 @@
     hitRangeInfo: document.getElementById('hitRangeInfo'),
     ballHeight: document.getElementById('ballHeight'),
     inBoxStatus: document.getElementById('inBoxStatus'),
+    // 竖屏排版（2026-10-06）：右缘球高刻度游标（替代中央球高文字）
+    bhScale: document.getElementById('ballHeightScale'),
+    bhCursor: document.getElementById('bhCursor'),
     quality: document.getElementById('quality'),
     setNoCrowd: document.getElementById('setNoCrowd'),
     appVersion: document.getElementById('appVersion'),
@@ -179,6 +188,7 @@
     btnBack: document.getElementById('btnBack'),
     joyBase: document.getElementById('joyBase'),
     joyKnob: document.getElementById('joyKnob'),
+    joyArea: document.getElementById('joyArea'),   // 摇杆隐形响应热区（竖屏 160×160）
     btnCrouch: document.getElementById('btnCrouch'),
     btnSmash: document.getElementById('btnSmash'),
     btnPause: document.getElementById('btnPause'),
@@ -261,7 +271,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.1.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.2.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
