@@ -90,8 +90,12 @@ if not exist "%~dp0release.keystore" (
   keytool -genkeypair -keystore "%~dp0release.keystore" -alias ppd -keyalg RSA -keysize 2048 ^
     -validity 10000 -storepass "%KEYSTORE_PASS%" -keypass "%KEY_PASS%" -dname "CN=PPD, OU=PPD, O=PPD, L=CN, S=CN, C=CN" -noprompt
 )
+rem 签名：v1（JAR）+ v2 + v3 全开。
+rem   v1 不能省：minSdk 24 技术上只需 v2，但部分国产 ROM 的安装器 / 安全组件只认 v1，
+rem   缺 v1 时安装器报「解析包错误」，而 apksigner verify 仍显示 Verifies（包没坏，
+rem   是被设备侧校验拒了）。2026-10-06 踩过，别再关掉。
 call "%BT%\apksigner.bat" sign --ks "%~dp0release.keystore" --ks-pass pass:%KEYSTORE_PASS% ^
-  --key-pass pass:%KEY_PASS% --v1-signing-enabled false --out "%OUT%\PingPongDuel.apk" "%OUT%\aligned.apk" || goto :err
+  --key-pass pass:%KEY_PASS% --v1-signing-enabled true --out "%OUT%\PingPongDuel.apk" "%OUT%\aligned.apk" || goto :err
 
 rem copy the APK back to the source folder
 copy /Y "%OUT%\PingPongDuel.apk" "%~dp0PingPongDuel.apk" >nul || goto :err
