@@ -1626,3 +1626,88 @@ input[type="range"]:focus-visible,
   #menu .logo { padding: var(--sp-1) 0; }
   .menu-scroll { padding-top: 132px; }
 }
+/* ============================================================
+ * 移动端竖屏适配（v3.0.3 · 2026-10-06）
+ * ------------------------------------------------------------
+ * 目标：**竖屏也能完整玩**，视觉基本复刻端游（同一套配色 / 圆角 / 令牌），
+ *      只按竖屏可用空间重排位置，不引入第二套设计语言。
+ *
+ * 背景：原页面按横屏调校（比分栏 top:14、操作提示 top:76、虚线面板 top:46、
+ *      发球计时 top:200），720px 断点里的 top 值（124/176/316）同样是横屏口径。
+ *      竖屏 390×844 下这些绝对定位互相叠压：玩家名被挤成竖排、操作提示盖住比分栏。
+ *
+ * 球台纵向铺满是**刻意保留**的：物理与渲染都是全屏画布（vw 驱动），
+ *      竖屏下桌面 / 观众席 / 挡板一应俱全，只是纵向视野更长——无需改引擎。
+ *
+ * 断点：orientation:portrait + max-width:520px（覆盖主流手机竖屏 360~430 宽）
+ * ============================================================ */
+@media (orientation:portrait) and (max-width:520px){
+  /* ---- 比分栏：横向铺满而非居中窄条；玩家名单行省略，绝不竖排 ---- */
+  #hud{
+    left:8px; right:8px; top:10px; transform:none;
+    width:auto; max-width:none;
+    gap:8px; padding:6px 10px; border-radius:12px;
+  }
+  #hud .player-box{min-width:0;flex:1 1 0;gap:6px}
+  #hud .player-box.right{justify-content:flex-end}
+  #hud .player-box span{
+    font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:4.5em;
+  }
+  #hud .score{font-size:24px;min-width:28px}
+  #hud .center{width:30px}
+  #hud .flag{width:18px;height:12px;flex:0 0 auto}
+
+  /* ---- 操作提示：贴在比分栏下方，绝不叠压；过长自动换行 ---- */
+  #hintBar{
+    left:8px; right:8px; transform:none;
+    top:58px; width:auto; max-width:none;
+    white-space:normal;
+    font-size:11px; line-height:1.5; text-align:center;
+    padding:3px 8px; border-radius:10px;
+  }
+
+  /* ---- 虚线面板（击球范围）：改到右上角窄条，与提示条分列 ---- */
+  #hitRangeInfo{
+    top:96px; left:auto; right:8px; transform:none;
+    flex-direction:row; flex-wrap:wrap; justify-content:flex-end;
+    gap:2px 8px; width:fit-content; max-width:calc(100vw - 16px);
+    font-size:11px; padding:4px 8px;
+  }
+
+  /* ---- 发球倒计时：挪到球台上方空域，避免压住球台 ---- */
+  #serveTimer{ top:34%; font-size:20px; letter-spacing:3px; }
+
+  /* ---- 触控区：摇杆与按钮贴近拇指，底部留安全区 ---- */
+  #touchControls .tc-btns{
+    right:14px; bottom:calc(18px + env(safe-area-inset-bottom));
+  }
+  .joy-area{ width:132px; height:132px; }
+  #touchControls .tc-group{ gap:10px; }
+
+  /* ---- 菜单页：竖屏一屏放不下时允许滚动，标题区不占位过高 ---- */
+  #menu .logo{ padding:10px 0 8px; }
+  .menu-scroll{ padding-top:96px; }
+  #hintBar{ z-index:6; }
+}
+
+/* ---------- 极窄竖屏（<=360px，部分安卓小屏）：再收一档 ---------- */
+@media (orientation:portrait) and (max-width:360px){
+  #hud{ gap:4px; padding:5px 8px; }
+  #hud .player-box span{ font-size:12px; max-width:3.4em; }
+  #hud .score{ font-size:21px; min-width:24px; }
+  #hintBar{ font-size:10px; top:54px; }
+  #hitRangeInfo{ top:92px; }
+  .joy-area{ width:118px; height:118px; }
+}
+/* ---------- 追加修正：比分栏与右上工具栏在竖屏抢同一行 ---------- */
+@media (orientation:portrait) and (max-width:520px){
+  /* 工具栏保持右上（它是操作入口，不该挪）；比分栏整体下移一行让位。
+     两个 fixed 元素各占一行，互不叠压——比分栏仍横贯全宽，视觉重心不变。 */
+  #hud{ top:44px; }
+  #gameTools{ top:8px; right:8px; }
+  #hintBar{ top:92px; }
+  #hitRangeInfo{ top:126px; }
+  #serveTimer{ top:36%; }
+  /* 帧率/延迟是诊断信息，竖屏窄屏先让位给操作（横屏仍显示） */
+  #gameTools .stat-stack{ display:none; }
+}
