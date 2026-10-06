@@ -117,13 +117,26 @@
   function showTouch(v) {
     // 手机端已取消本地分屏（需求 11）：P2 触控组与分屏适配已删除，仅 P1 一组控件
     PPD.show(PPD.ui.touchControls, v && PPD.isTouch);
+    // 竖屏：操作提示不再常驻顶部，改为开局浮层展示 2.5s 后自动消失
+    // （延迟一拍执行，确保各start* 已把本局提示文案写进 hintBar）
+    if (v && PPD.isTouch && PPD.flashHintBar) {
+      setTimeout(() => PPD.flashHintBar(), 0);
+    }
   }
-
   // 全方位摇杆：拖动映射左/右/前/后（可斜向移动），松手回中
-  const JOY_MAX = 48; // 摇杆最大行程（px）
-  // 摇杆工厂：P1/P2 各一个实例，base/knob 为各自 DOM，keyMap 指定写入哪一侧键组（'keyP1'/'keyP2'）
-  function makeJoy(base, knob, keyMap) {
-    const joy = { active: false, id: -1, cx: 0, cy: 0, dx: 0, dy: 0 };
+  const JOY_MAX = 48; // 摇杆最大行程（px，横屏固定底座时使用）
+  // 竖屏浮动摇杆：底座改为「按下触点处生成」，行程按底座/推杆实测尺寸反算
+  // （底座 R56、推杆 R24 → 可用行程 32px），推杆不会滑出底座。
+  function joyTravel(base, knob) {
+    const bw = base && base.offsetWidth ? base.offsetWidth : 0;
+    const kw = knob && knob.offsetWidth ? knob.offsetWidth : 0;
+    if (!bw || !kw) return JOY_MAX;
+    return Math.max(16, bw / 2 - kw / 2);
+  }
+  // 摇杆工厂：base/knob 为各自 DOM，keyMap 指定写入哪一侧键组（'keyP1'/'keyP2'）；
+  // area 为放大的隐形响应热区（竖屏 160×160，底座在其内浮动生成）。
+  function makeJoy(base, knob, keyMap, area) {
+    const joy = { active: false, id: -1, cx: 0, cy: 0, dx: 0, dy: 0, max: JOY_MAX };
     const apply = () => {
       const k = PPD.app[keyMap];
       k.r = joy.dx > 0.25 ? 1 : 0;
@@ -135,9 +148,9 @@
     const move = (clientX, clientY) => {
       let dx = clientX - joy.cx, dy = clientY - joy.cy;
       const len = Math.hypot(dx, dy);
-      if (len > JOY_MAX) { dx = (dx / len) * JOY_MAX; dy = (dy / len) * JOY_MAX; }
-      joy.dx = dx / JOY_MAX;
-      joy.dy = dy / JOY_MAX;
+      if (len > joy.max) { dx = (dx / len) * joy.max; dy = (dy / len) * joy.max; }
+      joy.dx = dx / joy.max;
+      joy.dy = dy / joy.max;
       if (knob) knob.style.transform = `translate(${dx}px, ${dy}px)`;
       apply();
     };
@@ -147,25 +160,51 @@
       const k = PPD.app[keyMap];
       k.l = 0; k.r = 0; k.f = 0; k.b = 0;
       if (knob) knob.style.transform = 'translate(0,0)';
+      // 浮动摇杆松手回位：底座撤回热区内的引导位并恢复半透明
+      if (base && base.style) { base.style.left = ''; base.style.top = ''; }
+      if (base && base.classList) base.classList.remove('active');
       syncKeys();
     };
-    if (base) {
-      base.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        joy.active = true; joy.id = e.pointerId;
-        const r = base.getBoundingClientRect();
-        joy.cx = r.left + r.width / 2; joy.cy = r.top + r.height / 2;
-        move(e.clientX, e.clientY);
-        if (base.setPointerCapture) { try { base.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } }
-      });
-      base.addEventListener('pointermove', (e) => {
-        if (joy.active && e.pointerId === joy.id) move(e.clientX, e.clientY);
-      });
-      const end = (e) => { if (joy.active && e.pointerId === joy.id) reset(); };
-      base.addEventListener('pointerup', end);
-      base.addEventListener('pointercancel', end);
-      base.addEventListener('pointerleave', end);
-      base.addEventListener('contextmenu', (e) => e.preventDefault());
+    const press = (target) => (e) => {
+      if (!e) return;
+      if (e.preventDefault) e.preventDefault();
+      // 触摸命中底座后事件还会冒泡到热区容器，按 pointerId 去重避免二次处理
+      if (joy.active && joy.id === e.pointerId) return;
+      joy.active = true; joy.id = e.pointerId;
+      joy.max = joyTravel(base, knob);
+      // 竖屏：浮动摇杆，中心取触点（底座在热区内的按下处生成）；
+      // 横屏：底座固定可见，中心仍取底座自身中心（行为与原先完全一致）
+      const floating = !!(window.matchMedia
+        && window.matchMedia('(orientation: portrait) and (max-width: 520px)').matches);
+      const ex = e.clientX, ey = e.clientY;
+      let cx = ex, cy = ey;
+      if (!floating || ex === undefined || ey === undefined) {
+        const r = base && base.getBoundingClientRect ? base.getBoundingClientRect() : null;
+        if (!r) return;
+        cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+      }
+      joy.cx = cx; joy.cy = cy;
+      if (floating && base && base.style) {
+        base.style.left = cx + 'px';
+        base.style.top = cy + 'px';
+        if (base.classList) base.classList.add('active');
+      }
+      // 首帧位移按「按下点相对中心」计算（浮动摇杆为 0，横屏为底座中心→按下点）
+      move(ex === undefined ? cx : ex, ey === undefined ? cy : ey);
+      if (target && target.setPointerCapture) { try { target.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } }
+    };
+    const drag = (e) => { if (joy.active && e.pointerId === joy.id) move(e.clientX, e.clientY); };
+    const end = (e) => { if (joy.active && e.pointerId === joy.id) reset(); };
+    const noMenu = (e) => { if (e && e.preventDefault) e.preventDefault(); };
+    // 底座与热区容器都挂监听：命中任一都能拖动（去重保证只生效一次）
+    for (const t of [base, area]) {
+      if (!t || !t.addEventListener) continue;
+      t.addEventListener('pointerdown', press(t));
+      t.addEventListener('pointermove', drag);
+      t.addEventListener('pointerup', end);
+      t.addEventListener('pointercancel', end);
+      t.addEventListener('pointerleave', end);
+      t.addEventListener('contextmenu', noMenu);
     }
     return { apply, reset };
   }
@@ -191,7 +230,8 @@
       PPD.ui.btnCrouch.addEventListener('pointerleave', crouchOff);
     }
     // 手机端已取消本地分屏：仅 P1 一套摇杆（P2 触控组已删除）
-    makeJoy(PPD.ui.joyBase, PPD.ui.joyKnob, 'keyP1');
+    // 第四参数为隐形响应热区（竖屏 160×160，底座在热区内的触点处浮动生成）
+    makeJoy(PPD.ui.joyBase, PPD.ui.joyKnob, 'keyP1', PPD.ui.joyArea);
   }
   bindTouch();
 

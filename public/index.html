@@ -81,17 +81,23 @@
           <span class="summary-text" id="setupSummaryText">我的队伍 · 中等难度 · 修改</span>
         </button>
         <div id="setupGroup" class="setup-group" hidden>
+          <!-- 竖屏抽屉头（方案 §3.3⑦）：桌面隐藏，竖屏为底部抽屉的标题 + 关闭 -->
+          <div class="setup-sheet-head">
+            <span class="setup-sheet-title">队伍配置</span>
+            <button id="btnSetupClose" class="setup-sheet-close" type="button" aria-label="关闭队伍配置">✕</button>
+          </div>
           <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（旗帜以颜色命名，系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
-          <div class="team-pick">
-            <label class="ai-label">我的队伍
-              <span class="team-flag" id="teamFlagMe"></span>
-              <select id="teamMe"></select>
-            </label>
+          <div class="pick-row">
+            <span class="pick-tag">我的队伍</span>
+            <span class="team-flag" id="teamFlagMe"></span>
+            <select id="teamMe" class="pick-team"></select>
             <input id="teamMeName" class="team-name" maxlength="6" placeholder="队名">
           </div>
+          <div class="swatch-row" id="swatchMe"></div>
           <!-- 人机电脑：难度 + 旗帜 + 队名 合并同一栏（电脑对手配置） -->
           <div class="pick-row">
             <span class="pick-tag">电脑</span>
+            <span class="segmented-host pick-seg" data-segmented-for="aiLevel"></span>
             <select id="aiLevel" class="pick-diff">
               <option value="0">简单</option>
               <option value="1" selected>中等</option>
@@ -102,9 +108,11 @@
             <select id="teamOpp" class="pick-team"></select>
             <input id="teamOppName" class="team-name" maxlength="6" placeholder="队名">
           </div>
+          <div class="swatch-row" id="swatchOpp"></div>
           <!-- 模拟推演：甲/乙双方 难度 + 旗帜 + 队名 合并同一栏 -->
           <div class="pick-row">
             <span class="pick-tag">甲</span>
+            <span class="segmented-host pick-seg" data-segmented-for="aiLevelA"></span>
             <select id="aiLevelA" class="pick-diff">
               <option value="0">简单</option>
               <option value="1" selected>中等</option>
@@ -115,8 +123,10 @@
             <select id="teamA" class="pick-team"></select>
             <input id="teamAName" class="team-name" maxlength="6" placeholder="队名">
           </div>
+          <div class="swatch-row" id="swatchA"></div>
           <div class="pick-row">
             <span class="pick-tag">乙</span>
+            <span class="segmented-host pick-seg" data-segmented-for="aiLevelB"></span>
             <select id="aiLevelB" class="pick-diff">
               <option value="0">简单</option>
               <option value="1" selected>中等</option>
@@ -127,6 +137,7 @@
             <select id="teamB" class="pick-team"></select>
             <input id="teamBName" class="team-name" maxlength="6" placeholder="队名">
           </div>
+          <div class="swatch-row" id="swatchB"></div>
         </div>
       <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
       <div class="row apk-row">
@@ -223,8 +234,14 @@
     <!-- 左上角：判定指示（v2.4 精简：只保留 球高/进箱；碰撞箱数字、扣杀/高吊指示已移除；虚线框在场景中绘制） -->
     <div id="hitRangeInfo">
       <div class="hr-title">接球判定（进箱即命中）</div>
-      <div class="hr-row"><span class="hr-dot ball"></span><span>球高 <b id="ballHeight">-</b></span></div>
+      <!-- hr-row-ball=球高精确值：桌面保留，竖屏移交右缘刻度条（.bh-scale）显示 -->
+      <div class="hr-row hr-row-ball"><span class="hr-dot ball"></span><span>球高 <b id="ballHeight">-</b></span></div>
       <div class="hr-row"><span class="hr-dot box"></span><span>进箱 <b id="inBoxStatus" class="off">-</b></span></div>
+    </div>
+    <!-- 竖屏球高刻度：右缘竖向刻度 + 游标，替代中央「球高 0.98m」文字（纯排版层，沿用现有高亮色） -->
+    <div id="ballHeightScale" class="bh-scale" aria-hidden="true">
+      <div class="bh-track"></div>
+      <div class="bh-cursor" id="bhCursor"></div>
     </div>
     <!-- 右上角工具：设置 / 暂停 / 退出（人机难度在开局菜单选定，对局中锁定不可切换） -->
     <div id="gameTools" class="game-tools">
@@ -323,6 +340,13 @@
         </div>
       </div>
       <div class="ti-tag">比赛即将开始</div>
+      <!-- 竖屏排版（方案 §1）：状态区 = 等宽倒计时 + 4dp 进度条 + 开始/返回出口；非竖屏隐藏（.ti-count/.ti-bar/.ti-actions） -->
+      <div class="ti-count"><span id="tiCount">3</span></div>
+      <div class="ti-bar"><i id="tiBar"></i></div>
+      <div class="ti-actions">
+        <button id="tiStart" class="btn primary ti-btn-main" type="button">立即开始</button>
+        <button id="tiBack" class="btn ti-btn-sub" type="button">返回主菜单</button>
+      </div>
     </div>
     <!-- 手机端触控（触屏设备才显示）：摇杆移动 + 蹲下按钮 + 说明书入口；扣球用上滑手势（单击=推球） -->
     <div id="touchControls" class="touch-controls" style="display:none">

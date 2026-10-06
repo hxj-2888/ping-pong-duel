@@ -178,6 +178,17 @@
     phaseBannerTimer = setTimeout(() => { el.style.opacity = 0; }, 1400);
   }
 
+  // 竖屏：常驻操作提示改为浮层——开局展示 2.5s 后自动消失（内容仍在说明书里），
+  // 不再长期占据顶部横向空间。非竖屏 .flash 无对应样式，行为与原先一致。
+  let hintFlashTimer = null;
+  function flashHintBar() {
+    const el = PPD.ui.hintBar;
+    if (!el || !el.classList) return;
+    el.classList.add('flash');
+    clearTimeout(hintFlashTimer);
+    hintFlashTimer = setTimeout(() => { el.classList.remove('flash'); }, 2500);
+  }
+
   // 6 秒发球倒计时：只在发球方持球时显示；剩余 2 秒进入红色警示。
   function updateServeTimer(phId, ballInHand, phaseT) {
     const el = PPD.ui.serveTimer;
@@ -264,7 +275,15 @@
       return `${label(i)}${inBox ? ' 进箱' : ' 未进箱'}`;
     });
     elS.textContent = parts.join(' · ');
-    elS.className = anyIn ? 'on' : 'off';
+        elS.className = anyIn ? 'on' : 'off';
+        // 竖屏球高刻度游标（右缘 6dp 竖条）：替代中央「球高 0.98m」文字，只表达相对高低
+        const cur = PPD.ui.bhCursor;
+        if (cur && cur.style) {
+          const H_MAX = 1.8; // 刻度满量程（米）：与球路上限同量级，超出即贴顶
+          const pct = Math.max(0, Math.min(1, (bv ? bv.y : 0) / H_MAX)) * 100;
+          cur.style.bottom = pct.toFixed(1) + '%';
+          cur.style.opacity = anyIn ? '1' : '0.3';
+        }
     // 感知辅助（仅判定范围显示开启时）：球进入"人类控制方"（人机=侧0；本地=P1/P2）
     // 箱体的上升沿 → 短提示音，帮玩家抓住出手时机；对打阶段才触发
     if (PPD.app.showHitRanges && (mode === 'ai' || mode === 'local') &&
@@ -399,5 +418,6 @@
   PPD.handleEngineEvents = handleEngineEvents;
   PPD.showPoint = showPoint;
   PPD.showPhase = showPhase;
+  PPD.flashHintBar = flashHintBar;
   PPD.addFx = addFx;
 })();

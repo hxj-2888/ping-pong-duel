@@ -129,15 +129,73 @@
     }
   }
 
+  // ---------- 队伍颜色色块选择（竖屏队伍配置抽屉用）：
+  // 8 个色块取自上方同一份 TEAMS 配色池，点击写回原<select> 并派发 change，
+  // 既有持久化/摘要刷新逻辑完全复用，不新增系统。非竖屏由 CSS 隐藏。 ----------
+  const SWATCH_IDS = { me: 'swatchMe', opp: 'swatchOpp', a: 'swatchA', b: 'swatchB' };
+  function initSwatches() {
+    if (!document || typeof document.getElementById !== 'function') return;
+    if (typeof document.createElement !== 'function') return;
+    for (const key of Object.keys(SWATCH_IDS)) {
+      const host = document.getElementById(SWATCH_IDS[key]);
+      const sel = PPD.$id(PICKERS[key].sel);
+      if (!host || !sel || !host.appendChild) continue;
+      const sync = () => {
+        const kids = host.children || [];
+        for (let i = 0; i < kids.length; i++) {
+          const on = !!kids[i].classList && kids[i].classList.toggle;
+          if (on) kids[i].classList.toggle('active', TEAMS[i] && TEAMS[i].id === sel.value);
+        }
+      };
+      for (const t of TEAMS) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'swatch';
+        b.title = t.name;
+        try { b.style.setProperty('--sw', t.color); } catch (e) { /* 测试桩无 setProperty */ }
+        b.addEventListener('click', () => {
+          if (sel.value === t.id) return;
+          sel.value = t.id;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        host.appendChild(b);
+      }
+      sel.addEventListener('change', sync);
+      sync();
+    }
+  }
+
   // ---------- 对局开场渲染：双方旗帜 + 队名 + VS（渲染结束进入对局） ----------
   const INTRO_MS = 2200; // 开场渲染时长（渲染结束后进入对局）
   let introToken = 0;
   let introTimer = null;
+    let introFinish = null;   // 当前开场的「立即收尾」回调（立即开始 / 跳过共用）
+// 开场倒计时 + 进度条：每 100ms 自续一个 setTimeout（不用 setInterval，
+  // 保证任何路径都能被clearTimeout 收干净，不会在测试里留下悬挂定时器）。
+  // 仅当 DOM 存在（真实页面）时启用；测试沙箱无这些节点即整体跳过。
+  function startCountdown(token) {
+    const u = PPD.ui;
+    const hasCount = !!(u.tiCount && u.tiBar);
+    const t0 = Date.now();
+    const tick = () => {
+      if (token !== introToken) return;
+      const left = Math.max(0, INTRO_MS - (Date.now() - t0));
+      if (hasCount) {
+        u.tiCount.textContent = String(Math.max(0, Math.ceil(left / 1000)));
+        try { u.tiBar.style.width = (left / INTRO_MS * 100).toFixed(1) + '%'; } catch (e) { /* ignore */ }
+      }
+      if (left <= 0) { if (introFinish) introFinish(); return; }
+      introTimer = setTimeout(tick, 100);
+    };
+    tick();
+  }
+
   function showTeamIntro(teams) {
     const u = PPD.ui;
     if (!u.teamIntro) return;
     const token = ++introToken;
     clearTimeout(introTimer);
+    introFinish = null;
     setFlag(u.tiFlagL, teams[0]);
     setFlag(u.tiFlagR, teams[1]);
     u.tiNameL.textContent = teams[0].name;
@@ -149,8 +207,11 @@
     u.teamIntro.classList.remove('hide');
     void u.teamIntro.offsetWidth; // 强制重排，触发渐入
     u.teamIntro.classList.add('show');
-    introTimer = setTimeout(() => {
+    // 收尾回调：倒计时走完与「立即开始」共用同一条路径，行为完全一致
+    introFinish = () => {
       if (token !== introToken) return;
+      introFinish = null;
+      clearTimeout(introTimer);
       PPD.app.introActive = false; // 渲染结束：进入对局
       u.teamIntro.classList.add('hide');
       setTimeout(() => {
@@ -159,12 +220,15 @@
         u.teamIntro.classList.remove('show');
         u.teamIntro.classList.remove('hide');
       }, 350);
-    }, INTRO_MS);
+    };
+    startCountdown(token);
   }
+
   // 返回主菜单/退出对局时立即关闭开场渲染
   function cancelTeamIntro() {
     introToken++;
     clearTimeout(introTimer);
+    introFinish = null;
     PPD.app.introActive = false;
     const u = PPD.ui;
     if (u.teamIntro) {
@@ -174,10 +238,22 @@
     }
   }
 
+  // 开场出口按钮（竖屏排版方案 §1.5）：立即开始 = 直接收尾；返回主菜单 = 退出开场。
+  if (PPD.ui.tiStart) {
+    PPD.ui.tiStart.addEventListener('click', () => { if (introFinish) introFinish(); });
+  }
+  if (PPD.ui.tiBack) {
+    PPD.ui.tiBack.addEventListener('click', () => {
+      cancelTeamIntro();
+      if (PPD.backToMenu) PPD.backToMenu();
+    });
+  }
+
   PPD.Teams = { TEAMS };
   PPD.resolveMatchTeams = resolveMatchTeams;
   PPD.setTeamFlag = setFlag;
   PPD.showTeamIntro = showTeamIntro;
   PPD.cancelTeamIntro = cancelTeamIntro;
   initPickers();
+  initSwatches(); // 竖屏队伍配置抽屉的色块选择（桌面隐藏，不影响原有下拉）
 })();

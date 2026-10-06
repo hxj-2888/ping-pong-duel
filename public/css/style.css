@@ -1627,87 +1627,359 @@ input[type="range"]:focus-visible,
   .menu-scroll { padding-top: 132px; }
 }
 /* ============================================================
- * 移动端竖屏适配（v3.0.3 · 2026-10-06）
- * ------------------------------------------------------------
- * 目标：**竖屏也能完整玩**，视觉基本复刻端游（同一套配色 / 圆角 / 令牌），
- *      只按竖屏可用空间重排位置，不引入第二套设计语言。
- *
- * 背景：原页面按横屏调校（比分栏 top:14、操作提示 top:76、虚线面板 top:46、
- *      发球计时 top:200），720px 断点里的 top 值（124/176/316）同样是横屏口径。
- *      竖屏 390×844 下这些绝对定位互相叠压：玩家名被挤成竖排、操作提示盖住比分栏。
- *
- * 球台纵向铺满是**刻意保留**的：物理与渲染都是全屏画布（vw 驱动），
- *      竖屏下桌面 / 观众席 / 挡板一应俱全，只是纵向视野更长——无需改引擎。
- *
- * 断点：orientation:portrait + max-width:520px（覆盖主流手机竖屏 360~430 宽）
+ * 球高刻度条（新增排版元素）：桌面隐藏，仅竖屏 HUD 用（右缘6dp 竖刻度 + 8dp 游标），
+ * 替代压在画面中央的「球高 0.98m」文字。颜色沿用现有高亮色，不新增色值。
  * ============================================================ */
-@media (orientation:portrait) and (max-width:520px){
-  /* ---- 比分栏：横向铺满而非居中窄条；玩家名单行省略，绝不竖排 ---- */
-  #hud{
-    left:8px; right:8px; top:10px; transform:none;
-    width:auto; max-width:none;
-    gap:8px; padding:6px 10px; border-radius:12px;
-  }
-  #hud .player-box{min-width:0;flex:1 1 0;gap:6px}
-  #hud .player-box.right{justify-content:flex-end}
-  #hud .player-box span{
-    font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:4.5em;
-  }
-  #hud .score{font-size:24px;min-width:28px}
-  #hud .center{width:30px}
-  #hud .flag{width:18px;height:12px;flex:0 0 auto}
+.bh-scale { display: none; }
+.bh-cursor { transition: bottom 0.08s linear, opacity 0.2s; }
 
-  /* ---- 操作提示：贴在比分栏下方，绝不叠压；过长自动换行 ---- */
-  #hintBar{
-    left:8px; right:8px; transform:none;
-    top:58px; width:auto; max-width:none;
-    white-space:normal;
-    font-size:11px; line-height:1.5; text-align:center;
-    padding:3px 8px; border-radius:10px;
+/* ---------- 开场倒计时 / 进度条 / 出口按钮：默认（桌面）隐藏，竖屏才显示 ---------- */
+.ti-count, .ti-bar, .ti-actions { display: none; }
+.ti-count {
+  font-size: 32px; font-weight: 800; line-height: 1.1; color: var(--primary-100);
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+}
+.ti-bar {
+  width: 240px; max-width: 100%; height: 4px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16); overflow: hidden;
+}
+.ti-bar > i { display: block; width: 100%; height: 100%; background: var(--primary-100); }
+.ti-actions { align-items: center; gap: 12px; }
+.ti-btn-main { min-width: 240px; }
+.ti-btn-sub { background: none; border: none; color: var(--text-3); }
+
+/* ---------- 队伍配置抽屉（竖屏）与色块选择：默认（桌面）隐藏 ---------- */
+.setup-sheet-head, .swatch-row { display: none; }
+.setup-sheet-close {
+  width: 44px; height: 44px; flex: none;
+  background: none; border: none; color: var(--text-2);
+  font-size: 18px; line-height: 1; cursor: pointer; border-radius: 10px;
+}
+.setup-sheet-close:hover { background: rgba(255, 255, 255, 0.08); }
+.team-swatches { display: flex; gap: 12px; flex-wrap: wrap; }
+.swatch {
+  width: 40px; height: 40px; flex: none; border-radius: 50%;
+  border: 2px solid transparent; background: var(--sw, #888);
+  position: relative; cursor: pointer; padding: 0;
+}
+.swatch.active { border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.22); }
+.swatch.active::after {
+  content: '\2713'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+}
+
+/* ============================================================
+ * 移动端竖屏排版（v3.1.1 · 2026-10-06）
+ * ------------------------------------------------------------
+ * 依据《乒乓对决_竖屏UI优化方案.md》落地：**只改排版**（位置 / 尺寸 / 间距 /
+ * 层级分组 / 可见性），不改配色体系、阵营色、按钮配色、渐变发光与任何图形造型
+ * （含旗帜本身——CSS 绘制比例保持不变，仅等比缩放）。
+ *
+ * 基准画布 390×844dp：横向固定 16dp 边距、纵向弹性；覆盖 360~430 宽机型。
+ * 断点：orientation:portrait + max-width:520px
+ * ============================================================ */
+@media (orientation: portrait) and (max-width: 520px) {
+  /* ---------- 通用：命中区与文字下限 ---------- */
+  /* 触控热区：普通 ≥44×44、高频 ≥56×56（图形可小，用内边距撑开）；字号下限 11 */
+  .btn, .tool-btn, .seg-btn, .swatch, .tbtn { min-height: 44px; }
+
+  /* ============================================================
+   * 界面四/ 三·主菜单（方案 §3）
+   * ============================================================ */
+  /* ---- ① 标题栏：压到 48dp（图标 24 + 标题 20 同行）；英文副标题与
+        「ITTF 标准场地」下沉到设置-关于，首屏纵向让给名称行与入口 ---- */
+  #menu .logo {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 6;
+    display: flex; align-items: center; gap: 10px;
+    margin: 0; min-height: 48px; text-align: left;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 60px 12px 16px;
+    background: #0d1220;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  #menu .logo .logo-ball {
+    width: 24px; height: 24px; margin: 0; font-size: 15px;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+  }
+  #menu .logo h1 { font-size: 20px; letter-spacing: 3px; margin: 0; }
+  #menu .logo p { display: none; }
+
+  /* 设置 / 说明书：命中区 44×44、间距 12、靠右 16（不再紧贴成40px 小方块） */
+  #btnSettings, #btnManualMenu {
+    top: calc(env(safe-area-inset-top, 0px) + 2px);
+    right: 8px; width: 44px; height: 44px; font-size: 20px;
+  }
+  #btnManualMenu { top: calc(env(safe-area-inset-top, 0px) + 50px); }
+
+  /* ---- ② 名称行：独立成行（48dp）可点击改名，不再被标题栏压住 ---- */
+  /* .menu-card 有 backdrop-filter 会成为 fixed 子元素的包含块，竖屏关掉它 */
+  .menu-card { backdrop-filter: none; }
+  .menu-nick {
+    position: fixed; left: 0; right: 0; z-index: 6;
+    top: calc(env(safe-area-inset-top, 0px) + 48px);
+    height: 48px; margin: 0; padding: 0 16px; gap: 8px;
+    background: #0d1220;
+  }
+  .menu-nick input { font-size: 17px; height: 44px; }  /* ≥16px：防 iOS 聚焦缩放 */
+  .menu-nick .nick-pencil { font-size: 18px; }
+
+  /* ---- 首屏容器：内容整体下移 标题栏+名称行，底部留安全区（兜底可滑） ---- */
+  .menu-scroll {
+    margin: 0; width: 100%;
+    padding: calc(env(safe-area-inset-top, 0px) + 48px + 48px + 12px)
+             16px calc(env(safe-area-inset-bottom, 0px) + 16px);
   }
 
-  /* ---- 虚线面板（击球范围）：改到右上角窄条，与提示条分列 ---- */
-  #hitRangeInfo{
-    top:96px; left:auto; right:8px; transform:none;
-    flex-direction:row; flex-wrap:wrap; justify-content:flex-end;
-    gap:2px 8px; width:fit-content; max-width:calc(100vw - 16px);
-    font-size:11px; padding:4px 8px;
+  /* ---- 首屏零滚动：卡片自身作为 2 列宫格，条目按频次排布 ---- */
+  .menu-card {
+    width: 100%; max-width: 100%;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    padding: var(--sp-2);
+  }
+  /* 分组容器摊平（display:contents）→ 三个分组合成同一宫格；文字分隔线收起 */
+  .menu-card > .btn-group { display: contents; }
+  .menu-card > .group-divider { display: none; }
+
+  /* ---- ③ 战绩摘要条：56dp，左右两区各自 ≥44dp 点击区 ---- */
+  .menu-card > .records-block {
+    grid-column: 1 / -1;
+    min-height: 56px; padding: 6px 0; align-items: center;
+  }
+  .menu-card > .records-block .dash-cell {
+    min-height: 44px; justify-content: center; padding: 0 8px;
+  }
+  .menu-card > .records-block .dash-value { font-size: 18px; }
+  /* 上次战绩条在竖屏首屏让位（完整记录仍在个人生涯页；避免第四行破坏零滚动） */
+  .menu-card > .records-block .recent-match { display: none; }
+
+  /* ---- ④ 快速开始 56dp / ⑤ 联机对战 48dp：主次只用尺寸表达，不改配色 ---- */
+  .menu-card > #btnPrimaryAction {
+    grid-column: 1 / -1; min-height: 56px; padding: 0 16px;
+  }
+  .menu-card > .btn-group > #btnNetEntry { grid-column: 1 / -1; min-height: 48px; }
+
+  /* ---- ⑥ 玩法入口宫格：格171×88（图标 + 文案，整格点击区） ---- */
+  .menu-card > .btn-group > .btn {
+    min-height: 88px; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; gap: 6px;
+  }
+  .menu-card > .btn-group > .btn .btn-ico svg { width: 40px; height: 40px; }
+  .menu-card > .btn-group > .btn .btn-main { font-size: 13px; letter-spacing: 0; }
+  /* 奇数个入口时最后一个占满整行（由 app/main.js 标记 data-grid-last） */
+  .menu-card > .btn-group > .btn[data-grid-last] { grid-column: 1 / -1; }
+
+  /* APK 下载行：整行通栏（网页版才显示，APK 内不显示） */
+  .menu-card > .row.apk-row { grid-column: 1 / -1; }
+
+  /* ---- ⑦ 队伍配置：常驻摘要行 44dp + 抽屉式面板 ---- */
+  .menu-card > .setup-summary {
+    grid-column: 1 / -1; min-height: 44px; display: flex; align-items: center;
+  }
+  .setup-group {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 36;
+    margin: 0; padding: 4px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    max-height: 76vh; overflow-y: auto;
+    background: var(--bg-panel);
+    border: 1px solid var(--line); border-bottom: none;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
+    transform: translateY(102%); transition: transform 0.28s ease;
+  }
+  .setup-group:not([hidden]) { transform: translateY(0); }
+  #menu.setup-open::before {
+    content: ''; position: fixed; inset: 0; z-index: 35;
+    background: rgba(5, 10, 20, 0.62);
+  }
+  .setup-sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 44px; position: sticky; top: 0; background: var(--bg-panel); z-index: 1;
+  }
+  .setup-sheet-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+  .setup-group .pick-row { min-height: 56px; gap: 8px; }
+  .setup-group .pick-tag { min-width: 44px; }   /* 破坏性/身份标签行高44+，便于点按*/
+  /* 难度改三档分段控件、颜色改色块选择（竖屏）：原select 只作为数据源隐藏 */
+  .setup-group .pick-diff, .setup-group .pick-team { display: none; }
+  .pick-seg { display: inline-flex; }
+  .setup-group .pick-seg .segmented { width: 100%; }
+  .setup-group .pick-seg .seg-btn { flex: 1 1 0; min-height: 40px; }
+  /* 队伍颜色改色块选择（8 色 = 现有配色池，选中加描边 + 对勾） */
+  .swatch-row { display: block; padding: 2px 0 10px; }
+
+  /* ============================================================
+   * 界面二 · 对战 HUD（方案 §2）：中央 55% 不放常驻 UI
+   * ============================================================ */
+  /* ---- ① 比分条：单行 44dp；右侧为 ⚙/暂停 两个 44dp 按钮预留 ---- */
+  #hud {
+    left: 8px; right: 108px; top: calc(env(safe-area-inset-top, 0px) + 4px);
+    transform: none; width: auto; max-width: none;
+    height: 44px; gap: 6px; padding: 0 10px; border-radius: 12px;
+  }
+  #hud .player-box { min-width: 0; flex: 1 1 0; gap: 6px; }
+  #hud .player-box.right { justify-content: flex-end; }
+  #hud .player-box span {
+    font-size: 13px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 4.5em;
+  }
+  #hud .score {
+    font-size: 20px; min-width: 26px;
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+  }
+  #hud .center { width: 26px; }
+  #hud .flag { width: 18px; height: 12px; flex: 0 0 auto; }
+  /* 发球方圆点：横屏靠左右偏移，竖屏条宽收窄后改为居中（随 VS 徽章） */
+  #hud .serve-dot { left: 50% !important; top: -6px; margin-left: -4px; }
+
+  /* ---- 工具区：⚙ + 暂停 44×44 并入比分条同一行；退出收进暂停抽屉 ---- */
+  #gameTools {
+    top: calc(env(safe-area-inset-top, 0px) + 4px); right: 8px; gap: 8px;
+  }
+  #gameTools .tool-btn {
+    min-width: 44px; height: 44px; padding: 0 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #gameTools #btnExit { display: none; }              /* 防误触：退出走暂停面板（含二次确认） */
+  #gameTools .stat-stack { display: none; } /* 帧率/延迟是诊断信息，竖屏让位给操作 */
+
+  /* ---- ② 发球提示：从画面中央移到比分条下方胶囊 ---- */
+  #serveTimer {
+    top: calc(env(safe-area-inset-top, 0px) + 56px);
+    font-size: 16px; letter-spacing: 1px; padding: 6px 16px;
+    border-radius: 18px; background: rgba(10, 15, 26, 0.72);
+    border: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
   }
 
-  /* ---- 发球倒计时：挪到球台上方空域，避免压住球台 ---- */
-  #serveTimer{ top:34%; font-size:20px; letter-spacing:3px; }
-
-  /* ---- 触控区：摇杆与按钮贴近拇指，底部留安全区 ---- */
-  #touchControls .tc-btns{
-    right:14px; bottom:calc(18px + env(safe-area-inset-bottom));
+  /* ---- 常驻操作提示：改浮层，仅开局展示 2.5s（之后进说明书） ---- */
+  #hintBar {
+    left: 50%; right: auto; top: 42%; transform: translate(-50%, -50%);
+    width: auto; max-width: 82vw; opacity: 0;
+    font-size: 12px; line-height: 1.6; text-align: center; white-space: normal;
+    padding: 10px 16px; border-radius: 12px;
+    transition: opacity 0.3s;
   }
-  .joy-area{ width:132px; height:132px; }
-  #touchControls .tc-group{ gap:10px; }
+  #hintBar.flash { opacity: 1; }
 
-  /* ---- 菜单页：竖屏一屏放不下时允许滚动，标题区不占位过高 ---- */
-  #menu .logo{ padding:10px 0 8px; }
-  .menu-scroll{ padding-top:96px; }
-  #hintBar{ z-index:6; }
+  /* ---- ③ 瞬时提示（阶段/得分）：允许中央短暂浮现，位置上移避开球路 ---- */
+  #phaseBanner { top: 22%; font-size: 22px; letter-spacing: 2px; }
+  #pointToast { top: 30%; font-size: 18px; letter-spacing: 2px; }
+
+  /* ---- ④ 球高刻度：右缘 6×200dp 竖刻度 + 8dp 游标（球进入玩家半台时提亮） ---- */
+  .bh-scale {
+    display: block; position: fixed; right: 12px; top: 30%;
+    width: 6px; height: 200px; z-index: 5; pointer-events: none;
+  }
+  .bh-track {
+    position: absolute; inset: 0; border-radius: 3px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .bh-cursor {
+    position: absolute; left: 50%; bottom: 0;
+    width: 8px; height: 8px; margin-left: -4px; margin-bottom: -4px;
+    border-radius: 50%; background: var(--primary-100);
+    box-shadow: 0 0 8px rgba(0, 229, 176, 0.6);
+    opacity: 0.3;
+  }
+  /* 判定面板：竖屏只留「进箱」，球高精确值已移交刻度条 */
+  #hitRangeInfo {
+    top: calc(env(safe-area-inset-top, 0px) + 100px);
+    left: auto; right: 8px; transform: none;
+    flex-direction: row; flex-wrap: wrap; justify-content: flex-end;
+    gap: 2px 8px; width: fit-content; max-width: calc(100vw - 32px);
+    font-size: 11px; padding: 4px 8px;
+  }
+  #hitRangeInfo .hr-row-ball { display: none; }
+
+  /* ---- ⑤ 摇杆：浮动式（按下触点生成，R56底座 / R24 推杆），隐形热区 160×160 ---- */
+  #touchControls { padding: 0 18px calc(14px + env(safe-area-inset-bottom, 0px)); }
+  #touchControls .tc-group { gap: 10px; align-items: flex-end; }
+  .joy-area { position: relative; width: 160px; height: 160px; }
+  #joyBase {
+    position: absolute; left: 50%; top: 50%;
+    width: 112px; height: 112px; margin: 0;
+    transform: translate(-50%, -50%);
+    opacity: 0.22; transition: opacity 0.15s;
+  }
+  #joyBase.active { position: fixed; left: 0; top: 0; opacity: 1; }
+  #joyKnob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  /* ---- ⑥ 蹲按钮 64×64，与摇杆中心同一水平基线（摇杆中心 = 底 80px） ---- */
+  #touchControls .tc-btns { margin-bottom: 48px; }
+  .crouch-btn { width: 64px; height: 64px; font-size: 18px; }
+
+  /* ============================================================
+   * 界面一 · 对战准备页（方案 §1）
+   * ============================================================ */
+  .team-intro {
+    justify-content: center;
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px
+             calc(env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  /* 旗帜整体等比缩放至 139dp 宽（旗杆/旗面比例不变，不裁切、不拆成色块）；
+     139×2 + VS 56 + 间距 12×2 + 边距 16×2 = 390 ✅ */
+  .ti-row { gap: 12px; align-items: flex-end; justify-content: center; }
+  /* 两侧统一「旗帜在上、队名在下」的两行结构：配合 align-items:flex-end，
+     两面旗杆底部落在同一水平基准线（竖屏不再左右高低错位） */
+  .ti-team {
+    min-width: 0; flex: 1 1 0;
+    display: grid; grid-template-rows: auto auto; justify-items: center;
+    align-content: end; row-gap: 8px;
+  }
+  .ti-flag { grid-row: 1; }
+  .ti-flag {
+    --k: 1.2636;                      /* 110→139 等比系数（旗杆 92→116，总高≈126 ≤132） */
+    flex: none;
+    width: calc(110px * var(--k)); height: calc(74px * var(--k));
+  }
+  .ti-flag::before {
+    left: 0; top: calc(-8px * var(--k));
+    width: calc(5px * var(--k)); height: calc(92px * var(--k));
+  }
+  .ti-flag::after {
+    left: calc(5px * var(--k)); top: 0;
+    width: calc(100px * var(--k)); height: calc(68px * var(--k));
+    border-radius: 4px;
+    box-shadow: inset calc(-24px * var(--k)) 0 0 var(--flag-accent, #ffffff);
+  }
+  /* 队名单行居中：6 字自定义队名在 139dp 内完整显示，超长省略（禁止竖排/切字） */
+  .ti-name {
+    grid-row: 2;
+    font-size: 16px; letter-spacing: 1px; text-align: center;
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ti-vs { font-size: 22px; letter-spacing: 2px; width: 56px; flex: none; text-align: center; }
+  .ti-tag { margin-top: 20px; font-size: 13px; letter-spacing: 2px; }
+  .ti-count { display: block; margin-top: 6px; }
+  .ti-bar { display: block; margin: 10px auto 0; }
+  .ti-actions { display: flex; margin-top: 20px; }
+  .ti-btn-main { min-height: 48px; }
+  .ti-btn-sub { min-height: 44px; }
 }
 
 /* ---------- 极窄竖屏（<=360px，部分安卓小屏）：再收一档 ---------- */
-@media (orientation:portrait) and (max-width:360px){
-  #hud{ gap:4px; padding:5px 8px; }
-  #hud .player-box span{ font-size:12px; max-width:3.4em; }
-  #hud .score{ font-size:21px; min-width:24px; }
-  #hintBar{ font-size:10px; top:54px; }
-  #hitRangeInfo{ top:92px; }
-  .joy-area{ width:118px; height:118px; }
+@media (orientation: portrait) and (max-width: 360px) {
+  #menu .logo h1 { font-size: 19px; letter-spacing: 2px; }
+  .menu-card { gap: 10px; }
+  .menu-card > .btn-group > .btn { min-height: 80px; }
+  .menu-card > .btn-group > .btn .btn-ico svg { width: 32px; height: 32px; }
+  #hud { right: 100px; }
+  #hud .player-box span { font-size: 12px; max-width: 3.4em; }
+  #hud .score { font-size: 18px; min-width: 24px; }
+  .ti-flag { --k: 1.15; }
+  .ti-name { font-size: 14px; letter-spacing: 0; }
+  .ti-vs { width: 48px; font-size: 20px; }
 }
-/* ---------- 追加修正：比分栏与右上工具栏在竖屏抢同一行 ---------- */
-@media (orientation:portrait) and (max-width:520px){
-  /* 工具栏保持右上（它是操作入口，不该挪）；比分栏整体下移一行让位。
-     两个 fixed 元素各占一行，互不叠压——比分栏仍横贯全宽，视觉重心不变。 */
-  #hud{ top:44px; }
-  #gameTools{ top:8px; right:8px; }
-  #hintBar{ top:92px; }
-  #hitRangeInfo{ top:126px; }
-  #serveTimer{ top:36%; }
-  /* 帧率/延迟是诊断信息，竖屏窄屏先让位给操作（横屏仍显示） */
-  #gameTools .stat-stack{ display:none; }
+
+/* ---------- 矮屏竖屏（<=780dp 高，方案 §1.6 / §3.4 兜底）：
+   依次压缩宫格与旗帜，始终保持标题栏、名称行、快速开始首屏可见 ---------- */
+@media (orientation: portrait) and (max-height: 780px) {
+  .menu-card > .btn-group > .btn { min-height: 80px; }
+  .menu-card > .btn-group > .btn .btn-ico svg { width: 32px; height: 32px; }
+  /* 矮屏再省两行纵向：战绩条标签与头部留白收紧（标题栏/名称行/快速开始仍常驻可见） */
+  .menu-card > .records-block .dash-label { display: none; }
+  .menu-scroll { padding-top: calc(env(safe-area-inset-top, 0px) + 48px + 48px + 8px); }
+  .menu-card { gap: 10px; padding: 6px; }
+  .menu-card > .setup-summary { min-height: 44px; }
+  .menu-card > .row.apk-row .btn { padding: 6px 10px; }
+  .ti-flag { --k: 1.12; }              /* 旗帜整体高度降至 ≈112dp（等比） */
+  .ti-count { font-size: 28px; }
+  .ti-actions { margin-top: 14px; }
 }

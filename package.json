@@ -21,7 +21,8 @@
     "deploy:all": "npm run deploy:room && npm run deploy:pages",
     "dev:room": "wrangler dev --config wrangler.room.toml",
     "dev:pages": "wrangler pages dev public",
-    "preview": "node tools/shot.js"
+    "preview": "node tools/shot.js",
+    "probe:mobile": "node tools/pp-probe.cjs"
   },
   "license": "MIT"
 }
