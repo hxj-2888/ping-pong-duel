@@ -40,3 +40,6 @@ test-out*.txt
 
 # retired keystores (never commit)
 android/release.keystore.old-*
+
+# 移动端布局截图（本地人工复核产物）
+.tmp_pp/
