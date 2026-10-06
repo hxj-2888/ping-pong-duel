@@ -23,3 +23,7 @@
 /PingPongDuel-v302.apk
   Cache-Control: no-cache, no-store, must-revalidate
   Content-Disposition: attachment; filename="PingPongDuel-v302.apk"
+  # 2026-10-06 修「手机上无法下载」：本页原先只有 Cache-Control 与 Content-Disposition，
+  # 没声明 Content-Type，Cloudflare 回源给的是 text/html；而全局带 x-content-type-options: nosniff，
+  # 移动端浏览器据此判定「这不是安装包」直接拒绝下载（桌面浏览器较宽容，故此前只在手机端暴露）。
+  Content-Type: application/vnd.android.package-archive
