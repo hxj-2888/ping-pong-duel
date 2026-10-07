@@ -96,6 +96,23 @@ function targets(ver, code, short) {
       ],
     },
     {
+      file: 'public/index.html',
+      // 主菜单里的「下载安卓版」按钮（main.js 在触屏且非 file:// 时显示它）。
+      // 这个文件名此前手工写成 v300 就再没动过：按钮照常显示，链接却指向早已不存在的
+      // 文件 —— 请求落到 SPA 回退返回 200 + HTML，用户下到一个改名为 .apk 的网页。
+      // 与 download.html / _headers 同一类漂移，必须由本脚本一起收口。
+      fixes: [[(/PingPongDuel-v\d+\.apk/g), () => `PingPongDuel-v${short}.apk`]],
+      checks: [
+        (c) => ({ ok: c.includes(`PingPongDuel-v${short}.apk`), actual: (c.match(/PingPongDuel-v(\d+)\.apk/) || [])[1], expect: short }),
+        // 不得残留任何其它版本的 APK 文件名（只允许当前版本一个）
+        (c) => {
+          const all = [...new Set([...c.matchAll(/PingPongDuel-v(\d+)\.apk/g)].map((m) => m[1]))];
+          const stray = all.filter((v) => v !== short);
+          return { ok: stray.length === 0, actual: stray.length ? `残留 ${stray.join(',')}` : `仅 ${short}`, expect: `仅 ${short}` };
+        },
+      ],
+    },
+    {
       file: 'public/_headers',
       fixes: [[(/PingPongDuel-v\d+\.apk/g), () => `PingPongDuel-v${short}.apk`]],
       checks: [
