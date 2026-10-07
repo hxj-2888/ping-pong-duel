@@ -81,18 +81,24 @@ function targets(ver, code, short) {
     },
     {
       file: 'public/download.html',
+      // 不再同步字节数与 SHA 指纹：APK 由 CI 每次推送重建，同一份源码两次构建的产物
+      // 字节数就会变（JDK/d8 版本、签名时间戳、压缩差异），写死的数值在 push 之后
+      // 立刻失真，反而误导排障。页面改为运行时向服务器读实际大小（apkSize /
+      // apkSizeLi 两个占位由 fetch HEAD 填充），并在点击下载时把整包长度与该值比对，
+      // 截断即当场报错。`var EXPECTED` 早已被这套 HEAD 校验取代，是死代码。
       fixes: [
         [(/PingPongDuel-v\d+\.apk/g), () => `PingPongDuel-v${short}.apk`],
         [(/v\d+\.\d+\.\d+/g), () => `v${ver}`],
         [(/版本 [\d.]+/g), () => `版本 ${ver}`],
-        // 期望字节数：从实际 APK 读取（不存在则保留并警告，build 后重跑 --sync）
-        [(/var EXPECTED = \d+/g), (_m, _c, _s, env) => `var EXPECTED = ${env.apkSize != null ? env.apkSize : _m.slice('var EXPECTED = '.length)}`],
-        [(/\d{1,3}(?:,\d{3})+ 字节/g), (_m, _c, _s, env) => env.apkSize != null ? `${env.apkSize.toLocaleString()} 字节` : _m],
-        [(/\d+\.\d+ MB/g), (_m, _c, _s, env) => env.apkSize != null ? `${(env.apkSize / 1048576).toFixed(2)} MB` : _m],
       ],
       checks: [
         (c) => ({ ok: c.includes(`PingPongDuel-v${short}.apk`), actual: (c.match(/PingPongDuel-v(\d+)\.apk/) || [])[1], expect: short }),
         (c) => ({ ok: c.includes(`版本 ${ver}`), actual: (c.match(/版本 ([\d.]+)/) || [])[1], expect: ver }),
+        // 不得残留写死的包大小/指纹：运行时校验已取代，写死必然随 CI 重建而失真
+        (c) => {
+          const stale = [...c.matchAll(/(?:\d{1,3}(?:,\d{3})+\s*字节|SHA-256\s*[0-9A-F]{8})/g)].map((m) => m[0]);
+          return { ok: stale.length === 0, actual: stale.length ? stale.join(' / ') : '无写死数值', expect: '无写死数值' };
+        },
       ],
     },
     {
@@ -132,17 +138,9 @@ function targets(ver, code, short) {
 function read(p) { return fs.readFileSync(p, 'utf8'); }
 function write(p, c) { fs.writeFileSync(p, c, 'utf8'); }
 
-// APK 实际大小（download.html 期望字节数的依据）
-function apkSize(short) {
-  const p = path.join(ROOT, 'public', `PingPongDuel-v${short}.apk`);
-  try { return fs.statSync(p).size; } catch (e) { return null; }
-}
-
 let failed = 0;
-const env = { apkSize: apkSize(shortOf(ver)) };
-if (env.apkSize == null && MODE !== '--check') {
-  console.log(`⚠ 未找到 public/PingPongDuel-v${shortOf(ver)}.apk，download.html 字节数保持原值（构建 APK 后重跑 --sync）`);
-}
+// 不再需要 env.apkSize：本脚本不再向 download.html 写死字节数（见该目标上的说明）
+const env = {};
 
 for (const t of targets(ver, code, shortOf(ver))) {
   const p = path.join(ROOT, t.file);
@@ -180,7 +178,9 @@ if (MODE === '--check') {
     write(PKG, JSON.stringify(pkg, null, 2) + '\n');
     console.log(`BUMP  package.json → ${newVer} (code ${newCode})`);
   }
-  console.log('\n同步完成。建议再跑 --check 复核；若 APK 已重建请同步更新 public/ 下的 APK 文件名。');
+  console.log('\n同步完成。建议再跑 --check 复核。');
+  console.log('注：APK 文件名已随版本同步；包体积/指纹不在此维护 —— APK 由 CI 每次推送重建，');
+  console.log('    写死的数值在 push 之后即失真，下载页改为运行时向服务器读取实际大小。');
 } else {
   console.log('用法: node tools/set-version.js --check | --sync | <新版本> [versionCode]');
   process.exitCode = 1;
