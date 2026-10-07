@@ -655,12 +655,6 @@
   <!-- 真实掌声 WAV 兜底：WebView/file:// 下 fetch 被拦截时用 <audio> 元素直载（与 BGM 同策略） -->
   <audio id="applauseAudio" preload="auto" style="display:none"></audio>
   <!-- PWA：注册 Service Worker（仅 https/localhost 生效；http 的 ECS 端自动跳过，不影响游玩） -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => { /* 非 https 或不受支持：静默 */ });
-      });
-    }
-  </script>
+  <script src="js/boot.js"></script>
 </body>
 </html>
