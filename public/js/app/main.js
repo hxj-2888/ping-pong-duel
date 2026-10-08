@@ -11,11 +11,6 @@
     PPD.GameAudio.ui();
     PPD.startLocal();
   });
-  PPD.ui.btnAI.addEventListener('click', () => {
-    PPD.GameAudio.ensure();
-    PPD.GameAudio.ui();
-    PPD.startAI();
-  });
   if (PPD.ui.btnEndless) {
     PPD.ui.btnEndless.addEventListener('click', () => {
       PPD.GameAudio.ensure();
@@ -23,11 +18,6 @@
       openEndlessPanel();
     });
   }
-  PPD.ui.btnAIVsAI.addEventListener('click', () => {
-    PPD.GameAudio.ensure();
-    PPD.GameAudio.ui();
-    PPD.startAIVsAI();
-  });
   // ---------- 联机框（主页「联机对战」入口，等同新开页面） ----------
   if (PPD.ui.btnNetEntry) {
     PPD.ui.btnNetEntry.addEventListener('click', () => {
@@ -57,31 +47,71 @@
     if (PPD.app.watchdogTimer) { clearInterval(PPD.app.watchdogTimer); PPD.app.watchdogTimer = null; }
     if (PPD.app.heartbeatTimer) { clearInterval(PPD.app.heartbeatTimer); PPD.app.heartbeatTimer = null; }
   }
+  // ---------- 模拟推演：原地展开的内嵌配置（甲/乙 难度 + 配色），不跳页、不弹全屏 Modal ----------
+  // 折叠态只显示标题 + 说明；展开态在原位显示甲/乙 的难度分段与配色行，开局按钮在配置区末尾。
+  // 高度过渡由 CSS .sim-panel（grid-template-rows 0fr→1fr）完成，无需测量高度。
+  function setSimOpen(open) {
+    const panel = PPD.ui.simPanel;
+    const btn = PPD.ui.btnAIVsAI;
+    if (!panel || !panel.classList) return;
+    panel.classList.toggle('open', !!open);
+    if (btn && btn.setAttribute) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  PPD.setSimOpen = setSimOpen;
+  if (PPD.ui.btnAIVsAI) {
+    PPD.ui.btnAIVsAI.addEventListener('click', () => {
+      PPD.GameAudio.ensure();
+      PPD.GameAudio.ui();
+      setSimOpen(!(PPD.ui.simPanel && PPD.ui.simPanel.classList &&
+        PPD.ui.simPanel.classList.contains('open')));
+    });
+  }
+  if (PPD.ui.btnAIVsAIStart) {
+    PPD.ui.btnAIVsAIStart.addEventListener('click', () => {
+      PPD.GameAudio.ensure();
+      PPD.GameAudio.ui();
+      PPD.startAIVsAI();
+    });
+  }
+
   PPD.closeNetPanel = closeNetPanel;
 
   // ---------- 一级主行动按钮（G1/G3）：无战局保留系统，用“快速开始” ----------
-  // 副标题实时显示当前局前配置摘要（模式 · 队伍 · 难度），随局前设置区联动。
-  // 点击行为与「自定义常规单机」一致（复用 PPD.startAI），不新增系统。
+  // 动态摘要实时显示当前局前配置（模式 · 我方 vs 敌方 · 难度），随快速开始卡片内的配置联动。
+  // 点击按卡片内当前难度 + 配色直接开局，不弹二次难度弹窗。
   function setupConfigSummary() {
-    let team = '';
-    const nameInput = PPD.ui.teamMeName;
-    if (nameInput && nameInput.value.trim()) team = nameInput.value.trim();
-    else if (PPD.ui.teamMe && PPD.ui.teamMe.selectedIndex >= 0) {
-      team = PPD.ui.teamMe.options[PPD.ui.teamMe.selectedIndex].textContent || '';
+    // 队名优先取自定义队名（限 6 字），空则回落到该队的默认名（与 teams.js 的槽位逻辑一致）
+    function teamLabel(nameInput, sel) {
+      const typed = nameInput && typeof nameInput.value === 'string' ? nameInput.value.trim() : '';
+      if (typed) return typed;
+      if (sel && sel.options && sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]) {
+        return String(sel.options[sel.selectedIndex].textContent || '').trim();
+      }
+      return '';
     }
+    const me = teamLabel(PPD.ui.teamMeName, PPD.ui.teamMe);
+    const opp = teamLabel(PPD.ui.teamOppName, PPD.ui.teamOpp);
+    // 难度文案：按 value 找对应 option（比 selectedIndex 稳，程序化回填 value 也能取到），
+    // 文字去掉「（…解锁）」补充与锁标记，只留档位名
     let diff = '';
-    if (PPD.ui.aiLevel && PPD.ui.aiLevel.selectedIndex >= 0) {
-      diff = PPD.ui.aiLevel.options[PPD.ui.aiLevel.selectedIndex].textContent || '';
+    const sel = PPD.ui.aiLevel;
+    if (sel && sel.options) {
+      const opt = Array.prototype.slice.call(sel.options)
+        .find((o) => String(o.value) === String(sel.value));
+      if (opt) diff = String(opt.textContent || '').replace(/（[^）]*）/g, '').replace(/🔒/g, '').trim();
     }
-    return { team: team || '我的队伍', diff: diff || '中等' };
+    if (!diff && PPD.AIC && PPD.AIC.levelName) {
+      try { diff = PPD.AIC.levelName(sel ? sel.value : '1'); } catch (e) { /* ignore */ }
+    }
+    return { me: me || '我的队伍', opp: opp || '电脑', diff: diff || '中等' };
   }
   function refreshPrimaryAction() {
     if (!PPD.ui.primaryActionText) return;
     // G1：固定为“快速开始”——不使用暗示存档的“继续/恢复/载入”措辞
     PPD.ui.primaryActionText.textContent = '快速开始';
-    if (PPD.ui.primaryActionDesc) {
+    if (PPD.ui.quickSummary) {
       const c = setupConfigSummary();
-      PPD.ui.primaryActionDesc.textContent = '常规单机 · ' + c.team + ' · ' + c.diff;
+      PPD.ui.quickSummary.textContent = '常规单机 · ' + c.me + ' vs ' + c.opp + ' · ' + c.diff;
     }
   }
   if (PPD.ui.btnPrimaryAction) {
@@ -92,69 +122,19 @@
     });
   }
 
-  // ---------- 局前设置（G3）：默认折叠为一行可点摘要，改动实时同步主按钮副标题 ----------
-  function refreshSetupSummary() {
-    const el = PPD.ui.setupSummaryText;
-    if (!el) return;
-    const c = setupConfigSummary();
-    el.innerHTML = '我的队伍 <b>' + c.team + '</b> · <b>' + c.diff + '难度</b> · 修改';
-  }
-  if (PPD.ui.btnSetupToggle && PPD.ui.setupGroup) {
-      // 竖屏：面板是底部抽屉（CSS transform 弹出），这里同步遮罩态与 aria
-      const closeSetup = () => {
-        PPD.ui.setupGroup.setAttribute('hidden', '');
-        PPD.ui.btnSetupToggle.setAttribute('aria-expanded', 'false');
-        if (PPD.ui.menu && PPD.ui.menu.classList) PPD.ui.menu.classList.remove('setup-open');
-      };
-      PPD.ui.btnSetupToggle.addEventListener('click', () => {
-        const open = PPD.ui.btnSetupToggle.getAttribute('aria-expanded') === 'true';
-        PPD.ui.btnSetupToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-        if (open) { closeSetup(); return; }
-        PPD.ui.setupGroup.removeAttribute('hidden');
-        if (PPD.ui.menu && PPD.ui.menu.classList) PPD.ui.menu.classList.add('setup-open');
-      });
-if (PPD.ui.btnSetupClose) PPD.ui.btnSetupClose.addEventListener('click', closeSetup);
-    // 下滑关闭（方案 §3.3）：按住抽屉标题栏下移超过阈值即关闭
-    const sheetHead = document.querySelector ? document.querySelector('.setup-sheet-head') : null;
-    if (sheetHead && sheetHead.addEventListener && PPD.ui.setupGroup) {
-      const g = PPD.ui.setupGroup;
-      let sy = 0, dy = 0, tracking = false;
-      sheetHead.addEventListener('pointerdown', (ev) => {
-        tracking = true; sy = ev.clientY; dy = 0;
-        if (g.setPointerCapture) { try { g.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } }
-      });
-      sheetHead.addEventListener('pointermove', (ev) => {
-        if (!tracking) return;
-        dy = Math.max(0, ev.clientY - sy);
-        if (g.style) g.style.transform = 'translateY(' + dy + 'px)';
-      });
-      const up = () => {
-        if (!tracking) return;
-        tracking = false;
-        if (g.style) g.style.transform = '';
-        if (dy > 60) closeSetup();
-      };
-      sheetHead.addEventListener('pointerup', up);
-      sheetHead.addEventListener('pointercancel', up);
-    }
-      if (PPD.ui.menu && PPD.ui.menu.addEventListener) {
-        PPD.ui.menu.addEventListener('click', (ev) => {
-          if (!PPD.ui.menu.classList || !PPD.ui.menu.classList.contains('setup-open')) return;
-          const t = ev && ev.target;
-          if (t && t.closest && (t.closest('#setupGroup') || t.closest('#btnSetupToggle'))) return;
-          closeSetup();
-        });
-      }
-      // 摘要与主按钮副标题随队伍/难度/队名变化实时刷新
-      [PPD.ui.teamMe, PPD.ui.aiLevel, PPD.ui.teamMeName].forEach((elx) => {
-        if (!elx) return;
-        elx.addEventListener('change', () => { refreshSetupSummary(); refreshPrimaryAction(); });
-        elx.addEventListener('input', () => { refreshSetupSummary(); refreshPrimaryAction(); });
-      });
-      refreshSetupSummary();
-    }
+  // 卡片内任一配置变化（难度 / 双方队伍下拉 / 双方队名）都实时刷新摘要：
+  // 摘要、分段控件与开局参数同读一份 state，不存在第二处配置来源。
+  [PPD.ui.aiLevel, PPD.ui.teamMe, PPD.ui.teamMeName,
+    PPD.ui.teamOpp, PPD.ui.teamOppName].forEach((el) => {
+    if (!el || !el.addEventListener) return;
+    const sync = () => refreshPrimaryAction();
+    el.addEventListener('change', sync);
+    el.addEventListener('input', sync);
+  });
+  refreshPrimaryAction();
+
   // 首屏宫格（竖屏 2×2）：入口数为奇数时标记最后一个，让它占满整行避免半行空位
-  const MENU_GRID_CELLS = ['btnLocal', 'btnAI', 'btnAIVsAI', 'btnTraining', 'btnDressup', 'btnEndless'];
+  const MENU_GRID_CELLS = ['btnLocal', 'btnAIVsAI', 'btnTraining', 'btnDressup', 'btnEndless'];
   function syncMenuGridLast() {
     const cells = [];
     for (const id of MENU_GRID_CELLS) {
@@ -172,7 +152,6 @@ if (PPD.ui.btnSetupClose) PPD.ui.btnSetupClose.addEventListener('click', closeSe
     if (n % 2 === 1 && last && last.setAttribute) last.setAttribute('data-grid-last', '1');
   }
   PPD.refreshPrimaryAction = refreshPrimaryAction;
-  PPD.refreshSetupSummary = refreshSetupSummary;
 
   // ---------- E3 统一控件 ----------
   // ② 滑条：把当前值写进 --val，驱动轨道“左侧主色填充 / 右侧 20% 白”
@@ -205,58 +184,90 @@ if (PPD.ui.btnSetupClose) PPD.ui.btnSetupClose.addEventListener('click', closeSe
   }
   PPD.initRangeFills = initRangeFills;
 
-  // ③ 分段选择器：由既有 <select> 的选项生成，双向同步；原 select 保留供既有逻辑读写
+  // ③ 分段选择器：由既有 <select> 的选项生成，双向同步；原 select 保留供既有逻辑读写。
+  // data-locked="1"（难度类控件）：锁定档位（如未解锁的地狱）也渲染为置灰按钮，
+  // 保证「简单/中等/困难/地狱」四档始终可见、层级不跳；解锁后由 syncHellOptions → refreshSegmented 重绘。
   function buildSegmented() {
     document.querySelectorAll('.segmented-host').forEach((host) => {
       const id = host.getAttribute('data-segmented-for');
       const sel = document.getElementById(id);
       if (!sel || host.dataset.built) return;
       host.dataset.built = '1';
+      const keepLocked = host.getAttribute('data-locked') === '1';
       const seg = document.createElement('span');
       seg.className = 'segmented';
+      seg.setAttribute('role', 'radiogroup');
+      if (id) seg.setAttribute('aria-label', host.getAttribute('data-label') || id);
       const render = () => {
         seg.innerHTML = '';
+        const btns = [];
         Array.from(sel.options).forEach((opt) => {
-          // 未解锁档位（如地狱）不生成按钮，保持与原 select 的禁用态一致
-          if (opt.disabled) return;
+          const locked = !!opt.disabled;
+          // 未解锁档位：不生成按钮（画质/帧率无锁）；难度类（data-locked）渲染为置灰档
+          if (locked && !keepLocked) return;
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'seg-btn' + (opt.value === sel.value ? ' active' : '');
-          // 段标签取选项文字首段（去掉括号补充），保持控件紧凑
-          b.textContent = String(opt.textContent || '').replace(/（[^）]*）/g, '').trim() || opt.value;
-          b.addEventListener('click', () => {
-            if (sel.value === opt.value) return;
-            sel.value = opt.value;
-            // 走既有 change 监听：画质/帧率的应用逻辑完全复用，未新增系统
-            sel.dispatchEvent(new Event('change', { bubbles: true }));
-            render();
-          });
+          b.className = 'seg-btn' + (opt.value === sel.value ? ' active' : '') + (locked ? ' locked' : '');
+          // 段标签取选项文字首段（去掉括号补充与锁标记）；锁定档的 🔒 由 CSS ::after 补画，
+          // 避免 emoji 占位宽把「地狱」挤成省略号
+          b.textContent = String(opt.textContent || '').replace(/（[^）]*）/g, '').replace(/🔒/g, '').trim() || opt.value;
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', opt.value === sel.value ? 'true' : 'false');
+          if (locked) {
+            b.disabled = true;
+            b.title = String(opt.textContent || '').replace('🔒', '').trim() || '未解锁';
+          } else {
+            b.addEventListener('click', () => {
+              if (sel.value === opt.value) return;
+              sel.value = opt.value;
+              // 走既有 change 监听：难度/画质/帧率的应用逻辑完全复用，未新增系统
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              render();
+            });
+          }
           seg.appendChild(b);
+          btns.push(b);
+        });
+        // 键盘 ←/→ 在档位间移动并即时选中（roving focus，分段控件的标准键盘操作）
+        seg.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+          const i = btns.indexOf(document.activeElement);
+          if (i < 0) return;
+          ev.preventDefault();
+          let n = i + (ev.key === 'ArrowRight' ? 1 : -1);
+          // 跳过锁定档，环绕查找可选项
+          for (let k = 0; k < btns.length; k++) {
+            n = (n + btns.length) % btns.length;
+            if (!btns[n].disabled) break;
+            n += ev.key === 'ArrowRight' ? 1 : -1;
+          }
+          const t = btns[n];
+          if (!t || t.disabled) return;
+          t.focus();
+          t.click();
         });
       };
       render();
       host.appendChild(seg);
       sel.addEventListener('change', render); // 外部回填 value 时同步选中态
+      host._segRender = render;
     });
   }
+  // 全量重绘分段控件：难度选项集合会在游戏进程中变化（解锁地狱、追加无尽-N）
+  function refreshSegmented() {
+    document.querySelectorAll('.segmented-host').forEach((host) => {
+      if (host && typeof host._segRender === 'function') host._segRender();
+    });
+  }
+  PPD.refreshSegmented = refreshSegmented;
   buildSegmented();
   PPD.buildSegmented = buildSegmented;
 
   // ---------- 无尽人机：主页入口 / 关卡页 / AI 观战动态选项 ----------
-  // 仅更新按钮的文案子节点（.btn-main），保留图标与功能说明。
-  function setBtnAIText(text) {
-    const el = PPD.ui.btnAI;
-    const main = el.querySelector ? el.querySelector('.btn-main') : null;
-    if (main) main.textContent = text;
-    else el.textContent = text; // 兜底：结构异常时按旧行为整体替换
-  }
   function refreshAIEntries() {
-    if (!PPD.ui.btnAI) return;
-    // G2：主按钮已是常规单机的主入口，此处固定为“自定义常规单机”以明确两者差异
-    setBtnAIText('自定义常规单机');
+    // 无尽人机入口：通关地狱后解锁；常规单机唯一入口是快速开始卡片，不再有第二个入口
     if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, PPD.isHellCleared());
     refreshPrimaryAction();
-    refreshSetupSummary();
     syncMenuGridLast();   // 无尽人机入口显隐会改变宫格末位，需重算
   }
   syncMenuGridLast();
@@ -284,6 +295,8 @@ if (PPD.ui.btnSetupClose) PPD.ui.btnSetupClose.addEventListener('click', closeSe
         if (n > unlocked && n !== 1) sel.value = 'inf-1';
       }
     }
+    // 选项集合变了（新增/移除无尽-N）：重绘分段控件，避免控件与 select 不一致
+    refreshSegmented();
   }
 
   function renderEndlessPanel() {

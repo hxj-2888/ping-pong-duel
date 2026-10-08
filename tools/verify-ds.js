@@ -12,19 +12,33 @@ const o = (html.match(/<div/g) || []).length;
 const c = (html.match(/<\/div>/g) || []).length;
 console.log('div 开/闭:', o, '/', c, o === c ? '平衡' : '不平衡!');
 
-const NEW = ['btnPrimaryAction', 'primaryActionText', 'primaryActionDesc', 'recentMatch',
-  'recentTitle', 'recentMeta', 'btnRecentReplay', 'btnSetupToggle', 'setupGroup', 'setupSummaryText',
+const NEW = ['btnPrimaryAction', 'primaryActionText', 'quickSummary', 'recentMatch',
+  'recentTitle', 'recentMeta', 'btnRecentReplay', 'simPanel', 'btnAIVsAIStart',
   'dashTrend', 'dashGuide', 'dashEntry'];
 const missNew = NEW.filter((i) => !html.includes('id="' + i + '"'));
 console.log('新增节点:', missNew.length ? '缺失 ' + missNew.join(',') : '全部就位 (' + NEW.length + ')');
 
-const KEEP = ['btnLocal', 'btnAI', 'btnNetEntry', 'btnEndless', 'btnAIVsAI', 'btnTraining',
+const KEEP = ['btnLocal', 'btnNetEntry', 'btnEndless', 'btnAIVsAI', 'btnTraining',
   'btnDressup', 'nameInput', 'recordsPanel', 'teamMe', 'aiLevel', 'teamA', 'aiLevelB'];
 const missKeep = KEEP.filter((i) => !html.includes('id="' + i + '"'));
 console.log('原有节点:', missKeep.length ? '缺失 ' + missKeep.join(',') : '全部保留 (' + KEEP.length + ')');
 
-// G2 授权将「人机对战（单机）」的重命名列为"自定义常规单机"，其余按钮文案一字不改
-const LABELS = ['本地双人对战（分屏）', '自定义常规单机', '模拟推演（AI vs AI）', '能力训练', '装扮系统', '联机对战'];
+// 难度四档固定为 简单 / 中等 / 困难 / 地狱（第四档不是「大师」）
+//地狱未解锁时 option 文字带解锁后缀，故只查档位名前缀
+const DIFF4 = ['简单', '中等', '困难', '地狱'];
+const missDiff = DIFF4.filter((t) => !html.includes('>' + t));
+console.log('难度四档:', missDiff.length ? '缺失 ' + missDiff.join(',') : '齐全 (' + DIFF4.length + ')');
+console.log('第四档不是「大师」:', /大师/.test(html) ? '仍出现「大师」文案!' : '无');
+
+// 已删除项不得残留：自定义常规单机 / 底部局前设置面板（注释里的历史说明不算残留）
+const GONE = ['自定义常规单机', 'id="btnAI"', 'setupGroup', 'btnSetupToggle', 'setupSummaryText',
+  'setup-summary', 'pick-row', 'pick-diff'];
+const stripComments = (s) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+const htmlCode = stripComments(html);
+const stillThere = GONE.filter((t) => htmlCode.includes(t) || css.includes(t));
+console.log('已删除项残留:', stillThere.length ? '仍存在 ' + stillThere.join(',') : '无残留 (' + GONE.length + ' 项已清)');
+
+const LABELS = ['本地双人对战（分屏）', '模拟推演（AI vs AI）', '能力训练', '装扮系统', '联机对战'];
 const missLbl = LABELS.filter((t) => !html.includes(t));
 console.log('按钮文案:', missLbl.length ? '被改动 ' + missLbl.join(',') : '符合预期 (' + LABELS.length + ')');
 
@@ -121,8 +135,10 @@ console.log('foot-danger 数量:', dangerCount, '(全部洗点 / 退出比赛)')
 
 console.log('\n=== 8. E2/E3 统一控件 ===');
 console.log('积分胶囊:', (html.match(/points-capsule/g) || []).length, '(训练 + 装扮 = 2)');
-console.log('分段选择器宿主:', (html.match(/segmented-host/g) || []).length, '(画质 + 帧率 = 2)');
-console.log('原生 select 保留并隐藏:', (html.match(/class="visually-hidden"/g) || []).length, '(应为 2)');
+// 分段选择器宿主：画质 + 帧率 + 快速开始难度 + 模拟推演甲/乙 = 5
+console.log('分段选择器宿主:', (html.match(/segmented-host/g) || []).length, '(画质 + 帧率 + 快速开始难度 + 甲/乙 = 5)');
+// 原生 select 保留并隐藏：画质 + 帧率 + 难度(3) + 队伍(4) = 9
+console.log('原生 select 保留并隐藏:', (html.match(/class="visually-hidden"/g) || []).length, '(应为 9)');
 const cs = css.indexOf('E3 统一控件');
 const ce = css.indexOf('E4 通用状态标记');
 const ctrl = css.slice(cs, ce);
@@ -138,3 +154,19 @@ for (const st of ['state-active', 'state-owned', 'state-max', 'state-locked']) {
   const hasBadge = new RegExp('\\.' + st + '[\\s\\S]{0,220}?state-badge|\\.' + st + '[\\s\\S]{0,220}?lock-ico').test(css);
   console.log(st.padEnd(14), '含角标/图标（非仅靠颜色）:', hasBadge);
 }
+
+console.log('\n=== 10. 快速开始卡片（难度 + 敌我配色唯一入口） ===');
+// 全页敌我配色入口唯一：me/opp 两行在快速开始卡片内，甲/乙在模拟推演内嵌配置内
+const swatchHosts = (html.match(/class="swatch-row"/g) || []).length;
+console.log('色块行数:', swatchHosts, '(快速开始 我方/敌方 2 + 模拟推演 甲/乙 2 = 4)');
+console.log('底部局前设置面板已移除:', !/id="setupGroup"/.test(html) && !/setup-summary/.test(html));
+console.log('模拟推演为原地展开（不跳页）:', /id="simPanel"/.test(html) && /class="sim-panel"/.test(html));
+// 移动端硬性约束：溢出防护 / 触控下限 / 窄屏降档 / 安全区
+console.log('难度行等分且 min-width:0:', /\.quick-seg\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0/.test(css));
+console.log('摘要标签省略号截断:', /\.quick-summary\s*\{[^}]*text-overflow:\s*ellipsis/.test(css));
+console.log('根容器禁横向溢出:', /#menu\s*\{[^}]*overflow-x:\s*hidden/.test(css));
+console.log('窄屏（≤360px）字号下沉一档:', /max-width:\s*360px[\s\S]{0,1400}?\.quick-seg \.seg-btn \{ font-size: 11px/.test(css));
+console.log('触控目标 ≥44px（竖屏）:', /\.btn, \.tool-btn, \.seg-btn, \.swatch, \.tbtn \{ min-height: 44px; \}/.test(css));
+console.log('色块高度 ≥32px:', /\.swatch\s*\{[^}]*min-height:\s*32px/.test(css) || /\.swatch \{ min-height: 32px; \}/.test(css));
+console.log('锁定档位置灰样式:', /\.seg-btn\.locked/.test(css));
+console.log('分段控件键盘 ←/→ 支持:', /ArrowLeft/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/main.js'), 'utf8')));

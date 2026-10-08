@@ -129,9 +129,9 @@
     }
   }
 
-  // ---------- 队伍颜色色块选择（竖屏队伍配置抽屉用）：
+  // ---------- 队伍颜色色块选择（快速开始卡片 / 模拟推演配置区共用）：
   // 8 个色块取自上方同一份 TEAMS 配色池，点击写回原<select> 并派发 change，
-  // 既有持久化/摘要刷新逻辑完全复用，不新增系统。非竖屏由 CSS 隐藏。 ----------
+  // 既有持久化/摘要刷新逻辑完全复用，不新增系统。 ----------
   const SWATCH_IDS = { me: 'swatchMe', opp: 'swatchOpp', a: 'swatchA', b: 'swatchB' };
   function initSwatches() {
     if (!document || typeof document.getElementById !== 'function') return;
@@ -140,11 +140,14 @@
       const host = document.getElementById(SWATCH_IDS[key]);
       const sel = PPD.$id(PICKERS[key].sel);
       if (!host || !sel || !host.appendChild) continue;
+      if (host.setAttribute) host.setAttribute('role', 'radiogroup');
+      const kids = [];
       const sync = () => {
-        const kids = host.children || [];
         for (let i = 0; i < kids.length; i++) {
-          const on = !!kids[i].classList && kids[i].classList.toggle;
-          if (on) kids[i].classList.toggle('active', TEAMS[i] && TEAMS[i].id === sel.value);
+          const on = TEAMS[i] && TEAMS[i].id === sel.value;
+          const b = kids[i];
+          if (b.classList && b.classList.toggle) b.classList.toggle('active', !!on);
+          if (b.setAttribute) b.setAttribute('aria-checked', on ? 'true' : 'false');
         }
       };
       for (const t of TEAMS) {
@@ -152,6 +155,8 @@
         b.type = 'button';
         b.className = 'swatch';
         b.title = t.name;
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-label', t.name);
         try { b.style.setProperty('--sw', t.color); } catch (e) { /* 测试桩无 setProperty */ }
         b.addEventListener('click', () => {
           if (sel.value === t.id) return;
@@ -159,6 +164,19 @@
           sel.dispatchEvent(new Event('change', { bubbles: true }));
         });
         host.appendChild(b);
+        kids.push(b);
+      }
+      // 键盘 ←/→ 在色块间移动并选中（与难度分段控件一致的单选组键盘操作）
+      if (host.addEventListener) {
+        host.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+          const i = kids.indexOf(document.activeElement);
+          if (i < 0) return;
+          ev.preventDefault();
+          const n = (i + (ev.key === 'ArrowRight' ? 1 : -1) + kids.length) % kids.length;
+          kids[n].focus();
+          kids[n].click();
+        });
       }
       sel.addEventListener('change', sync);
       sync();
@@ -255,5 +273,5 @@
   PPD.showTeamIntro = showTeamIntro;
   PPD.cancelTeamIntro = cancelTeamIntro;
   initPickers();
-  initSwatches(); // 竖屏队伍配置抽屉的色块选择（桌面隐藏，不影响原有下拉）
+  initSwatches(); // 快速开始卡片 / 模拟推演配置区的敌我配色色块
 })();

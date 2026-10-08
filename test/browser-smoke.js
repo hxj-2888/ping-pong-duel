@@ -45,6 +45,18 @@ function makeElement(id) {
     value: '',
     width: 0,
     height: 0,
+    // 极简 DOM 面：children/appendChild/remove + 属性存取，
+    // 供 teams.js 的队伍下拉填充与 buildSegmented 生成的控件挂载使用
+    children: [],
+    dataset: {},
+    appendChild(child) { this.children.push(child); return child; },
+    remove(i) { this.children.splice(i, 1); },
+    getAttribute(name) { return this._attrs ? this._attrs[name] : null; },
+    setAttribute(name, v) {
+      if (!this._attrs) this._attrs = {};
+      this._attrs[name] = String(v);
+    },
+    removeAttribute(name) { if (this._attrs) delete this._attrs[name]; },
     classList: {
       add(c) { classes.add(c); },
       remove(c) { classes.delete(c); },
@@ -59,9 +71,16 @@ function makeElement(id) {
     dispatch(type, ev) { for (const fn of handlers[type] || []) fn(ev); },
     getContext: () => makeCtx2d(),
     // 难度下拉的地狱 option 桩（syncHellOption 查询 option[value="3"]）
+    // <select> 的 options 集合：buildSegmented / syncHellOption 都要读
+    options: [],
+    selectedIndex: -1,
     querySelector(sel) {
       if (sel === 'option[value="3"]') {
-        if (!this._hellOpt) this._hellOpt = { disabled: true, textContent: '地狱 🔒（击败困难解锁）' };
+        if (!this._hellOpt) {
+          this._hellOpt = { value: '3', disabled: true, textContent: '地狱 🔒（击败困难解锁）' };
+          const i = this.options.findIndex((o) => o.value === '3');
+          if (i >= 0) this.options[i] = this._hellOpt;
+        }
         return this._hellOpt;
       }
       return null;
@@ -93,7 +112,9 @@ const ELEMENT_IDS = [
   'manualPanel', 'btnManualMenu', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
   'overlay', 'overlayTitle', 'overlayText', 'overlayBtn', 'hud', 'hudP1', 'hudP2',
   'phaseBanner', 'serveTimer', 'pointToast', 'hintBar', 'netInfo', 'hitRangeInfo', 'ballHeight', 'inBoxStatus', 'serveDot',
-  'score1', 'score2', 'btnAI', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
+  'score1', 'score2', 'aiLevel', 'btnAIVsAI', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB', 'pauseAiNameA', 'pauseAiNameB', 'pauseAIVsAI',
+  // 快速开始卡片：主行动按钮 + 动态摘要（难度与敌我配色的唯一入口）
+  'btnPrimaryAction', 'primaryActionText', 'quickSummary', 'simPanel', 'btnAIVsAIStart',
   'tuneAReact', 'tuneACatch', 'tuneASmash', 'tuneAAgility',
   'tuneBReact', 'tuneBCatch', 'tuneBSmash', 'tuneBAgility',
   'gameOver', 'gameOverTitle', 'btnAgain', 'btnMenu', 'btnQuit',
@@ -123,6 +144,15 @@ function boot(opts) {
   const elements = new Map();
   for (const id of ELEMENT_IDS) elements.set(id, makeElement(id));
   elements.get('nameInput').value = '测试员';
+  // 难度下拉的四个档位选项（真实页面由 HTML 提供；buildSegmented/syncHellOption/摘要都要读）
+  elements.get('aiLevel').options = [
+    { value: '0', textContent: '简单' },
+    { value: '1', textContent: '中等' },
+    { value: '2', textContent: '困难' },
+    { value: '3', textContent: '地狱 🔒（击败困难解锁）', disabled: true },
+  ];
+  elements.get('aiLevel').value = '1';
+  elements.get('aiLevel').selectedIndex = 1;
   // bgmAudio：<audio> 元素桩（play/pause/paused/src/volume/loop）
   const bgm = elements.get('bgmAudio');
   Object.assign(bgm, {
@@ -174,7 +204,11 @@ function boot(opts) {
     performance: perf,
     location: loc,
     localStorage,
-    document: { getElementById: (id) => elements.get(id), querySelectorAll: () => [] },
+    document: {
+      getElementById: (id) => elements.get(id),
+      querySelectorAll: () => [],
+      createElement: (tag) => makeElement('<' + tag + '>'),
+    },
     navigator: { userAgent: 'smoke', maxTouchPoints: opts.touch ? 5 : 0 },
     matchMedia: opts.matchMedia ? opts.matchMedia : (opts.touch ? () => ({ matches: true }) : undefined),
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
@@ -758,10 +792,36 @@ async function main() {
     check('右上角退出：返回主菜单', t.app.mode === null && t.elements.get('menu').style.display !== 'none');
   }
 
-  // ---------- 2. 人机对战 ----------
+  // ---------- 2. 首页快速开始卡片（难度 + 敌我配色的唯一入口） ----------
   {
     const t = await boot();
-    t.click('btnAI');
+    const q = t.elements.get('quickSummary');
+    check('快速开始摘要含模式 · 敌我 · 难度三段',
+      q.textContent.indexOf('常规单机') === 0 && q.textContent.indexOf(' vs ') !== -1 &&
+      q.textContent.indexOf('中等') !== -1);
+    // 难度改动 → 摘要实时更新（无二次弹窗、无跳转）
+    t.elements.get('aiLevel').value = '2';
+    t.elements.get('aiLevel').dispatch('change', {});
+    check('切换难度后摘要实时更新为「困难」', q.textContent.indexOf('困难') !== -1);
+    // 配色改动 → 摘要实时更新（敌我队伍各一行色块，同一份 select 数据源）
+    t.elements.get('teamMeName').value = '金队';
+    t.elements.get('teamOppName').value = '红队';
+    t.elements.get('teamMeName').dispatch('input', {});
+    check('改队名后摘要实时更新为「金队 vs 红队」',
+      q.textContent.indexOf('金队 vs 红队') !== -1);
+    check('底部局前设置面板已移除（无 setupGroup / btnSetupToggle）',
+      !t.elements.get('setupGroup') && !t.elements.get('btnSetupToggle'));
+    check('「自定义常规单机」入口已移除', !t.elements.get('btnAI'));
+    // 四档难度齐全，第三档为地狱而非大师
+    const aiOpts = [0, 1, 2, 3].map((n) => t.elements.get('aiLevel').options.find((o) => o.value === String(n)));
+    check('难度四档 = 简单/中等/困难/地狱（非大师）',
+      aiOpts.length === 4 && /地狱/.test(aiOpts[3].textContent) && !/大师/.test(aiOpts[3].textContent));
+  }
+
+  // ---------- 2.1 人机对战 ----------
+  {
+    const t = await boot();
+    t.click('btnPrimaryAction');
     t.runFrames(2);
     check('发球倒计时显示 6s', t.elements.get('serveTimer').style.display !== 'none' &&
       t.elements.get('serveTimer').textContent.indexOf('6s') !== -1);
@@ -800,7 +860,7 @@ async function main() {
 
     // 设备判定矩阵：触屏+大窗口=桌面；手机尺寸+触屏=手机端；?touch=1 强制手机；?desktop=1 强制桌面
     {
-      const enterAI = (tt) => { tt.click('btnAI'); return tt.elements.get('hintBar').innerHTML; };
+      const enterAI = (tt) => { tt.click('btnPrimaryAction'); return tt.elements.get('hintBar').innerHTML; };
       const hA = enterAI(await boot({ touch: true })); // 触屏但 1280px 宽窗口 → 桌面
       check('触屏+大窗口：按桌面判定（键位齐全、无摇杆/蹲按钮）',
         hA.indexOf('摇杆') === -1 && hA.indexOf('按钮') === -1 && hA.indexOf('左键') !== -1 && hA.indexOf('推球') !== -1);
@@ -811,7 +871,7 @@ async function main() {
       const hD = enterAI(await boot({ width: 390, height: 844, touch: true })); // 手机尺寸+触屏 → 手机端
       check('手机尺寸+触屏：显示手机端说明', hD.indexOf('摇杆') !== -1);
       const mobileServe = await boot({ touch: true, search: '?touch=1' });
-      mobileServe.click('btnAI');
+      mobileServe.click('btnPrimaryAction');
       mobileServe.runFrames(2);
       check('手机端同步显示发球倒计时', mobileServe.elements.get('serveTimer').style.display !== 'none' &&
         mobileServe.elements.get('serveTimer').textContent.indexOf('6s') !== -1);
@@ -857,10 +917,15 @@ async function main() {
   {
     const t = await boot();
     check('主页出现模拟推演入口', !!t.elements.get('btnAIVsAI'));
+    // 折叠态：点击只展开内嵌配置，不跳页、不开局
+    check('模拟推演初始为折叠态', !t.elements.get('simPanel').classList.contains('open'));
+    t.click('btnAIVsAI');
+    check('点击后原地展开内嵌配置（未跳页、未开局）',
+      t.elements.get('simPanel').classList.contains('open') && t.app.mode === null);
     // 设定甲=困难(2)、乙=中等(1) 后开始
     t.elements.get('aiLevelA').value = '2';
     t.elements.get('aiLevelB').value = '1';
-    t.click('btnAIVsAI');
+    t.click('btnAIVsAIStart');
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     check('模拟推演启动', t.app.mode === 'aivai' && !!t.app.engine);
     check('模拟推演读取双方难度', t.app.aiLevelA === 2 && t.app.aiLevelB === 1);
@@ -933,7 +998,7 @@ async function main() {
     await sleep(10); // refreshRecords 异步：等微任务完成渲染
     check('通关记录：面板显示「暂无」占位', t.elements.get('recordsPanel').innerHTML.indexOf('暂无') !== -1);
     t.elements.get('aiLevel').value = '2'; // 困难
-    t.click('btnAI');
+    t.click('btnPrimaryAction');
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     check('通关记录：困难 AI 模式启动', t.app.mode === 'ai' && t.app.aiLevel === 2);
     const eng = t.app.engine;
@@ -1006,7 +1071,7 @@ async function main() {
   // ---------- 2.8 地狱通关 → 人机暂停变「电脑 AI 数值调控」 ----------
   {
     const t = await boot();
-    t.click('btnAI');
+    t.click('btnPrimaryAction');
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     // 未通关地狱：暂停面板不显示调控块
     t.elements.get('btnPause').dispatch('click', {});
@@ -1015,9 +1080,9 @@ async function main() {
     // 模拟通关地狱（人机击败地狱难度）→ 再暂停：调控块出现
     t.ppd.markHellCleared();
     check('通关地狱标记生效', t.ppd.isHellCleared());
-    // G2：主按钮「快速开始」是常规单机主入口，此按钮固定为「自定义常规单机」以明确差异
-    check('地狱通关后拆分自定义常规单机与无尽人机', t.elements.get('btnAI').textContent === '自定义常规单机' &&
-      t.elements.get('btnEndless').style.display !== 'none');
+    // 无尽人机入口在通关地狱后出现；常规单机的唯一入口是快速开始卡片（无第二个入口）
+    check('地狱通关后解锁无尽人机入口', t.elements.get('btnEndless').style.display !== 'none' &&
+      !t.elements.get('btnAI'));
     check('无尽进度初始为 0（可挑战无尽-1）', t.ppd.getEndlessHighest() === 0);
     t.ppd.advanceEndless(1);
     check('通关无尽-1 解锁无尽-2', t.ppd.getEndlessHighest() === 1);
@@ -1066,7 +1131,7 @@ async function main() {
     check('合并页关闭返回主菜单', t.elements.get('careerPanel').style.display === 'none' &&
       t.elements.get('menu').style.display !== 'none');
     // 人机一局强制结束 → 回放自动保存
-    t.click('btnAI');
+    t.click('btnPrimaryAction');
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）
     t.runFrames(120);
     const engR = t.app.engine;

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 为什么必须有这个文件：Manifest 没声明 android:theme 时，Activity 套用系统默认主题，
+     窗口顶部会自动多出一条深色 ActionBar（标题栏）。页面底色是深色（bg = #0d1220），
+     深色标题栏压在深色网页头顶，看起来就是一条「黑框」。
+     解法：声明无 ActionBar 的主题，并把 windowBackground 对齐站点底色——
+     顺带消除首屏渲染前的白闪（与 MainActivity 里 web.setBackgroundColor 同色）。 -->
+<resources>
+  <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <item name="android:windowBackground">#0d1220</item>
+  </style>
+</resources>

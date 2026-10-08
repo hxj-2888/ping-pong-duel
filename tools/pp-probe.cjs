@@ -47,8 +47,8 @@ function serve() {
   };
 
   await dump('菜单', ['#menu .logo', '.menu-nick', '#nameInput', '.menu-scroll', '.menu-card', '.records-block',
-    '#btnPrimaryAction', '#btnNetEntry', '#btnLocal', '#btnAI', '#btnAIVsAI', '#btnTraining',
-    '#btnDressup', '#btnEndless', '.setup-summary', '.apk-row', '#btnSettings']);
+    '.quick-card', '.quick-head', '.quick-summary', '#btnPrimaryAction', '#btnNetEntry', '#btnLocal', '#btnAIVsAI',
+    '#btnTraining', '#btnDressup', '#btnEndless', '.apk-row', '#btnSettings']);
   const scroll = await pg.evaluate(() => ({
     scrollH: document.documentElement.scrollHeight, innerH: innerHeight,
     menuScrollH: document.querySelector('.menu-scroll') ? document.querySelector('.menu-scroll').scrollHeight : -1,
@@ -56,19 +56,24 @@ function serve() {
   }));
   console.log('   滚动: doc=' + scroll.scrollH + '/' + scroll.innerH + '  menu-scroll=' + scroll.menuScrollH + '/' + scroll.menuClientH);
 
-  // 打开队伍配置抽屉
-  await pg.click('.setup-summary').catch(e => console.log('   抽屉点击失败: ' + String(e).slice(0, 80)));
+  // 快速开始卡片内的难度 + 敌我配色（首屏内联，无抽屉）
+  await dump('快速开始卡片', ['.quick-row', '.quick-label', '.quick-seg .segmented', '.quick-seg .seg-btn',
+    '.swatch-row', '.swatch', '.quick-name']);
+  // 模拟推演：点击原地展开内嵌配置（甲/乙 难度 + 配色）
+  await pg.click('#btnAIVsAI').catch(e => console.log('   模拟推演展开失败: ' + String(e).slice(0, 80)));
   await pg.waitForTimeout(600);
-  await dump('队伍配置抽屉', ['.setup-group', '.setup-sheet-head', '.pick-row', '.swatch-row', '.pick-seg .segmented', '.swatch']);
-  const sheet = await pg.evaluate(() => {
-    const e = document.querySelector('.setup-group');
+  const sim = await pg.evaluate(() => {
+    const e = document.querySelector('#simPanel');
     if (!e) return null;
     const r = e.getBoundingClientRect();
-    return { bottom: Math.round(r.bottom), innerH: innerHeight, inView: r.bottom <= innerHeight + 1 && r.top >= 0 };
+    return { open: e.classList.contains('open'), h: Math.round(r.height),
+      inView: r.bottom <= innerHeight + 1 && r.top >= 0 };
   });
-  console.log('   抽屉在视口内: ' + JSON.stringify(sheet));
-  await pg.screenshot({ path: path.join(os.tmpdir(), 'pp-probe-sheet-' + W + 'x' + H + '.png') });
-  await pg.evaluate(() => { const b = document.getElementById('btnSetupClose'); if (b) b.click(); });
+  console.log('   模拟推演内嵌配置: ' + JSON.stringify(sim));
+  await dump('模拟推演配置区', ['#simPanel', '.sim-inner', '.sim-panel .quick-row', '.sim-panel .swatch-row',
+    '.sim-panel .seg-btn', '.sim-start']);
+  await pg.screenshot({ path: path.join(os.tmpdir(), 'pp-probe-sim-' + W + 'x' + H + '.png') });
+  await pg.click('#btnAIVsAI').catch(() => {});
   await pg.waitForTimeout(500);
 
   // 开局 → 对战 HUD

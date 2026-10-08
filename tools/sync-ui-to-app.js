@@ -27,18 +27,20 @@ const FILES = [
 
 // 每个文件同步后必须存在的关键标记，用于确认写入的是新版内容
 const MARKERS = {
-  'public/index.html': ['btn-group', 'btn-group-primary', 'group-divider', 'menu-nick', 'setup-group', 'btn-ico',
-    'btnPrimaryAction', 'recentMatch', 'btnSetupToggle', 'dashTrend', 'dashGuide', 'dashEntry',
+  'public/index.html': ['btn-group', 'btn-group-primary', 'group-divider', 'menu-nick', 'btn-ico',
+    'quick-card', 'quick-summary', 'btnPrimaryAction', 'recentMatch', 'dashTrend', 'dashGuide', 'dashEntry',
+    'simPanel', 'btnAIVsAIStart',
     'shell-card', 'shell-head', 'shell-body', 'shell-foot', 'points-capsule', 'segmented-host'],
   'public/css/style.css': ['--ui-accent', '.stat-ring', '.btn-group-primary', '.group-divider',
     '--primary-100', '--primary-40', '--primary-15', '--accent', '.btn-primary-action', '.recent-match',
+    '.quick-card', '.quick-row', '.quick-seg', '.swatch-row', '.sim-panel', '.mode-toggle',
     '.shell-card', '.shell-head', '.shell-foot', '.points-capsule', '.segmented', '.state-max',
     '.sticky-group', '.lv-dot', '.t-item', '.item-preview', '.setting-row', '.dash-cell'],
   'public/js/app/records.js': ['statBarsHtml', 'statTrendHtml', 'trendCellHtml', 'guideCellHtml',
     'renderRecentMatch', 'paintDashboard', 'btnRecentReplay'],
-  'public/js/app/main.js': ['setBtnAIText', '.btn-main', 'refreshPrimaryAction', 'refreshSetupSummary',
+  'public/js/app/main.js': ['.btn-main', 'refreshPrimaryAction', 'setSimOpen', 'refreshSegmented',
     'syncRangeFill', 'buildSegmented', '快速开始'],
-  'public/js/app/state.js': ['btnPrimaryAction', 'recentMatch', 'btnSetupToggle', 'setupGroup', 'btnRecentReplay'],
+  'public/js/app/state.js': ['btnPrimaryAction', 'quickSummary', 'simPanel', 'btnAIVsAIStart', 'btnRecentReplay'],
   'public/js/app/training.js': ['rollDownPoints', 'points-capsule', 'lv-dot', 'state-max'],
   'public/js/app/dressup.js': ['previewHtml', 'item-preview', 'state-active', 'state-owned', 'sticky-group'],
 };

@@ -46,12 +46,52 @@
           <div class="dash-cell dash-entry" id="dashEntry"></div>
         </div>
 
-        <!-- 一级主行动（G1/G7）：琥珀金实心（全站唯一强调色）+ 球拍图标 + 局前配置副标题 -->
-        <button id="btnPrimaryAction" class="btn-primary-action" type="button">
-          <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="9" r="6"/><path d="M14.5 13.5 21 20"/></svg></span>
-          <span class="btn-main" id="primaryActionText">快速开始</span>
-          <span class="btn-desc" id="primaryActionDesc">常规单机</span>
-        </button>
+        <!-- 快速开始卡片：全页唯一的难度 + 敌我配色入口（首屏内联，不跳转、不弹窗）。
+             难度与配色原「底部局前设置面板」已删除，此处为收敛后的唯一配置处； -->
+        <div class="quick-card">
+          <!-- 标题栏：标题 + 动态摘要（随难度/配色实时变化，超长省略号截断） -->
+          <div class="quick-head">
+            <span class="quick-title">快速开始</span>
+            <span class="quick-summary" id="quickSummary">常规单机</span>
+          </div>
+          <!-- 一级主行动：琥珀金实心（全站唯一强调色）+ 球拍图标；点击按当前难度与配色直接开局 -->
+          <button id="btnPrimaryAction" class="btn-primary-action" type="button">
+            <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="9" r="6"/><path d="M14.5 13.5 21 20"/></svg></span>
+            <span class="btn-main" id="primaryActionText">快速开始</span>
+          </button>
+          <!-- 难度四档：简单 / 中等 / 困难 / 地狱。地狱未解锁时置灰带 🔒（击败困难后自动可选）。
+               aiLevel 是唯一数据源：分段控件由 app/main.js 依据其 option 生成，原 select 仅作数据宿主 -->
+          <div class="quick-row">
+            <span class="quick-label">难度</span>
+            <span class="segmented-host quick-seg" data-segmented-for="aiLevel" data-locked="1"></span>
+            <select id="aiLevel" class="visually-hidden">
+              <option value="0">简单</option>
+              <option value="1" selected>中等</option>
+              <option value="2">困难</option>
+              <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
+            </select>
+          </div>
+          <!-- 敌我配色：8 色取自 teams.js 的同一份队伍配色池（选中加青绿描边 + 对勾）。
+               teamMe / teamOpp 仅作数据宿主，点击色块写回 select 并派发 change，持久化逻辑完全复用 -->
+          <div class="quick-row">
+            <span class="quick-label">我方</span>
+            <span class="swatch-row" id="swatchMe"></span>
+            <span class="team-flag flag-preview" id="teamFlagMe"></span>
+            <select id="teamMe" class="visually-hidden"></select>
+          </div>
+          <div class="quick-row">
+            <span class="quick-label">敌方</span>
+            <span class="swatch-row" id="swatchOpp"></span>
+            <span class="team-flag flag-preview" id="teamFlagOpp"></span>
+            <select id="teamOpp" class="visually-hidden"></select>
+          </div>
+          <!-- 队名（可选自定义，限 6 字）：与配色同一块，不另开设置面板 -->
+          <div class="quick-row">
+            <span class="quick-label">队名</span>
+            <input id="teamMeName" class="quick-name" maxlength="6" placeholder="我方">
+            <input id="teamOppName" class="quick-name" maxlength="6" placeholder="敌方">
+          </div>
+        </div>
 
         <!-- 二级：高频模式（青绿实心）——常规单机由上方主按钮承担，此处不再重复 -->
         <div class="btn-group btn-group-primary">
@@ -59,13 +99,63 @@
           <button id="btnNetEntry" class="btn primary"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg></span><span class="btn-main">联机对战</span><span class="btn-desc">房间码联机</span></button>
         </div>
 
-        <!-- 更多玩法（G2/G6）：主按钮已是常规单机唯一主入口，此处降级为描边样式 -->
+        <!-- 更多玩法：低频入口降级为描边样式（原「自定义常规单机」已随快速开始卡片收敛而删除） -->
         <div class="group-divider"><span>更多玩法</span></div>
         <div class="btn-group btn-group-secondary">
-          <!-- G2：常规单机的主入口已上移为主按钮，此处降为三级描边样式（弱于二级描边） -->
-          <button id="btnAI" class="btn tertiary"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1"/><path d="M8 13h.01M16 13h.01"/><path d="M9 17h6"/></svg></span><span class="btn-main">自定义常规单机</span><span class="btn-desc">自选难度与对手</span></button>
           <button id="btnEndless" class="btn" style="display:none"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15a3 3 0 1 1 0-6c3 0 3 6 6 6s3-6 6-6a3 3 0 1 1 0 6c-3 0-3-6-6-6s-3 6-6 6Z"/></svg></span><span class="btn-main">无尽人机</span><span class="btn-desc">逐级挑战</span></button>
-          <button id="btnAIVsAI" class="btn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="m19 21 2-2"/><path d="M21.5 6.5 18 3h-3"/></svg></span><span class="btn-main">模拟推演（AI vs AI）</span><span class="btn-desc">自动对局演示</span></button>
+          <!-- 模拟推演（AI vs AI）：原地展开的内嵌配置行（不跳页、不弹全屏 Modal）。
+               甲/乙是本局双方各自独立的配置（业务必需），与「快速开始」的敌我配色不构成第二处入口 -->
+          <div class="mode-wrap">
+            <button id="btnAIVsAI" class="btn mode-toggle" type="button" aria-expanded="false" aria-controls="simPanel">
+              <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="m19 21 2-2"/><path d="M21.5 6.5 18 3h-3"/></svg></span>
+              <span class="btn-main">模拟推演（AI vs AI）</span><span class="btn-desc">自动对局演示</span>
+              <span class="caret" aria-hidden="true">▸</span>
+            </button>
+            <div id="simPanel" class="sim-panel">
+              <div class="sim-inner">
+                <div class="quick-sub">难度</div>
+                <div class="quick-row">
+                  <span class="quick-label">甲</span>
+                  <span class="segmented-host quick-seg" data-segmented-for="aiLevelA" data-locked="1"></span>
+                  <select id="aiLevelA" class="visually-hidden">
+                    <option value="0">简单</option>
+                    <option value="1" selected>中等</option>
+                    <option value="2">困难</option>
+                    <option value="3" disabled>地狱 🔒</option>
+                  </select>
+                </div>
+                <div class="quick-row">
+                  <span class="quick-label">乙</span>
+                  <span class="segmented-host quick-seg" data-segmented-for="aiLevelB" data-locked="1"></span>
+                  <select id="aiLevelB" class="visually-hidden">
+                    <option value="0">简单</option>
+                    <option value="1" selected>中等</option>
+                    <option value="2">困难</option>
+                    <option value="3" disabled>地狱 🔒</option>
+                  </select>
+                </div>
+                <div class="quick-sub">配色</div>
+                <div class="quick-row">
+                  <span class="quick-label">甲</span>
+                  <span class="swatch-row" id="swatchA"></span>
+                  <span class="team-flag flag-preview" id="teamFlagA"></span>
+                  <select id="teamA" class="visually-hidden"></select>
+                </div>
+                <div class="quick-row">
+                  <span class="quick-label">乙</span>
+                  <span class="swatch-row" id="swatchB"></span>
+                  <span class="team-flag flag-preview" id="teamFlagB"></span>
+                  <select id="teamB" class="visually-hidden"></select>
+                </div>
+                <div class="quick-sub">队名</div>
+                <div class="quick-row">
+                  <input id="teamAName" class="quick-name" maxlength="6" placeholder="甲队名">
+                  <input id="teamBName" class="quick-name" maxlength="6" placeholder="乙队名">
+                </div>
+                <button id="btnAIVsAIStart" class="btn primary sim-start" type="button">▶ 开始推演</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 系统（G6）：能力训练与装扮系统属于系统功能，不与玩法混列 -->
@@ -75,74 +165,10 @@
           <button id="btnDressup" class="btn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2H6a3 3 0 0 0 0 6h2v2a4 4 0 0 0 8 0v-2h2a3 3 0 0 0 0-6h-2V6a4 4 0 0 0-4-4Z"/></svg></span><span class="btn-main">装扮系统</span><span class="btn-desc">外观与方案</span></button>
         </div>
 
-        <!-- 局前设置（G3）：默认折叠为一行可点摘要，改动实时同步主按钮副标题 -->
-        <button id="btnSetupToggle" class="setup-summary" type="button" aria-expanded="false" aria-controls="setupGroup">
-          <span class="summary-caret" aria-hidden="true">▸</span>
-          <span class="summary-text" id="setupSummaryText">我的队伍 · 中等难度 · 修改</span>
-        </button>
-        <div id="setupGroup" class="setup-group" hidden>
-          <!-- 竖屏抽屉头（方案 §3.3⑦）：桌面隐藏，竖屏为底部抽屉的标题 + 关闭 -->
-          <div class="setup-sheet-head">
-            <span class="setup-sheet-title">队伍配置</span>
-            <button id="btnSetupClose" class="setup-sheet-close" type="button" aria-label="关闭队伍配置">✕</button>
-          </div>
-          <!-- 队伍与旗帜：玩家在名称旁选择自己的队伍（旗帜以颜色命名，系统默认队名可自定义）；观众/球服颜色随旗帜同步 -->
-          <div class="pick-row">
-            <span class="pick-tag">我的队伍</span>
-            <span class="team-flag" id="teamFlagMe"></span>
-            <select id="teamMe" class="pick-team"></select>
-            <input id="teamMeName" class="team-name" maxlength="6" placeholder="队名">
-          </div>
-          <div class="swatch-row" id="swatchMe"></div>
-          <!-- 人机电脑：难度 + 旗帜 + 队名 合并同一栏（电脑对手配置） -->
-          <div class="pick-row">
-            <span class="pick-tag">电脑</span>
-            <span class="segmented-host pick-seg" data-segmented-for="aiLevel"></span>
-            <select id="aiLevel" class="pick-diff">
-              <option value="0">简单</option>
-              <option value="1" selected>中等</option>
-              <option value="2">困难</option>
-              <option value="3" disabled>地狱 🔒（击败困难解锁）</option>
-            </select>
-            <span class="team-flag" id="teamFlagOpp"></span>
-            <select id="teamOpp" class="pick-team"></select>
-            <input id="teamOppName" class="team-name" maxlength="6" placeholder="队名">
-          </div>
-          <div class="swatch-row" id="swatchOpp"></div>
-          <!-- 模拟推演：甲/乙双方 难度 + 旗帜 + 队名 合并同一栏 -->
-          <div class="pick-row">
-            <span class="pick-tag">甲</span>
-            <span class="segmented-host pick-seg" data-segmented-for="aiLevelA"></span>
-            <select id="aiLevelA" class="pick-diff">
-              <option value="0">简单</option>
-              <option value="1" selected>中等</option>
-              <option value="2">困难</option>
-              <option value="3" disabled>地狱 🔒</option>
-            </select>
-            <span class="team-flag" id="teamFlagA"></span>
-            <select id="teamA" class="pick-team"></select>
-            <input id="teamAName" class="team-name" maxlength="6" placeholder="队名">
-          </div>
-          <div class="swatch-row" id="swatchA"></div>
-          <div class="pick-row">
-            <span class="pick-tag">乙</span>
-            <span class="segmented-host pick-seg" data-segmented-for="aiLevelB"></span>
-            <select id="aiLevelB" class="pick-diff">
-              <option value="0">简单</option>
-              <option value="1" selected>中等</option>
-              <option value="2">困难</option>
-              <option value="3" disabled>地狱 🔒</option>
-            </select>
-            <span class="team-flag" id="teamFlagB"></span>
-            <select id="teamB" class="pick-team"></select>
-            <input id="teamBName" class="team-name" maxlength="6" placeholder="队名">
-          </div>
-          <div class="swatch-row" id="swatchB"></div>
-        </div>
-      <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
-      <div class="row apk-row">
-        <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v320.apk" download="PingPongDuel-v320.apk" style="display:none">📱 下载安卓版（直接安装）</a>
-        <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
+        <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
+        <div class="row apk-row">
+          <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v321.apk" download="PingPongDuel-v321.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+          <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
       </div>
     </div>
   </div>
@@ -655,12 +681,6 @@
   <!-- 真实掌声 WAV 兜底：WebView/file:// 下 fetch 被拦截时用 <audio> 元素直载（与 BGM 同策略） -->
   <audio id="applauseAudio" preload="auto" style="display:none"></audio>
   <!-- PWA：注册 Service Worker（仅 https/localhost 生效；http 的 ECS 端自动跳过，不影响游玩） -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => { /* 非 https 或不受支持：静默 */ });
-      });
-    }
-  </script>
+  <script src="js/boot.js"></script>
 </body>
 </html>

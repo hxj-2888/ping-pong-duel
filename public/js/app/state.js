@@ -19,11 +19,10 @@
     gameScreen: document.getElementById('gameScreen'),
     nameInput: document.getElementById('nameInput'),
     btnLocal: document.getElementById('btnLocal'),
-    btnAI: document.getElementById('btnAI'),
-    // 设计系统新增节点：一级主行动按钮 / 最近对局条 / 局前设置折叠
+    // 快速开始卡片：一级主行动按钮 + 动态摘要（难度与敌我配色的唯一入口）
     btnPrimaryAction: document.getElementById('btnPrimaryAction'),
     primaryActionText: document.getElementById('primaryActionText'),
-    primaryActionDesc: document.getElementById('primaryActionDesc'),
+    quickSummary: document.getElementById('quickSummary'),
     recentMatch: document.getElementById('recentMatch'),
     recentTitle: document.getElementById('recentTitle'),
     recentMeta: document.getElementById('recentMeta'),
@@ -32,11 +31,7 @@
     dashTrend: document.getElementById('dashTrend'),
     dashGuide: document.getElementById('dashGuide'),
     dashEntry: document.getElementById('dashEntry'),
-    btnSetupToggle: document.getElementById('btnSetupToggle'),
-    setupGroup: document.getElementById('setupGroup'),
-    btnSetupClose: document.getElementById('btnSetupClose'), // 竖屏：队伍配置抽屉关闭钮
-    setupSummaryText: document.getElementById('setupSummaryText'),
-    // 局前设置的队伍/队名（主按钮副标题与折叠摘要据此生成）
+    // 快速开始卡片内的队伍/队名/难度（摘要标签与开局参数据此生成，均在首屏内联）
     teamMe: document.getElementById('teamMe'),
     teamMeName: document.getElementById('teamMeName'),
     teamOpp: document.getElementById('teamOpp'),
@@ -51,6 +46,8 @@
     endlessList: document.getElementById('endlessList'),
     btnEndlessBack: document.getElementById('btnEndlessBack'),
     btnAIVsAI: document.getElementById('btnAIVsAI'),
+    simPanel: document.getElementById('simPanel'),      // 模拟推演：原地展开的内嵌配置区
+    btnAIVsAIStart: document.getElementById('btnAIVsAIStart'),
     aiLevelA: document.getElementById('aiLevelA'),
     aiLevelB: document.getElementById('aiLevelB'),
     pauseAiLevelA: document.getElementById('pauseAiLevelA'),
@@ -271,7 +268,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.2.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.2.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -603,6 +600,8 @@
     syncHellOption(PPD.ui.aiLevelB);
     syncHellOption(PPD.ui.pauseAiLevelA);
     syncHellOption(PPD.ui.pauseAiLevelB);
+    // 难度分段控件同步重绘：解锁地狱后首页难度行由 3 档变 4 档（data-locked 渲染）
+    if (PPD.refreshSegmented) PPD.refreshSegmented();
   }
 
   // 解锁地狱模式并全量同步所有难度下拉框状态
