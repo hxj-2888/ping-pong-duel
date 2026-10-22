@@ -217,34 +217,164 @@ const SWEEP = [
 /* 灯位：球馆顶部。4.2m + 靠近球员上方——太远会把灯投到画面外，只剩无源白柱。 */
 const LAMP_Y = 4.2;
 
-/* 画一个光束：从灯位到地面目标，用锥形遮罩贴图，贴图下端对准光斑 */
+/* ═══════════════════════════════════════════════════════════════
+ * 光照架构（2026-10-22 重做 v2）：快照 → 压暗 → 按遮罩贴回原图
+ *
+ * 上一版的错误：用 destination-out 直接擦画布 ⇒ 擦出的是**透明**，
+ * 露出下面的黑底 ⇒ 光斑变成黑洞。destination-out 只能擦掉"画布上的像素"，
+ * 擦不出"原本更亮的画面"。
+ *
+ * 正确做法（也是游戏引擎里 shadow-mask 灯光的标准做法）：
+ *   ① 先把「完整场景」快照到一张离屏 canvas
+ *   ② 主画布上整体压暗
+ *   ③ 用遮罩贴图做 destination-in，把快照里「光斑区域」贴回主画布
+ *      ⇒ 光斑内 = 快照原亮度（≤1.0，不可能过曝）
+ *      ⇒ 光斑外 = 压暗后的画面
+ *
+ * 这样灯光是纯减法：只有光斑里恢复原样，其余变暗。
+ * 玩家要看的球/球员/台面在光斑内**完全清晰**，且亮度不超过原图。
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* 离屏快照画布（按主画布尺寸，resize 时重建） */
+let SNAP = null, SNAP_CTX = null;
+function ensureSnap() {
+  const w = cv.width, h = cv.height;
+  if (!SNAP) {
+    SNAP = document.createElement('canvas');
+    SNAP_CTX = SNAP.getContext('2d');
+  }
+  if (SNAP.width !== w || SNAP.height !== h) { SNAP.width = w; SNAP.height = h; }
+  return SNAP_CTX;
+}
+
+/* 把当前主画布内容快照下来（在压暗之前调用） */
+function takeSnapshot() {
+  const sc = ensureSnap();
+  sc.setTransform(1, 0, 0, 1, 0, 0);
+  sc.clearRect(0, 0, SNAP.width, SNAP.height);
+  sc.drawImage(cv, 0, 0);
+}
+
+/* 压暗层：整屏乘暗系数。中下部（球台区）压得轻，上下缘压得重 */
+function drawDarken(strength) {
+  if (strength <= 0.01) return;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, `rgba(2,4,8,${Math.min(1, strength * 1.3)})`);
+  g.addColorStop(0.45, `rgba(2,4,8,${strength * 0.68})`);
+  g.addColorStop(0.75, `rgba(2,4,8,${strength * 0.52})`);
+  g.addColorStop(1, `rgba(2,4,8,${Math.min(1, strength * 1.15)})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* 光斑贴回：用遮罩贴图把快照的「光斑区域」画回主画布。
+   做法：在一张临时画布上，先用遮罩形状裁剪，再把快照贴上去，
+   最后把这张临时画布以 source-over 叠回主画布。 */
+let POOL_TMP = null, POOL_CTX = null;
+function ensurePoolTmp() {
+  const w = cv.width, h = cv.height;
+  if (!POOL_TMP) { POOL_TMP = document.createElement('canvas'); POOL_CTX = POOL_TMP.getContext('2d'); }
+  if (POOL_TMP.width !== w || POOL_TMP.height !== h) { POOL_TMP.width = w; POOL_TMP.height = h; }
+  return POOL_CTX;
+}
+
+/* 多光斑并集贴回。
+   ⚠ 合成顺序是唯一的坑：
+     destination-in = 「保留**目标**颜色，用**源**的 alpha 裁剪」。
+     ⇒ 必须 ① 先画快照（目标＝原始画面） ② 再用遮罩 alpha 裁剪。
+     反过来（先画遮罩、再 destination-in 贴快照）保留的是**遮罩的白色** ⇒ 一坨白斑。
+   多盏灯要取并集，故遮罩先单独累积到 MASK 画布，再一次性裁。 */
+let MASK = null, MASK_CTX = null;
+function ensureMask() {
+  const w = cv.width, h = cv.height;
+  if (!MASK) { MASK = document.createElement('canvas'); MASK_CTX = MASK.getContext('2d'); }
+  if (MASK.width !== w || MASK.height !== h) { MASK.width = w; MASK.height = h; }
+  return MASK_CTX;
+}
+
+function drawPoolsRestore(pools, imgPoolA, imgPoolB) {
+  if (!pools.length || !SNAP) return 0;
+  const mc = ensureMask();
+
+  /* ① 遮罩画布：把所有光斑**累加**成并集（lighter 保证重叠区不被冲淡） */
+  mc.setTransform(1, 0, 0, 1, 0, 0);
+  mc.globalCompositeOperation = 'source-over';
+  mc.globalAlpha = 1;
+  mc.clearRect(0, 0, MASK.width, MASK.height);
+  mc.globalCompositeOperation = 'lighter';
+
+  let drawn = 0;
+  for (const p of pools) {
+    const pr = cam.project(p.target);
+    if (!pr) continue;
+    const rx = p.radius * pr.s;
+    const ry = rx * 0.42;
+    if (rx < 2) continue;
+    const img = p.team === 0 ? imgPoolA : imgPoolB;
+    mc.globalAlpha = p.strength;
+    if (img) {
+      mc.drawImage(img, pr.x - rx, pr.y - ry, rx * 2, ry * 2);
+    } else {
+      const g = mc.createRadialGradient(pr.x, pr.y, 0, pr.x, pr.y, rx);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.5, 'rgba(255,255,255,.75)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      mc.fillStyle = g;
+      mc.beginPath(); mc.ellipse(pr.x, pr.y, rx, ry, 0, 0, 7); mc.fill();
+    }
+    drawn++;
+  }
+  mc.globalAlpha = 1;
+  mc.globalCompositeOperation = 'source-over';
+  if (!drawn) return 0;
+
+  /* ② 临时画布：目标＝快照，源＝遮罩 alpha（destination-in 裁剪） */
+  const pc = ensurePoolTmp();
+  pc.setTransform(1, 0, 0, 1, 0, 0);
+  pc.globalCompositeOperation = 'source-over';
+  pc.globalAlpha = 1;
+  pc.clearRect(0, 0, POOL_TMP.width, POOL_TMP.height);
+  pc.drawImage(SNAP, 0, 0);
+  pc.globalCompositeOperation = 'destination-in';
+  pc.drawImage(MASK, 0, 0);
+  pc.globalCompositeOperation = 'source-over';
+
+  /* ③ 贴回主画布（覆盖压暗后的画面） */
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.drawImage(POOL_TMP, 0, 0);
+  ctx.restore();
+  return drawn;
+}
+
+/* 光束：极低 alpha 的锥形，只做"空气感"。
+   真实球馆的灯束只有在烟尘里才可见；转播里几乎看不到实体。
+   纵向衰减：近灯处几乎透明（否则会有一根白柱直插画面）。 */
 function drawBeam(lampPos, targetPos, radius, alpha, tint, img) {
+  if (alpha <= 0.005) return 0;
   const pLamp = cam.project(lampPos);
   const pTgt = cam.project(targetPos);
   if (!pLamp || !pTgt) return 0;
 
-  /* 目标处的横向半径（世界）→ 屏幕像素 */
-  const sT = pTgt.s;
-  const halfW = radius * sT;           // 光斑屏幕半宽
-  const beamH = pTgt.y - pLamp.y;      // 屏幕纵向长度
+  const halfW = radius * pTgt.s;
+  const beamH = pTgt.y - pLamp.y;
   if (beamH <= 2 || halfW <= 1) return 0;
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = alpha;
-  /* 锥形贴图是"上窄下宽、上暗下亮"，正好对应灯→地面。
-     纵向只拉伸到 pTgt.y，**不越界**（此前 1.02 会把亮部顶到画面上缘，出现一道白柱）。
-     横向留白补偿 1.35：贴图两侧有透明边，直接按光斑宽度贴会显得太窄。 */
   const w = halfW * 2 * 1.35;
   const h = Math.max(4, beamH);
+
   if (img) {
+    ctx.globalAlpha = alpha;
     ctx.drawImage(img, pLamp.x - w / 2, pLamp.y, w, h);
   } else {
-    /* 回退：程序化锥形渐变 */
     const g = ctx.createLinearGradient(0, pLamp.y, 0, pTgt.y);
     g.addColorStop(0, `rgba(${tint},0)`);
-    g.addColorStop(0.35, `rgba(${tint},.35)`);
-    g.addColorStop(1, `rgba(${tint},.75)`);
+    g.addColorStop(0.45, `rgba(${tint},${alpha * 0.35})`);
+    g.addColorStop(1, `rgba(${tint},${alpha})`);
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.moveTo(pLamp.x - 2, pLamp.y);
@@ -257,60 +387,40 @@ function drawBeam(lampPos, targetPos, radius, alpha, tint, img) {
   return 1;
 }
 
-/* 地面光斑：圆贴图按透视压扁成椭圆（y 方向压缩 ≈ 俯视角的余弦） */
-function drawPool(targetPos, radius, alpha, tint, img) {
-  const p = cam.project(targetPos);
-  if (!p) return 0;
-  const rx = radius * p.s;
-  const ry = rx * 0.42;                // 俯视角压缩
-  if (rx < 2) return 0;
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = alpha;
-  if (img) {
-    ctx.drawImage(img, p.x - rx, p.y - ry, rx * 2, ry * 2);
-  } else {
-    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rx);
-    g.addColorStop(0, `rgba(${tint},.8)`);
-    g.addColorStop(0.55, `rgba(${tint},.35)`);
-    g.addColorStop(1, `rgba(${tint},0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7); ctx.fill();
-  }
-  ctx.restore();
-  return 1;
-}
-
 /* 灯具本体：光束得有"来源"，否则只是一根凭空出现的白柱。
    画一个发光的小椭圆 + 光晕（程序化，不依赖贴图）。 */
+/* 灯具：只留一个小亮点 + 很淡的光晕。
+   ⚠ 旧版画了 alpha 0.95 的白芯 + 0.55 的光晕，是"晃眼"的第二大来源
+   （第一是光束+光斑的 lighter 叠加）。转播里的灯位就是一个针尖大小的亮点。 */
 function drawLamp(lampPos, tint, intensity) {
   const p = cam.project(lampPos);
   if (!p) return 0;
-  /* 灯具在 4.6m 高处、离相机仅 ~4m，投影缩放很大（s≈150+），
-     所以世界半径必须很小（0.05m），否则会画成一个占满画面的"蘑菇"。 */
-  const r = Math.max(2, 0.05 * p.s);
+  /* 灯在 4.2m 高处、离相机约 4m，投影缩放 s≈150+ ⇒ 世界半径必须极小（0.04m） */
+  const r = Math.max(1.6, 0.04 * p.s);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  /* 外壳光晕 */
-  const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 4.5);
-  g.addColorStop(0, `rgba(${tint},${0.55 * intensity})`);
-  g.addColorStop(0.3, `rgba(${tint},${0.16 * intensity})`);
+  /* 淡光晕（0.28 而非 0.55） */
+  const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 5);
+  g.addColorStop(0, `rgba(${tint},${0.28 * intensity})`);
+  g.addColorStop(0.35, `rgba(${tint},${0.07 * intensity})`);
   g.addColorStop(1, `rgba(${tint},0)`);
   ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(p.x, p.y, r * 4.5, 0, 7); ctx.fill();
-  /* 灯芯：小而亮 */
-  ctx.fillStyle = `rgba(255,255,255,${0.95 * intensity})`;
+  ctx.beginPath(); ctx.arc(p.x, p.y, r * 5, 0, 7); ctx.fill();
+  /* 灯芯：小亮点（0.8 而非 0.95，且更小） */
+  ctx.fillStyle = `rgba(255,252,240,${0.8 * intensity})`;
   ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.7, 0, 0, 7); ctx.fill();
   ctx.restore();
   return 1;
 }
 
-/* 环境压暗：以两个光斑为中心留亮，四周压暗（径向渐变减法） */
+/* 轻微暗角：只压四周边缘（不碰光斑内的画面要素）。
+   ⚠ 旧版这里是主压暗层，现在压暗已交给 drawDarken + erasePool，
+   本层只负责「四角收边」，强度必须很小（≤0.3），否则又会把画面压死。 */
 function drawVignette(time) {
-  const strength = { normal: P.vig, dark: Math.min(1, P.vig + 0.28), party: Math.max(0, P.vig - 0.3) }[P.amb];
+  const strength = { normal: P.vig * 0.45, dark: P.vig * 0.6, party: P.vig * 0.25 }[P.amb];
   if (strength <= 0.01) return;
-  const g = ctx.createRadialGradient(W / 2, H * 0.58, Math.min(W, H) * 0.22,
-                                     W / 2, H * 0.58, Math.max(W, H) * 0.78);
+  const g = ctx.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.42,
+                                     W / 2, H * 0.55, Math.max(W, H) * 0.8);
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(1, `rgba(0,0,0,${strength})`);
   ctx.fillStyle = g;
@@ -426,10 +536,32 @@ function frame(now) {
     pl.vx = Math.cos(time * 0.85 + pl.side * 2.2) * 0.7 * 0.85;
   }
 
-  /* ① 光束（画在球员之前：光在空间里，人在光里） */
+  /* ② 球员 + ③ 观众 —— 先把「完整画面」画好 */
+  for (const pl of players) {
+    if (R.drawCharacter) R.drawCharacter(ctx, cam, pl, null, time, 0, false, false);
+  }
+  drawCrowd(time);
+
+  /* ④ 光照：快照 → 压暗 → 光斑贴回 → 淡光束
+     顺序不可换：快照必须在压暗之前，否则贴回的是"压暗后的自己"。 */
   let lightCount = 0;
   if (P.mode !== 'off') {
+    const amb = {
+      normal: { dark: 0.55, pool: 0.95, beam: 0.12 },
+      dark:   { dark: 0.76, pool: 0.98, beam: 0.09 },
+      party:  { dark: 0.36, pool: 0.88, beam: 0.20 },
+    }[P.amb];
+
+    /* ④a 快照（此时是完整、未经压暗的画面） */
+    takeSnapshot();
+
+    /* ④b 压暗 */
+    drawDarken(amb.dark);
+
+    /* ④c 光斑：把快照的光斑区域贴回（亮度 = 原图，不可能过曝） */
     const list = P.mode === 'sweep' ? SWEEP : LIGHTS;
+    const pools = [];
+    const targets = [];
     for (const L of list) {
       let tx, tz, radius = L.r;
       if (P.mode === 'sweep') {
@@ -437,33 +569,28 @@ function frame(now) {
         tz = Math.cos(time * L.sp * 0.8 + L.ph) * L.az;
         radius = 1.7;
       } else {
-        /* 比赛模式：主灯锁定球员（加一点滞后摆动，像真人追灯） */
         const pl = players[L.team];
         tx = pl.x + Math.sin(time * 0.7 + L.team) * P.sway;
         tz = pl.z;
       }
       const tint = L.team === 0 ? '255,170,150' : '150,190,255';
       const target = R.v3(tx, 0.76, tz);
-      /* 灯位：略在目标正上方偏后 */
       const lamp = R.v3(tx * 0.55, LAMP_Y, tz * 0.55 + (L.team === 0 ? -1.2 : 1.2));
+      pools.push({ target, radius, strength: amb.pool, team: L.team });
+      targets.push({ L, tint, target, lamp, radius });
+    }
+    DRAW_IMAGES += drawPoolsRestore(pools, IMG.circA, IMG.circB);
+
+    /* ④d 光束：极低 alpha，只做空气感 */
+    for (const { L, tint, target, lamp, radius } of targets) {
       const beamImg = L.team === 0 ? IMG.coneA : IMG.coneB;
-      const poolImg = L.team === 0 ? IMG.circA : IMG.circB;
-      DRAW_IMAGES += drawBeam(lamp, target, radius, P.beam, tint, beamImg);
-      DRAW_IMAGES += drawPool(target, radius, P.pool, tint, poolImg);
-      DRAW_IMAGES += drawLamp(lamp, tint, Math.min(1, P.beam + 0.35));
+      DRAW_IMAGES += drawBeam(lamp, target, radius, Math.min(P.beam, amb.beam), tint, beamImg);
+      DRAW_IMAGES += drawLamp(lamp, tint, 0.85);
       lightCount++;
     }
   }
 
-  /* ② 球员（在灯光之上，但会被光束轻微提亮） */
-  for (const pl of players) {
-    if (R.drawCharacter) R.drawCharacter(ctx, cam, pl, null, time, 0, false, false);
-  }
-
-  /* ③ 观众 */
-  drawCrowd(time);
-
-  /* ④ 环境压暗（最上层：让光斑外变暗） */
+  /* ④d 轻微暗角（最上层，仅压四周，不影响光斑内画面） */
   drawVignette(time);
 
   /* HUD */
