@@ -180,29 +180,51 @@
   // 场地两端 + 两侧共四个方向的观众席，一次性生成固定站位（确定性伪随机）
   let crowdList = null;
   let crowdListDensity = 1; // 当前观众布局的密度（1=满员，0.5=电脑减半，0.25=手机再减半），变化时重建布局
-  // 观众布局：两端/两侧看台坐姿火柴人。density 密度（默认 1）：0.5/0.25 步长加倍、人数成比例减半（省填充率）
+  /* 看台几何常量：crowdLayout() 与 benchLayout() 共用，避免"观众和座位对不上"。
+     〔2026-10-22 外推〕首排离球场边缘只有约 0.05m（台边 3.4 / 首排 3.62），
+     视觉上光点几乎贴住台面。参考图里球台四周有明显空地，
+     故整体外推：侧看台 3.62→4.30、端看台 6.35→6.95，给球场留出呼吸区。 */
+  const CROWD_SIDE_X0 = 4.30;    // 侧看台首排 |x|
+  const CROWD_SIDE_DX = 0.55;    // 侧看台行距
+  const CROWD_END_Z0 = 6.95;     // 端看台首排 |z|
+  const CROWD_END_DZ = 0.50;     // 端看台行距
+  const CROWD_ROW_H = 0.48;      // 行高（观众 y 与看台台阶对齐）
+  const CROWD_SIDE_ZSPAN = 5.5;  // 侧看台沿 z 的半程
+  const CROWD_END_XSPAN = 5.2;   // 端看台沿 x 的半程
+
+  /* 观众布局：两端/两侧看台。density 密度（1=满员，0.5 电脑减半，0.25 手机再减半）。
+     〔2026-10-22 弱化座位〕
+       · 步长 0.46 → 0.30：参考图（图3）是**密排光点阵列**，原间距太疏，光海不成立。
+         满员由 376 增至 576，接近参考图密度。
+       · 抖动 0.2 → 0.06：参考图光点**整齐成排**（按台阶列队），原来 ±0.2m 的随机偏移
+         会让阵列糊成随机散点，反而看不清"排"。
+       · 行高与看台对齐不变（0.48），保证光点落在台阶上。
+     ⚠ 人数由 crowdLayout() 动态给出，测试都走 crowdLayout() 取数、未硬编码，
+       故改步长不影响任何断言口径。 */
   function crowdLayout(density) {
     const d = density == null ? 1 : density;
-    const step = 0.46 / d;
+    const step = 0.30 / d;
     const list = [];
     let seed = 20260804;
     const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const person = (x, y, z) => ({
-      x: x + (rnd() - 0.5) * 0.2, y: y + (rnd() - 0.5) * 0.1, z,
+      x: x + (rnd() - 0.5) * 0.06, y: y + (rnd() - 0.5) * 0.04, z,
       ph: rnd() * Math.PI * 2, c: rnd(),
     });
-    // 两端看台（z = ±6.35，球台远端），四排（由远到近生成，保证遮挡顺序正确）
-    for (const ez of [-6.35, 6.35]) {
+    // 两端看台（球台远端），四排（由远到近生成，保证遮挡顺序正确）
+    for (const ez of [-1, 1]) {
       for (let row = 3; row >= 0; row--) {
-        const z = ez + row * 0.5;
-        for (let x = -5.2; x <= 5.2; x += step) list.push(person(x, 0.25 + row * 0.48, z));
+        const z = ez * CROWD_END_Z0 + ez * row * CROWD_END_DZ;
+        for (let x = -CROWD_END_XSPAN; x <= CROWD_END_XSPAN; x += step)
+          list.push(person(x, 0.25 + row * CROWD_ROW_H, z));
       }
     }
-    // 两侧看台（x = ±3.62/4.17/4.72，四排，面向球台；由外到内生成）
+    // 两侧看台（四排，面向球台；由外到内生成）
     for (const sx of [-1, 1]) {
       for (let row = 3; row >= 0; row--) {
-        const x = sx * (3.62 + row * 0.55);
-        for (let z = -5.5; z <= 5.5; z += step) list.push(person(x, 0.25 + row * 0.48, z + (rnd() - 0.5) * 0.2));
+        const x = sx * (CROWD_SIDE_X0 + row * CROWD_SIDE_DX);
+        for (let z = -CROWD_SIDE_ZSPAN; z <= CROWD_SIDE_ZSPAN; z += step)
+          list.push(person(x, 0.25 + row * CROWD_ROW_H, z + (rnd() - 0.5) * 0.06));
       }
     }
     return list;
@@ -244,49 +266,60 @@
     return { head, shoulder, shL, shR, hips, kneeL, kneeR, footL, footR, handL: vadd(handL, vscale(side, sway)), handR: vadd(handR, vscale(side, -sway)), f, side };
   }
 
-  // 座位（长条座椅 + 靠背）：与观众行对齐的看台座席，一次性生成
+  /* 看台几何常量在 crowdLayout() 之前已定义（CROWD_SIDE_X0 等），此处复用。 */
+  // 座位（与观众行对齐的看台座席），一次性生成
   let benchList = null;
   function benchLayout() {
     const benches = [];
-    const y = (row) => 0.25 + row * 0.48; // 与 crowdLayout 行高一致
-    // 两侧看台（x = ±(3.62 + row*0.55)，沿 z 方向排座；axis='z'）
+    const y = (row) => 0.25 + row * CROWD_ROW_H;
+    // 两侧看台（沿 z 方向排座；axis='z'）
     for (const sx of [-1, 1]) {
       for (let row = 0; row < 4; row++) {
-        const x = sx * (3.62 + row * 0.55);
-        benches.push({ x, y: y(row), z: 0, lenX: 0.36, lenZ: 11.0, axis: 'z' });
+        const x = sx * (CROWD_SIDE_X0 + row * CROWD_SIDE_DX);
+        benches.push({ x, y: y(row), z: 0, lenX: 0.36, lenZ: CROWD_SIDE_ZSPAN * 2, axis: 'z' });
       }
     }
-    // 两端看台（z = ±(6.35 + row*0.5)，沿 x 方向排座；axis='x'）
-    for (const ez of [-6.35, 6.35]) {
+    // 两端看台（沿 x 方向排座；axis='x'）
+    for (const ez of [-1, 1]) {
       for (let row = 0; row < 4; row++) {
-        const z = ez + row * 0.5;
-        benches.push({ x: 0, y: y(row), z, lenX: 10.4, lenZ: 0.36, axis: 'x' });
+        const z = ez * CROWD_END_Z0 + ez * row * CROWD_END_DZ;
+        benches.push({ x: 0, y: y(row), z, lenX: CROWD_END_XSPAN * 2, lenZ: 0.36, axis: 'x' });
       }
     }
     return benches;
   }
 
-  // 绘制看台座席：加高的座面 + 高靠背；正对面/远端座椅的前脸提亮，与左右两侧一致
+  // 绘制看台座席（2026-10-22 弱化版）
+  //
+  // 旧实现画的是「加高座面 + 高靠背 + 提亮前脸」的**实体长椅**，8 条实心条带非常抢眼，
+  // 与参考图（图3：只有一片光点、看台本身几乎看不见）方向相反。
+  //
+  // 新做法：**只保留极淡的横向分层带**，用于暗示"这是层层看台"，且：
+  //   · 不画靠背、不画前脸（那是"座椅"的具象特征，越画越像实景）
+  //   · 亮度按**离中心距离**衰减：近处（靠球场）稍亮、远处（外圈）几乎融入背景
+  //     —— 即「从四周向中心逐渐降低」，中心球台最亮，视觉自然聚焦
+  //   · 用 rgba 低透明度叠色，不做描边
   function drawBenches(ctx, cam) {
     if (!benchList) benchList = benchLayout();
-    const basis = { f: v3(0, 0, 1), u: v3(0, 1, 0), s: v3(1, 0, 0) };
     for (const b of benchList) {
-      // 座面（高 0.2m）
-      box(ctx, cam, v3(b.x, b.y + 0.10, b.z), b.lenX / 2, 0.10, b.lenZ / 2, basis, '#67809f');
-      // 靠背（竖向板，高于观众下半身，从人群中清晰露出）
-      if (b.axis === 'z') {
-        box(ctx, cam, v3(b.x + Math.sign(b.x) * 0.24, b.y + 0.17, b.z), 0.035, 0.17, b.lenZ / 2, basis, '#6b85a7');
-      } else {
-        box(ctx, cam, v3(b.x, b.y + 0.17, b.z + Math.sign(b.z) * 0.24), b.lenX / 2, 0.17, 0.035, basis, '#6b85a7');
-      }
-      // 面向镜头的前脸提亮（端看台：正对面/远端的座椅清晰可见）
-      if (b.axis === 'x') {
-        const fz = b.z + Math.sign(cam.eye.z || 1) * (b.lenZ / 2);
-        poly(ctx, cam, [
-          v3(b.x - b.lenX / 2, b.y, fz), v3(b.x + b.lenX / 2, b.y, fz),
-          v3(b.x + b.lenX / 2, b.y + 0.34, fz), v3(b.x - b.lenX / 2, b.y + 0.34, fz),
-        ], '#8fa9c8', null);
-      }
+      /* 离场地中心的归一化距离：x∈[3.62,5.27]、z∈[6.35,7.85] ⇒ d≈0.78~1.0。
+         映射成 0.045~0.009 的透明度：越外圈越淡，最终融进黑背景。
+         ⚠ 2026-10-22 三次调低（0.18 → 0.07 → 0.045）：
+         参考图里看台**几乎完全看不见**，只有"层层台阶"的极淡暗示。
+         任何明显的灰带都会让观众席重新变成"实体结构"，与弱化目标相反。 */
+      const d = Math.min(1, Math.hypot(b.x / 5.3, b.z / 7.9));
+      const a = 0.045 * (1 - d * 0.80);
+      if (a <= 0.012) continue;
+      /* 只画一条很扁的"台阶面"（水平条带），**不用 box()**：
+         box 会对六个面做光照着色，侧面被压暗成黑块——上一轮截图里两侧的黑色斜块
+         就是 box 的侧面。看台既然要"几乎看不见"，就不该有立体感。
+         改用 poly() 画一个 0.05m 高的水平面，纯平面、无光照。 */
+      const h = 0.05;
+      const hx = b.lenX / 2, hz = b.lenZ / 2;
+      poly(ctx, cam, [
+        v3(b.x - hx, b.y, b.z - hz), v3(b.x + hx, b.y, b.z - hz),
+        v3(b.x + hx, b.y + h, b.z + hz), v3(b.x - hx, b.y + h, b.z + hz),
+      ], `rgba(130,160,200,${a.toFixed(3)})`, null);
     }
   }
 
@@ -300,39 +333,61 @@
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, vw, vh);
 
-    // 场地木地板
+    // 场地木地板（2026-10-22 弱化边界）
+    //
+    // 旧实现：地板是硬边多边形 + 深色描边 + 格线 + **4 块 0.9m 高的实心围挡**。
+    // 围挡在参考图里根本不存在（图3 的球场直接融进黑暗），硬边也让场地像"一块板"。
+    //
+    // 新做法：
+    //   · 地板用**径向渐隐**（中心实、边缘透明），不再描边
+    //   · 格线透明度降低、只保留靠近中心的几条
+    //   · **删除围挡**，改由地板自身的渐隐承担"边界消失"的效果
     const arena = [
       v3(-3.4, 0, -4.6), v3(3.4, 0, -4.6), v3(3.4, 0, 4.6), v3(-3.4, 0, 4.6),
     ];
     const pa = arena.map((p) => cam.project(p));
     if (pa.every((p) => p)) {
       const lg = ctx.createLinearGradient(0, pa[0].y, 0, pa[2].y);
-      lg.addColorStop(0, '#7c4a21');
-      lg.addColorStop(1, '#a06a33');
+      lg.addColorStop(0, 'rgba(124,74,33,0.55)');
+      lg.addColorStop(0.5, 'rgba(150,100,52,0.85)');
+      lg.addColorStop(1, 'rgba(124,74,33,0.55)');
       ctx.fillStyle = lg;
       ctx.beginPath();
       ctx.moveTo(pa[0].x, pa[0].y);
       for (let i = 1; i < pa.length; i++) ctx.lineTo(pa[i].x, pa[i].y);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      // 地板格线
-      for (let x = -3; x <= 3; x += 1) {
-        line(ctx, cam, v3(x, 0.001, -4.5), v3(x, 0.001, 4.5), 'rgba(60,30,10,0.25)', 0.012);
+
+      /* 边缘渐隐：以地板中心为圆心，向外把地板"擦淡"。
+         用 destination-out 会擦出透明（露黑底），这里改用**同色径向渐变覆盖**，
+         从中心透明到边缘不透明，效果是地板四边自然融进背景，无硬边。 */
+      const cx = (pa[0].x + pa[2].x) / 2, cy = (pa[0].y + pa[2].y) / 2;
+      /* 渐变半径取到地板外接矩形对角方向的最远处，保证四角也被完全吃掉。
+         上一版 0.62 倍半径 + 末端 0.92 不够：地板边缘仍是一圈可见的褐色硬边。 */
+      const spanX = Math.abs(pa[1].x - pa[0].x) / 2;
+      const spanY = Math.abs(pa[2].y - pa[0].y) / 2;
+      const r = Math.hypot(spanX, spanY) * 1.05;
+      const fade = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      fade.addColorStop(0, 'rgba(13,18,32,0)');
+      fade.addColorStop(0.42, 'rgba(13,18,32,0.22)');
+      fade.addColorStop(0.72, 'rgba(13,18,32,0.72)');
+      fade.addColorStop(1, 'rgba(13,18,32,1)');
+      ctx.fillStyle = fade;
+      ctx.beginPath();
+      ctx.moveTo(pa[0].x, pa[0].y);
+      for (let i = 1; i < pa.length; i++) ctx.lineTo(pa[i].x, pa[i].y);
+      ctx.closePath();
+      ctx.fill();
+
+      // 地板格线：透明度降到 1/3，且只画靠近中心的（外圈已被渐隐吃掉）
+      for (let x = -2; x <= 2; x += 1) {
+        line(ctx, cam, v3(x, 0.001, -3.2), v3(x, 0.001, 3.2), 'rgba(60,30,10,0.10)', 0.010);
       }
-      for (let z = -4; z <= 4; z += 1) {
-        line(ctx, cam, v3(-3.3, 0.001, z), v3(3.3, 0.001, z), 'rgba(60,30,10,0.25)', 0.012);
+      for (let z = -3; z <= 3; z += 1) {
+        line(ctx, cam, v3(-2.4, 0.001, z), v3(2.4, 0.001, z), 'rgba(60,30,10,0.10)', 0.010);
       }
-      // 比赛区域围挡（低广告板）
-      const barrier = [
-        [v3(-3.2, 0, -3.2), v3(3.2, 0, -3.2), v3(3.2, 0.9, -3.2), v3(-3.2, 0.9, -3.2)],
-        [v3(-3.2, 0, 3.2), v3(3.2, 0, 3.2), v3(3.2, 0.9, 3.2), v3(-3.2, 0.9, 3.2)],
-        [v3(-3.2, 0, -3.2), v3(-3.2, 0, 3.2), v3(-3.2, 0.9, 3.2), v3(-3.2, 0.9, -3.2)],
-        [v3(3.2, 0, -3.2), v3(3.2, 0, 3.2), v3(3.2, 0.9, 3.2), v3(3.2, 0.9, -3.2)],
-      ];
-      for (const b of barrier) poly(ctx, cam, b, 'rgba(20,42,74,0.9)', 'rgba(0,0,0,0.4)');
+      /* 围挡已删除：参考图里球场边缘没有任何实体遮挡物，
+         边界感由地板渐隐 + 观众光点自然收束。 */
     }
   }
 
@@ -492,32 +547,36 @@
     const farN = Math.max(0, Math.min(1, (110 - sc) / 50));   // 远景补偿
     const att = 1 - nearN * 0.65;
 
-    // ① 暗影：只表示"有人"，不画肢体。用最基础的路径方法（各测试桩都有）
-    ctx.fillStyle = CROWD_BODY;
-    const bw = Math.max(1.2, 0.16 * sc) / 2;
-    const bh = Math.max(1.8, 0.26 * sc) / 2;
-    const bodyY = hp.y + (fp.y - hp.y) * 0.55;
-    ctx.beginPath();
-    ctx.moveTo(hp.x - bw, bodyY - bh);
-    ctx.lineTo(hp.x + bw, bodyY - bh);
-    ctx.lineTo(hp.x + bw, bodyY + bh);
-    ctx.lineTo(hp.x - bw, bodyY + bh);
-    ctx.lineTo(hp.x - bw, bodyY - bh);
-    ctx.fill();
+    /* ① 不画人体暗影。
+       参考图（图3）里观众**只有光点**，没有任何人体轮廓——暗影块会显出"一片方块"，
+       反而强化了"座位是实体"的感觉，与"弱化座位敏感度"的目标相反。
+       保留 hp/fp 只用于近远判定（sc），不参与绘制。 */
 
     // ② 应援棒：握点取姿态的手心，扇形摆动；欢呼举手时棒随之升高
     const gp = cam.project(p.handR);
     if (!gp) return;
-    const swing = Math.sin(time * 3 + s.ph) * 0.38 * (1 + c * 0.6) * (1 - sh * 0.65) - 0.9 * sh;
-    const stickLen = 0.62 * (0.96 - nearN * 0.35);
+    /* 挥舞速度由 c（fan.cheer[team]，得分时置 1 后按 0.6/s 衰减）驱动：
+       c=0 → 3.0 rad/s 常速；c=1 → 9.0 rad/s 快速挥舞（约 1.7 秒内衰减回常速）。
+       这正是「进球时该方应援棒加速挥舞一小段时间」，复用既有机制，不新增状态。 */
+    const swingSpeed = 3.0 + c * 6.0;
+    const swing = Math.sin(time * swingSpeed + s.ph) * 0.38 * (1 + c * 0.6) * (1 - sh * 0.65) - 0.9 * sh;
+    /* 棒长缩短：参考图的光棒是「短条」（约占人身高 1/5），不是长杆。
+       旧值 0.62 太长，改为 0.30。 */
+    const stickLen = 0.30 * (0.96 - nearN * 0.35);
     const tp = cam.project(v3(p.handR.x + Math.sin(swing) * stickLen,
                               p.handR.y + Math.cos(swing) * stickLen * 0.55, p.handR.z));
     if (!tp) return;
 
-    /* 棒宽/亮度：比 demo 更粗更亮——产品里观众席是背景，太细会被台面抢掉注意力。
-       下限 1.4→2.0、系数 0.035→0.055；远景补偿加强到 0.6。 */
-    const w = Math.max(2.0, 0.055 * gp.s * att) * (1 + farN * 0.6);
-    const alpha = Math.min(1, (0.62 + 0.38 * (1 - nearN)) * (1 + c * 0.35) * (1 - sh * 0.4) + farN * 0.3);
+    /* 棒宽/亮度：参考图的光点是短而亮的竖条，需保持一定宽度才看得见。 */
+    const w = Math.max(2.2, 0.058 * gp.s * att) * (1 + farN * 0.6);
+    /* 由四周向中心递减（2026-10-22）：
+       与看台同一套衰减——外圈观众更暗、更融进背景，中心球台区保持清晰。
+       用「离场地中心的归一化距离」d，外圈压到 0.45、内圈保持 1.0。
+       注意：这里只压 alpha，不改人数（人数口径由测试锁定）。 */
+    const _dx = s.x / 5.3, _dz = s.z / 7.9;
+    const _d = Math.min(1, Math.hypot(_dx, _dz));
+    const rimFade = 1 - _d * 0.55;
+    const alpha = Math.min(1, ((0.70 + 0.30 * (1 - nearN)) * (1 + c * 0.30) * (1 - sh * 0.4) + farN * 0.3) * rimFade);
 
     /* 光棒形状直接取自 Kenney Light Masks 的 streaks_composed_*（CC0 1.0）：
        竖向光条、底部实、顶部渐隐，正是应援棒的形态——**不自己画线段**。
@@ -685,11 +744,14 @@
     const vx = (cam.cx || 0) - vw / 2;
     ac.setTransform(dpr * s, 0, 0, dpr * s, -vx * dpr * s, 0);
     ac.clearRect(0, 0, vw, vh);
+    /* ⚠ 必须走样式开关：此处原先硬编码 drawPerson（火柴人），
+       导致"平静时是应援棒、一得分就变回火柴人"（2026-10-22 截图发现）。 */
+    const paintAnim = CROWD_STYLE.stick ? drawPersonStick : drawPerson;
     for (const p of crowdList) {
       const team = teamFixed ? (p.x < 0 ? 0 : 1) : (p.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0));
       const c = (fan && fan.cheer) ? fan.cheer[team] : 0;
       const sh = (fan && fan.shake) ? fan.shake[team] : 0;
-      drawPerson(ac, cam, p, time, c, sh, FAN_COL[team], true);
+      paintAnim(ac, cam, p, time, c, sh, FAN_COL[team], true);
     }
   }
 
