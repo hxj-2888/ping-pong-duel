@@ -344,6 +344,24 @@
      CROWD_GLOW 用离屏烘焙而非 ctx.shadowBlur——后者是逐图元高斯模糊，
      376 根棒/帧实测把 60fps 压到 46。无 document 的环境返回 null，自动退化为无光斑。 */
   const CROWD_BODY = 'rgba(16,22,34,0.72)';
+  /* 应援棒光棒贴图：Kenney Light Masks 的 streaks_composed_*（CC0 1.0，可商用）。
+     素材本身是「竖向光条、底亮顶淡」，与应援棒形态一致，故直接用素材，不手绘。
+     懒加载：浏览器里 Image 异步加载，未就绪时 drawPersonStick 自动退回线段；
+     Node（测试桩）无 Image ⇒ 数组保持空 ⇒ 全部走线段回退，测试行为不变。 */
+  const CROWD_STICKS = [];
+  (() => {
+    try {
+      if (typeof Image === 'undefined') return;
+      const base = 'assets/light/';
+      for (const n of ['streaks_composed_a.png', 'streaks_composed_b.png',
+                       'streaks_composed_c.png', 'streaks_composed_d.png']) {
+        const im = new Image();
+        im.onload = () => { clearCrowdCache(); };   // 贴图到位后重建观众缓存
+        im.src = base + n;
+        CROWD_STICKS.push(im);
+      }
+    } catch (e) { /* 无 Image 环境：保持线段回退 */ }
+  })();
   const CROWD_GLOW = (() => {
     try {
       if (typeof document === 'undefined' || !document.createElement) return null;
@@ -491,7 +509,7 @@
     const gp = cam.project(p.handR);
     if (!gp) return;
     const swing = Math.sin(time * 3 + s.ph) * 0.38 * (1 + c * 0.6) * (1 - sh * 0.65) - 0.9 * sh;
-    const stickLen = 0.46 * (0.96 - nearN * 0.35);
+    const stickLen = 0.62 * (0.96 - nearN * 0.35);
     const tp = cam.project(v3(p.handR.x + Math.sin(swing) * stickLen,
                               p.handR.y + Math.cos(swing) * stickLen * 0.55, p.handR.z));
     if (!tp) return;
@@ -500,31 +518,70 @@
        下限 1.4→2.0、系数 0.035→0.055；远景补偿加强到 0.6。 */
     const w = Math.max(2.0, 0.055 * gp.s * att) * (1 + farN * 0.6);
     const alpha = Math.min(1, (0.62 + 0.38 * (1 - nearN)) * (1 + c * 0.35) * (1 - sh * 0.4) + farN * 0.3);
-    /* 状态隔离：不用 save/restore——部分测试桩（crowd-*-test）只实现基础绘图方法，
-       没有 save/restore，直接调用会抛 TypeError。改为「记原值→改→还原」，
-       等价效果且对 ctx 能力零假设。 */
-    const _prevAlpha = ctx.globalAlpha;
-    const _prevStroke = ctx.strokeStyle;
-    const _prevWidth = ctx.lineWidth;
-    const _prevCap = ctx.lineCap;
-    ctx.strokeStyle = col;
-    ctx.globalAlpha = alpha;
-    ctx.lineWidth = w;
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(gp.x, gp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
-    ctx.globalAlpha = _prevAlpha;
-    ctx.strokeStyle = _prevStroke;
-    ctx.lineWidth = _prevWidth;
-    ctx.lineCap = _prevCap;
 
-    // ③ 棒头光斑：预烘焙贴图（不用 shadowBlur——逐图元模糊，376 次/帧会掉到 46fps）
-    //    同样不用 save/restore：测试桩无此方法。改值后还原。
+    /* 光棒形状直接取自 Kenney Light Masks 的 streaks_composed_*（CC0 1.0）：
+       竖向光条、底部实、顶部渐隐，正是应援棒的形态——**不自己画线段**。
+       贴图未加载完成（或环境无 drawImage）时退回线段，保证任何情况下都有东西可画。
+
+       贴图方向：素材是「底亮顶淡」，绘制时以握点为底、棒尖为顶，
+       用 setTransform 把贴图沿棒方向旋转（不用 save/restore——测试桩没有）。 */
+    const STICK_SPRITE = (() => {
+      const cand = CROWD_STICKS[(s.c * 4 | 0) % CROWD_STICKS.length];
+      /* 必须检查 complete && naturalWidth：加载失败/未完成时 drawImage 会抛
+         InvalidStateError（"The HTMLImageElement provided is in the 'broken' state"）。
+         检查失败则返回 null，走下面的线段回退。 */
+      return (cand && cand.complete && cand.naturalWidth > 0) ? cand : null;
+    })();
+    if (STICK_SPRITE && typeof ctx.drawImage === 'function' && typeof ctx.setTransform === 'function'
+        && typeof ctx.rotate === 'function') {
+      const _m = ctx.getTransform ? ctx.getTransform() : null;
+      const _s = _m && _m.a > 0 ? _m.a : 1;
+      const _dx = tp.x - gp.x, _dy = tp.y - gp.y;
+      const _len = Math.hypot(_dx, _dy);
+      if (_len > 1) {
+        /* 贴图实测（streaks_composed_a）：底部 alpha≈251、顶部≈4 —— 即「下亮上淡」。
+           应援棒的亮端在**手上**（棒尖朝上发光），所以贴图要翻过来用：
+           把亮端放在握点、淡端朝棒尖。做法是旋转后按 -len..0 反向绘制。 */
+        const _ang = Math.atan2(_dy, _dx) + Math.PI / 2;
+        const _hw = Math.max(2.4, w * 2.0);   // 贴图自带辉光边，半宽要比线宽宽
+        const _pa2 = ctx.globalAlpha;
+        const _pc2 = ctx.globalCompositeOperation;
+        if (typeof _pc2 === 'string') ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = alpha;
+        ctx.setTransform(_s, 0, 0, _s, gp.x * _s, gp.y * _s);
+        ctx.rotate(_ang);
+        /* 反向绘制：贴图底（亮端）落在握点，顶（淡端）落在棒尖 */
+        ctx.drawImage(STICK_SPRITE, -_hw, 0, _hw * 2, -_len);
+        ctx.setTransform(_m || [1, 0, 0, 1, 0, 0]);
+        ctx.globalAlpha = _pa2;
+        if (typeof _pc2 === 'string') ctx.globalCompositeOperation = _pc2;
+      }
+    } else {
+      /* 回退：线段（素材不可用时） */
+      const _prevAlpha = ctx.globalAlpha;
+      const _prevStroke = ctx.strokeStyle;
+      const _prevWidth = ctx.lineWidth;
+      const _prevCap = ctx.lineCap;
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = w;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(gp.x, gp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+      ctx.globalAlpha = _prevAlpha;
+      ctx.strokeStyle = _prevStroke;
+      ctx.lineWidth = _prevWidth;
+      ctx.lineCap = _prevCap;
+    }
+
+    /* ③ 棒尖辉光：贴图本身已带「下亮上淡」，所以**不再叠整根光斑**（会糊成一片）。
+       只在棒尖补一个很小的光点，模拟发光棒端头的高光——这也是应援棒的辨识特征。
+       用预烘焙贴图而非 shadowBlur（后者逐图元模糊，376 次/帧会掉到 46fps）。 */
     if (CROWD_GLOW && typeof ctx.drawImage === 'function') {
-      const gs = Math.max(4, w * 1.8);
+      const gs = Math.max(3, w * 1.1);
       const _pa = ctx.globalAlpha;
       const _pc = ctx.globalCompositeOperation;
       if (typeof _pc === 'string') ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = Math.min(0.75, alpha * 0.6);
+      ctx.globalAlpha = Math.min(0.6, alpha * 0.5);
       ctx.drawImage(CROWD_GLOW, tp.x - gs / 2, tp.y - gs / 2, gs, gs);
       ctx.globalAlpha = _pa;
       if (typeof _pc === 'string') ctx.globalCompositeOperation = _pc;
