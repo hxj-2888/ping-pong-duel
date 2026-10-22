@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>观众席对比原型</title>
+<style>html,body{margin:0;background:#0a0e18}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<script src="../public/js/engine/rules.js"></script>
+<script src="../public/js/engine/math.js"></script>
+<script src="../public/js/engine/state.js"></script>
+<script src="../public/js/engine/physics.js"></script>
+<script src="../public/js/engine/shots.js"></script>
+<script src="../public/js/engine/strokes.js"></script>
+<script src="../public/js/engine.js"></script>
+<script src="../public/js/render.js"></script>
+<script>
+/* 观众席风格对比原型：左=现状火柴人，右=应援棒剪影。
+   直接复用项目真实 Camera 与投影，保证透视与产品一致。 */
+const W = 1280, H = 720;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const R = window.TTG;
+
+/* 复刻 crowdLayout（同种子同步长 ⇒ 站位与人数与产品一致） */
+function crowdLayout(density) {
+  const d = density == null ? 1 : density;
+  const step = 0.46 / d;
+  const list = [];
+  let seed = 20260804;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const person = (x, y, z) => ({ x: x + (rnd() - .5) * .2, y: y + (rnd() - .5) * .1, z, ph: rnd() * 6.283, c: rnd() });
+  for (const ez of [-6.35, 6.35]) {
+    for (let row = 3; row >= 0; row--) {
+      const z = ez + row * 0.5;
+      for (let x = -5.2; x <= 5.2; x += step) list.push(person(x, 0.25 + row * 0.48, z));
+    }
+  }
+  for (const sx of [-1, 1]) {
+    for (let row = 3; row >= 0; row--) {
+      const x = sx * (3.62 + row * 0.55);
+      for (let z = -5.5; z <= 5.5; z += step) list.push(person(x, 0.25 + row * 0.48, z + (rnd() - .5) * .2));
+    }
+  }
+  return list;
+}
+const LIST = crowdLayout(1);
+const RED = [255, 92, 72], BLUE = [86, 152, 255];
+
+function newCam() {
+  const cam = new R.Camera();
+  /* 真实比赛视角：拉远抬高，能同时看到两端 + 两侧看台（此前 6.2 太近，只见一侧） */
+  cam.set(R.v3(0, 2.9, 9.6), R.v3(0, 0.85, 0), W / 2, H * 0.52, 700);
+  return cam;
+}
+function backdrop() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a0e18'); g.addColorStop(.55, '#101828'); g.addColorStop(1, '#0c1220');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+/* ── A：现状（坐姿火柴人，每人 8 条路径） ── */
+function drawStick(cam) {
+  for (const s of LIST) {
+    const col = s.x < 0 ? RED : BLUE;
+    const c = `rgb(${col[0]},${col[1]},${col[2]})`;
+    const base = R.v3(s.x, s.y + .30, s.z);
+    const shoulder = R.v3(s.x, s.y + .64, s.z);
+    const head = R.v3(s.x, s.y + .81, s.z);
+    const toC = R.vnorm(R.v3(-s.x, 0, -s.z));
+    const side = R.vnorm(R.v3(-toC.z, 0, toC.x));
+    const kL = R.vadd(base, R.vadd(R.vscale(toC, .26), R.vadd(R.vscale(side, -.13), R.v3(0, -.08, 0))));
+    const kR = R.vadd(base, R.vadd(R.vscale(toC, .26), R.vadd(R.vscale(side, .13), R.v3(0, -.08, 0))));
+    const fL = R.vadd(kL, R.vadd(R.vscale(toC, .20), R.v3(0, -.18, 0)));
+    const fR = R.vadd(kR, R.vadd(R.vscale(toC, .20), R.v3(0, -.18, 0)));
+    const shL = R.vadd(shoulder, R.vscale(side, -.15)), shR = R.vadd(shoulder, R.vscale(side, .15));
+    const hL = R.vadd(kL, R.v3(0, .04, 0)), hR = R.vadd(kR, R.v3(0, .04, 0));
+    const hp = cam.project(head), fp = cam.project(base);
+    if (!hp || !fp) continue;
+    const hr = Math.max(1.2, .105 * Math.min(hp.s, fp.s) * .9);
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(hp.x, hp.y, hr, 0, 7); ctx.fill();
+    for (const [a, b] of [[base, shoulder], [base, kL], [base, kR], [kL, fL], [kR, fR], [shL, hL], [shR, hR]])
+      R.limb(ctx, cam, a, b, .055, c, 'rgba(0,0,0,.55)');
+  }
+}
+
+/* ── B：应援棒（暗色剪影 + 发光棒） ── */
+function drawSticks(cam, time) {
+  const sorted = LIST.slice().sort((a, b) => cam.depth(R.v3(b.x, b.y, b.z)) - cam.depth(R.v3(a.x, a.y, a.z)));
+  /* 第一遍：身体暗影（单一 fillStyle + fillRect，无 stroke） */
+  ctx.fillStyle = 'rgba(14,19,30,.9)';
+  for (const s of sorted) {
+    const b = cam.project(R.v3(s.x, s.y + .34, s.z));
+    if (!b) continue;
+    const w = Math.max(1.6, .20 * b.s), h = Math.max(2.2, .34 * b.s);
+    ctx.fillRect(b.x - w / 2, b.y - h / 2, w, h);
+  }
+  /* 第二遍：应援棒，按队色各设一次 shadowColor 批量画。
+     关键修正：**近排衰减**——近排观众离相机近，透视放大 1.8 倍会把光棒糊满镜头。
+     做法：按投影缩放 s 反向收敛棒长/棒宽/亮度（s 越大 = 越近 ⇒ 压得越小越暗），
+     效果等价于"镜头聚焦在球台、近处观众被虚化压暗"，也符合真实转播的景深观感。 */
+  for (const team of [0, 1]) {
+    const col = team === 0 ? RED : BLUE;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const s of sorted) {
+      if ((s.x < 0 ? 0 : 1) !== team) continue;
+      const sway = Math.sin(time * 3 + s.ph) * .06;
+      const pb = cam.project(R.v3(s.x + sway, s.y + .60, s.z));
+      const pt = cam.project(R.v3(s.x + sway * 1.6, s.y + .96, s.z));
+      if (!pb || !pt) continue;
+      /* 近排衰减：s 归一化到 [0,1]，越近衰减越强（1.0 → 0.35） */
+      const sN = Math.max(0, Math.min(1, (pb.s - 60) / 90));
+      const att = 1 - sN * 0.65;              // 近排压到 35%
+      /* 远景提亮：远排棒太细太暗会"消失"，按距离补一点亮度与最小宽度 */
+      const far = Math.max(0, Math.min(1, (110 - pb.s) / 50));
+      const w = Math.max(1.4, .035 * pb.s * att) * (1 + far * 0.35);
+      const alpha = Math.min(1, (.45 + .5 * (1 - sN)) + far * 0.25);
+      ctx.shadowColor = `rgba(${col[0]},${col[1]},${col[2]},${alpha})`;
+      ctx.shadowBlur = 10 * att + 3;
+      ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${alpha})`;
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.lineWidth = w;
+      /* 挥动：整根棒绕握点做扇形摆动（±22°），这才是"应援棒"的灵魂。
+         用 sin(t*3+ph) 驱动角度，个体相位错开 ⇒ 波浪感。 */
+      const swing = Math.sin(time * 3 + s.ph) * 0.38;   // 弧度
+      const shorten = 0.96 - sN * 0.35;
+      const L = .36 * shorten;
+      const tip = R.v3(s.x + Math.sin(swing) * L, s.y + .60 + Math.cos(swing) * L, s.z);
+      const pt2 = cam.project(tip);
+      if (!pt2) continue;
+      ctx.beginPath(); ctx.moveTo(pb.x, pb.y); ctx.lineTo(pt2.x, pt2.y); ctx.stroke();
+      ctx.beginPath(); ctx.arc(pt2.x, pt2.y, Math.max(1.0, w * .85), 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+/* 出图：上=现状，下=应援棒（同一相机、同一站位，只有画法不同） */
+const camA = newCam();
+backdrop(); drawStick(camA);
+
+/* 把"现状"裁到上半屏，再在下半屏画"应援棒" */
+const before = ctx.getImageData(0, 0, W, H);
+ctx.save(); ctx.clearRect(0, 0, W, H);
+backdrop(); drawSticks(newCam(), 1.2);
+const after = ctx.getImageData(0, 0, W, H);
+ctx.restore();
+
+/* 左右并排：左半屏=现状，右半屏=应援棒 */
+ctx.clearRect(0, 0, W, H);
+ctx.putImageData(before, 0, 0);
+ctx.save();
+ctx.beginPath(); ctx.rect(W / 2, 0, W / 2, H); ctx.clip();
+ctx.putImageData(after, 0, 0);
+ctx.restore();
+ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2;
+ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+ctx.font = 'bold 20px sans-serif'; ctx.fillStyle = '#fff';
+ctx.fillText('现状：376 个坐姿火柴人 · 每帧 3008 条路径', 24, 40);
+ctx.fillText('方案：剪影 + 应援棒 · 每帧 752 条路径（-75%）', W / 2 + 24, 40);
+window.__done = true;
+</script>
+</body>
+</html>
