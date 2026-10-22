@@ -83,6 +83,8 @@
         el.volume = musicVol; // 与音乐总线 musicGain 音量一致（音量滑杆）
         el.preload = 'auto';
         bgmEl = el;
+        // 元素就绪即尝试出声（无用户手势时会被自动播放策略拦下 → 静默失败，不影响交互重试）
+        try { el.addEventListener('canplay', function () { if (musicOn && el.paused) tryStartBgm(); }); } catch (e) { /* ignore */ }
       } catch (e) { bgmEl = null; }
     }
     // WebAudio 解码（需要 ctx；成功后 loop=true 零间隙循环，解码完成自动无缝切换）
@@ -98,6 +100,8 @@
           if (ctx && ctx.state === 'running' && !bgmSource) {
             if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
             startMusic();
+          } else {
+            tryStartBgm();
           }
         }).catch(() => { /* ignore */ });
         return;
@@ -114,6 +118,8 @@
           if (ctx && ctx.state === 'running') {
             if (bgmEl && !bgmEl.paused) { try { bgmEl.pause(); } catch (e) { /* ignore */ } }
             startMusic();
+          } else {
+            tryStartBgm();   // ctx 未运行：元素兜底立即补播，不必等下一次交互
           }
           return buf;
         })
@@ -338,30 +344,36 @@
   // 先直接尝试启动；若被拦截（AudioContext 处于 suspended / <audio> 未能播放），
   // 持续挂接用户交互（任意点击/按键/触摸），每次交互都重试恢复出声，
   // 直到音乐真正在播才卸载——避免一次性恢复监听因交互时机过早/被策略拦截而丢失机会。
+  /* 让音乐出声（幂等，可反复调用）：缓冲路径优先、元素兜底；被自动播放策略拦截时静默失败，
+     由 autoplayMusic 挂的交互监听在下次手势再试。
+     〔2026-10-09〕**资源就绪后必须主动补一次**：首次交互时音乐若尚未解码/未缓冲完，
+     那次手势会白白消耗（此刻无缓冲、元素也未就绪，播不了），于是要等到**下一次**交互才出声
+     ——表现正是「点了具体模式才响」。故解码完成 / 元素 canplay 时都调本函数一次。 */
+  function tryStartBgm() {
+    // v1.6.2：单一音源 + 无静默——缓冲路径存在时：ctx 挂起则先恢复运行，恢复后补启缓冲源
+    // （绝不额外启动元素）；ctx 尚未运行时由元素兜底出声；元素路径仅在无解码缓冲时使用。
+    const needResume = ctx && ctx.state === 'suspended' && ctx.resume;
+    if (needResume) {
+      try { ctx.resume().then(() => { if (musicOn && bgmBuf && !bgmSource) startMusic(); }).catch(() => { /* ignore */ }); } catch (e) { /* ignore */ }
+    }
+    if (!musicOn) return;
+    if (bgmBuf) {
+      if (!bgmSource) {
+        if (ctx && ctx.state === 'running') startMusic();
+        else if (bgmEl && bgmEl.paused) { try { bgmEl.play(); } catch (e) { /* ignore */ } }
+      }
+    } else if (bgmEl && bgmEl.paused) {
+      try { bgmEl.play(); } catch (e) { /* ignore */ }
+    }
+  }
+
   function autoplayMusic() {
     ensure(); // 建 AudioContext + 挂接 raw 音乐（musicOn 时内部已尝试启动）
     const playing = () =>
       (bgmSource && ctx && ctx.state === 'running') ||
       (bgmEl && !bgmEl.paused && musicOn);
-    const resume = () => {
-      // v1.6.2：单一音源 + 无静默——缓冲路径存在时：ctx 挂起则先恢复运行，恢复后补启缓冲源
-      // （绝不额外启动元素）；ctx 尚未运行时由元素兜底出声；元素路径仅在无解码缓冲时使用。
-      const needResume = ctx && ctx.state === 'suspended' && ctx.resume;
-      if (needResume) {
-        try { ctx.resume().then(() => { if (musicOn && bgmBuf && !bgmSource) startMusic(); }).catch(() => { /* ignore */ }); } catch (e) { /* ignore */ }
-      }
-      if (!musicOn) return;
-      if (bgmBuf) {
-        if (!bgmSource) {
-          if (ctx && ctx.state === 'running') startMusic();
-          else if (bgmEl && bgmEl.paused) { try { bgmEl.play(); } catch (e) { /* ignore */ } }
-        }
-      } else if (bgmEl && bgmEl.paused) {
-        try { bgmEl.play(); } catch (e) { /* ignore */ }
-      }
-    };
     const tryResume = () => {
-      resume();
+      tryStartBgm();
       if (playing()) { // 已出声 → 卸载监听，避免常驻开销
         for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) {
           try { window.removeEventListener(t, tryResume); } catch (e) { /* ignore */ }

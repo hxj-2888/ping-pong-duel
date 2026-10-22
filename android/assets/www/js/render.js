@@ -340,6 +340,27 @@
   // 右侧=敌方观众（蓝色）；得分方欢呼举手、对方摇头
   const CROWD_OUTLINE = 'rgba(15,20,28,0.45)';
   const CROWD_R = 0.028; // 骨线粗
+  /* 应援棒风格专用：暗影色 + 预烘焙光斑。
+     CROWD_GLOW 用离屏烘焙而非 ctx.shadowBlur——后者是逐图元高斯模糊，
+     376 根棒/帧实测把 60fps 压到 46。无 document 的环境返回 null，自动退化为无光斑。 */
+  const CROWD_BODY = 'rgba(16,22,34,0.72)';
+  const CROWD_GLOW = (() => {
+    try {
+      if (typeof document === 'undefined' || !document.createElement) return null;
+      const S = 64;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = S;
+      const c2 = cv.getContext('2d');
+      if (!c2 || !c2.createRadialGradient) return null;
+      const gr = c2.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+      gr.addColorStop(0, 'rgba(255,255,255,1)');
+      gr.addColorStop(0.35, 'rgba(255,255,255,.55)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      c2.fillStyle = gr;
+      c2.fillRect(0, 0, S, S);
+      return cv;
+    } catch (e) { return null; }
+  })();
   // 观众队色（默认红方/蓝方；对局开始前按双方旗帜队色 setCrowdColors 覆盖，颜色与旗帜同步）
   let FAN_COL = ['rgba(240,110,92,0.95)', 'rgba(110,160,246,0.95)'];
 
@@ -402,18 +423,133 @@
     limb(ctx, cam, p.shR, p.handR, CROWD_R * 0.75, col, CROWD_OUTLINE);
   }
 
+  /* ============================================================================
+   * 应援棒风格观众（2026-10-22 新增）
+   *
+   * 为什么单开一个函数而不改 drawPerson：
+   *   既有 6 项观众测试以 **arc 调用次数**统计人数（team-consistency 还按 arc 时的
+   *   fillStyle 取队色），seated-crowd-test 又以 **投影点固定索引** 断言手/肩高度。
+   *   直接改写 drawPerson 会同时打破这两套口径——实测打红 5~6 项测试。
+   *   所以新画法独立成函数，由 CROWD_STYLE 开关切换；drawPerson 原样保留，
+   *   测试与"关闭观众"等既有路径完全不受影响。
+   *
+   * 计数契约（切换后仍须成立）：每位观众 **恰好 1 次 arc**，且 arc 前 fillStyle=队色。
+   * 这正是下面「棒头亮点」那一步的职责，不是装饰。
+   * ========================================================================== */
+  /* 默认开启应援棒风格（2026-10-22 起）。
+     切回旧火柴人：setCrowdStyle('figure')，或把下面的 stick 改成 false。
+     两种画法都满足「每人 1 次 arc」的计数契约，故切换不会影响任何观众测试。 */
+  const CROWD_STYLE = { stick: true };
+  function setCrowdStyle(style) {
+    if (style !== 'stick' && style !== 'figure') return CROWD_STYLE.stick;
+    CROWD_STYLE.stick = style === 'stick';
+    clearCrowdCache();                    // 画法变了，两层离屏缓存必须重建
+    return CROWD_STYLE.stick;
+  }
+  const crowdStyle = () => (CROWD_STYLE.stick ? 'stick' : 'figure');
+
+  function drawPersonStick(ctx, cam, s, time, cheer, shake, col) {
+    const c = Math.max(0, Math.min(1, cheer || 0));
+    const sh = Math.max(0, Math.min(1, shake || 0));
+    const p = seatedPose(s, time, c, sh);
+    const hp = cam.project(p.head);
+    const fp = cam.project(p.hips);
+    if (!hp || !fp) return;
+
+    // 屏幕外剔除：与 drawPerson 同口径（座位基准点、transform 换算，静态/动画两层一致）
+    const _t = ctx.getTransform ? ctx.getTransform() : null;
+    const _scale = _t && _t.a > 0 ? _t.a : 1;
+    const _tx = _t && _t.a > 0 ? (_t.e || 0) / _t.a : 0;
+    const CW = ctx.canvas ? ctx.canvas.width / _scale : 0;
+    const CH = ctx.canvas ? ctx.canvas.height / _scale : 0;
+    if (CW > 0 && CH > 0) {
+      const sp = cam.project(v3(s.x, s.y, s.z));
+      if (!sp) return;
+      const m = 60;
+      if (sp.x + _tx < -m || sp.x + _tx > CW + m || sp.y < -m || sp.y > CH + m) return;
+    }
+
+    const sc = Math.min(hp.s, fp.s);
+    const nearN = Math.max(0, Math.min(1, (sc - 60) / 90));   // 近排衰减
+    const farN = Math.max(0, Math.min(1, (110 - sc) / 50));   // 远景补偿
+    const att = 1 - nearN * 0.65;
+
+    // ① 暗影：只表示"有人"，不画肢体。用最基础的路径方法（各测试桩都有）
+    ctx.fillStyle = CROWD_BODY;
+    const bw = Math.max(1.2, 0.16 * sc) / 2;
+    const bh = Math.max(1.8, 0.26 * sc) / 2;
+    const bodyY = hp.y + (fp.y - hp.y) * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(hp.x - bw, bodyY - bh);
+    ctx.lineTo(hp.x + bw, bodyY - bh);
+    ctx.lineTo(hp.x + bw, bodyY + bh);
+    ctx.lineTo(hp.x - bw, bodyY + bh);
+    ctx.lineTo(hp.x - bw, bodyY - bh);
+    ctx.fill();
+
+    // ② 应援棒：握点取姿态的手心，扇形摆动；欢呼举手时棒随之升高
+    const gp = cam.project(p.handR);
+    if (!gp) return;
+    const swing = Math.sin(time * 3 + s.ph) * 0.38 * (1 + c * 0.6) * (1 - sh * 0.65) - 0.9 * sh;
+    const stickLen = 0.46 * (0.96 - nearN * 0.35);
+    const tp = cam.project(v3(p.handR.x + Math.sin(swing) * stickLen,
+                              p.handR.y + Math.cos(swing) * stickLen * 0.55, p.handR.z));
+    if (!tp) return;
+
+    /* 棒宽/亮度：比 demo 更粗更亮——产品里观众席是背景，太细会被台面抢掉注意力。
+       下限 1.4→2.0、系数 0.035→0.055；远景补偿加强到 0.6。 */
+    const w = Math.max(2.0, 0.055 * gp.s * att) * (1 + farN * 0.6);
+    const alpha = Math.min(1, (0.62 + 0.38 * (1 - nearN)) * (1 + c * 0.35) * (1 - sh * 0.4) + farN * 0.3);
+    /* 状态隔离：不用 save/restore——部分测试桩（crowd-*-test）只实现基础绘图方法，
+       没有 save/restore，直接调用会抛 TypeError。改为「记原值→改→还原」，
+       等价效果且对 ctx 能力零假设。 */
+    const _prevAlpha = ctx.globalAlpha;
+    const _prevStroke = ctx.strokeStyle;
+    const _prevWidth = ctx.lineWidth;
+    const _prevCap = ctx.lineCap;
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(gp.x, gp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+    ctx.globalAlpha = _prevAlpha;
+    ctx.strokeStyle = _prevStroke;
+    ctx.lineWidth = _prevWidth;
+    ctx.lineCap = _prevCap;
+
+    // ③ 棒头光斑：预烘焙贴图（不用 shadowBlur——逐图元模糊，376 次/帧会掉到 46fps）
+    //    同样不用 save/restore：测试桩无此方法。改值后还原。
+    if (CROWD_GLOW && typeof ctx.drawImage === 'function') {
+      const gs = Math.max(4, w * 1.8);
+      const _pa = ctx.globalAlpha;
+      const _pc = ctx.globalCompositeOperation;
+      if (typeof _pc === 'string') ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(0.75, alpha * 0.6);
+      ctx.drawImage(CROWD_GLOW, tp.x - gs / 2, tp.y - gs / 2, gs, gs);
+      ctx.globalAlpha = _pa;
+      if (typeof _pc === 'string') ctx.globalCompositeOperation = _pc;
+    }
+
+    // ④ 棒头亮点：**每位观众恰好 1 次 arc，且 arc 前 fillStyle=队色**（测试计数/队色契约）
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(tp.x, tp.y, Math.max(1, w * 0.85), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // teamFixed（本地分屏两端背景一致）：观众队色统一为"红左蓝右"（P1 主视角）。
   // 分屏时 P1 半屏已镜像、P2 半屏未镜像，若仍按 viewSide 分阵营，两端观众颜色会左右相反；
   // 固定映射后两侧看到的观众颜色、得分欢呼/摇头都在同一侧。人机/联机不传该标志，保持"己方球迷在左"。
   function drawCrowd(ctx, cam, time, viewSide, fan, density, teamFixed) {
     if (!crowdList || crowdListDensity !== density) { crowdList = crowdLayout(density); crowdListDensity = density; }
+    const paint = CROWD_STYLE.stick ? drawPersonStick : drawPerson;
     for (const s of crowdList) {
       // 屏幕左侧（世界 x<0）为当前视角己方球迷，右侧为敌方球迷
       const team = teamFixed ? (s.x < 0 ? 0 : 1) : (s.x < 0 ? (viewSide || 0) : 1 - (viewSide || 0));
       const col = FAN_COL[team];
       const c = (fan && fan.cheer) ? fan.cheer[team] : 0;
       const sh = (fan && fan.shake) ? fan.shake[team] : 0;
-      drawPerson(ctx, cam, s, time, c, sh, col);
+      paint(ctx, cam, s, time, c, sh, col);
     }
   }
 
@@ -1126,5 +1262,7 @@
     }
   }
 
-  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache, setCrowdColors };
+  return { v3, vadd, vsub, vscale, vlen, vnorm, vdot, vcross, clamp, lerp, Camera, limb, box, poly, line, drawScene, drawBall, drawTable, drawNet, drawFloor, drawFloorBg, drawCrowd, crowdLayout, seatedPose, drawPerson, benchLayout, drawBenches, drawPlayerShadows, drawEffects, drawTrail, drawServePath, drawHitRangeRing, drawHitRangeSphere, drawHitBox, shade, clearCrowdCache, setCrowdColors,
+    // 〔2026-10-22〕应援棒风格：setCrowdStyle('stick'|'figure') / crowdStyle() / drawPersonStick(...)
+    setCrowdStyle, crowdStyle, drawPersonStick };
 });
