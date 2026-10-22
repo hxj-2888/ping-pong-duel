@@ -9,7 +9,12 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
-const SKIP_DIRS = new Set(['node_modules', '.git', '.wrangler', 'dist', 'android', 'attachment-site', 'projects', 'public', 'src', '.tmp_shots', '.tmp_pp', '_retired', 'bin', 'obj']);
+const SKIP_DIRS = new Set(['node_modules', '.git', '.wrangler', 'dist', 'android', 'attachment-site', 'projects', 'public', 'src', '.tmp_shots', '.tmp_pp', '_retired', 'bin', 'obj',
+  /* 〔2026-10-22〕安装包分发目录：被 .gitignore 排除、**不受版本控制**，
+     里面是整仓的历史副本（README 指向仓库根的文件，但该目录下没有）。
+     对它做死链检查只会在每次 autosync 后报同一批假死链。
+     判定口径：该目录是否被 git 跟踪 —— 见下方 SKIP_DIRS 的注释。 */
+  '乒乓对决_安装包']);
 
 function walk(dir, out) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
