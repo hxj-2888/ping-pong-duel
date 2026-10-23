@@ -17,6 +17,9 @@ function check(name, cond) {
 }
 
 const VW = 1280, VH = 720;
+/* 〔2026-10-23 v7〕跟随 render.js FAN_COL 默认值（参考图采样：左暖橙红 / 右青蓝）。
+   改 render.js 队色时必须同步这里——计数契约不变（arc fillStyle=队色）。 */
+/* 〔2026-10-23 v9〕跟随 render.js 的 FAN_COL 回退到远端原版队色（移除应援棒） */
 const FAN_RED = 'rgba(240,110,92,0.95)';
 const FAN_BLUE = 'rgba(110,160,246,0.95)';
 

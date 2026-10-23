@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>赛场画面验收（开发用：直接调用 render.js 的 drawScene）</title>
+<style>
+  html,body{margin:0;background:#000;overflow:hidden}
+  #c{display:block;width:1280px;height:720px}
+  #bad{position:fixed;left:8px;bottom:8px;color:#f66;font:12px monospace;white-space:pre}
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<div id="bad"></div>
+<script src="../public/js/engine/rules.js"></script>
+<script src="../public/js/engine/math.js"></script>
+<script src="../public/js/engine/state.js"></script>
+<script src="../public/js/engine/physics.js"></script>
+<script src="../public/js/engine/shots.js"></script>
+<script src="../public/js/engine/strokes.js"></script>
+<script src="../public/js/engine.js"></script>
+<script src="../public/js/render.js"></script>
+<script src="../public/js/characters.js"></script>
+<script>
+'use strict';
+/* 机位与参数走 URL：?eye=x,y,z&look=x,y,z&f=1240&fan=cheer|none&mode=world|overlay|off&density=1&time=1.2 */
+(function () {
+  const q = new URLSearchParams(location.search);
+  const num = (k, d) => (q.has(k) ? parseFloat(q.get(k)) : d);
+  const vec = (k, dx, dy, dz) => {
+    const v = (q.get(k) || '').split(',').map(Number);
+    return TTG.v3(v.length === 3 && v.every(isFinite) ? v[0] : dx, v.length === 3 && v.every(isFinite) ? v[1] : dy, v.length === 3 && v.every(isFinite) ? v[2] : dz);
+  };
+  /* 画幅走 URL：?w=1450&h=1085（默认 1280×720）。
+     对比验收时用参考图同 aspect 截图，避免拉伸造成区域指标失真。 */
+  const W = Math.max(320, num('w', 1280)), H = Math.max(240, num('h', 720));
+  const cv = document.getElementById('c');
+  cv.width = W; cv.height = H;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d');
+  if (q.get('mode')) TTG.setLightingMode(q.get('mode'));
+  else TTG.setLightingMode('both');
+  /* 默认机位 = app 层 makeCam（side 0）：〔2026-10-23 v8b 用户指定俯角 30°〕
+     eyeY 7.43 / |z| 10.10 / lookY 1.60 / 2.00×W
+     俯角 = atan((eyeY-lookY)/|eyeZ|) = atan(5.83/10.10) = **30.0°**（v8 原为 13.9°）。
+     相机上抬后台面透视压缩、显小，焦距同步 1.75→2.00 补回台宽。
+     ⚠ v7 及以前的求解器把「世界 +x 投到屏幕左侧」这条搞反了（Camera.right =
+       cross(fwd, up)，相机朝 +z 看时 right 指向 -x），台宽约束全程反向，
+       因此误判"参考图透视无解"、把机位压到 0.86×W/6.5m。 */
+  const cam = new TTG.Camera();
+  cam.set(vec('eye', 0, 7.43, -10.10), vec('look', 0, 1.60, 0), W / 2, num('cy', H * 0.5), num('f', W * 2.00));
+  const fan = q.get('fan') === 'cheer' ? { cheer: [1, 1], shake: [0, 0] } : null;
+  /* 球员站位与真实 side 0（红方）视角一致：side 0 在 -z（近相机）、side 1 在 +z（远）。
+     paddle.p.z 与球员同侧（击球准备姿势：拍在身体前方）。
+     ⚠ z 必须用 RULES.PLAYER_Z（1.65）而不是拍脑袋的值：之前写 2.35 让球员远离球台 0.7m，
+     机位求解器（按 1.65 建模）与实拍画面因此对不上，球员显小、站位漂浮。 */
+  const PZ = (window.TT && TT.RULES.PLAYER_Z) || 1.65;
+  const players = [
+    { side: 0, x: 0.12, z: -PZ, facing: 1, paddle: { p: { x: 0.52, y: 1.02, z: -PZ + 0.33 } }, stroke: { active: false, type: 0, t: 0, dur: 0.4 } },
+    { side: 1, x: -0.12, z: PZ, facing: -1, paddle: { p: { x: -0.5, y: 1.0, z: PZ - 0.33 } }, stroke: { active: false, type: 0, t: 0, dur: 0.4 } },
+  ];
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    TTG.drawScene(ctx, {
+      cam, players,
+      ball: { pos: { x: 0, y: 0.9, z: -0.3 }, spin: { x: 0, y: 0, z: 0 }, vis: true },
+      time: num('time', 1.2), side: 0, fan,
+      density: num('density', 1), low: false,
+      noCrowd: q.get('nocrowd') === '1',
+    }, W, H);
+  }
+  draw();
+  window.__draw = draw;
+  window.__ready = true;
+  window.addEventListener('error', (e) => { document.getElementById('bad').textContent = String(e.message); });
+})();
+</script>
+</body>
+</html>

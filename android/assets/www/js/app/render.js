@@ -249,7 +249,10 @@
       trailHidden: !fxShow.trail,
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
-      density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
+      /* 〔2026-10-23 忠于原图 + 性能〕观众密度：电脑 0.62 / 手机 0.42。
+         曾按"原图是密排光海"调到 0.8，但实测静态层重建 9.8ms、动画层 30Hz 烘焙 9.2ms，
+         边跑边重建会明显掉帧；0.62 时重建约 6.8ms，密度观感与原图仍属同一档。 */
+      density: PPD.isTouch ? 0.42 : 0.62,
       noCrowd: PPD.app.mode === 'online' || !!(PPD.app.noCrowd), // 联机自动关 / 用户勾选关闭环境观众
     };
   }
@@ -301,7 +304,10 @@
       trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
-      density: PPD.isTouch ? 0.25 : 0.5, // 观众密度再减半：电脑 0.5 / 手机 0.25（省 DPR 填充率）
+      /* 〔2026-10-23 忠于原图 + 性能〕观众密度：电脑 0.62 / 手机 0.42。
+         曾按"原图是密排光海"调到 0.8，但实测静态层重建 9.8ms、动画层 30Hz 烘焙 9.2ms，
+         边跑边重建会明显掉帧；0.62 时重建约 6.8ms，密度观感与原图仍属同一档。 */
+      density: PPD.isTouch ? 0.42 : 0.62,
       noCrowd: PPD.app.mode === 'online' || !!(PPD.app.noCrowd), // 联机自动关 / 用户勾选关闭环境观众
     };
   }
@@ -375,7 +381,10 @@
       trailStyle: PPD.app.equip.trail || null, // 养成尾影特效
       low: !!(PPD.app.quality && PPD.app.quality.low), // 低画质：跳过观众席/看台/尾影
       showHitRanges: PPD.app.showHitRanges && !(PPD.app.quality && PPD.app.quality.low), // 低画质临时关闭虚线（不改用户勾选）
-      density: PPD.isTouch ? 0.25 : 0.5, // 手机端观众密度减半（省 DPR3 填充率）
+      /* 〔2026-10-23 忠于原图 + 性能〕观众密度：电脑 0.62 / 手机 0.42。
+         曾按"原图是密排光海"调到 0.8，但实测静态层重建 9.8ms、动画层 30Hz 烘焙 9.2ms，
+         边跑边重建会明显掉帧；0.62 时重建约 6.8ms，密度观感与原图仍属同一档。 */
+      density: PPD.isTouch ? 0.42 : 0.62,
       noCrowd: PPD.app.mode === 'online' || !!(PPD.app.noCrowd), // 联机自动关 / 用户勾选关闭环境观众
     };
   }
@@ -385,11 +394,31 @@
     const cam = new PPD.TTG.Camera();
     // 死区跟随：角色在台面中部 ±0.62m 内时相机不动，避免"按左球往右跑"的反直觉感
     const camX = followX - PPD.TTG.clamp(followX, -0.62, 0.62);
-    // 低机位赛事转播视角：机位贴近球员高度、视线略抬，两侧与远端像素观众席入画，
-    // 球员更大更有临场感，看台如围墙环绕球场
-    const eye = PPD.TTG.v3(camX, 4.8, (side === 0 ? -5.20 : 5.20) + camX * 0.05);
-    const look = PPD.TTG.v3(camX * 0.55, 1.7, 0);
-    const focal = vw * 0.9;
+    /* 〔2026-10-23 参考图底板〕机位**标定到底板**，不是手调：
+       底板 public/assets/arena/arena_plate.jpg 里已经画死球台，
+       用 tools/solve-arena-camera.cjs 把真实球台四角投影对齐到底板上量出的四角，
+       解得 eyeY 3.20 / |z| 3.35 / lookY 1.70 / focal 0.50×vw（残差 4e-4）。
+       这样用同一相机画的球员会正好站在底板的球台上，不会错位。 */
+    /* 〔2026-10-23 新参考图机位反解 v8〕目标地标（tools/measure-ref2.py 实测，
+       参考图 1450×1085）：
+       台远边 y 0.545 / 台近边 y 0.70 / 台宽（中线）0.284W /
+       己方头顶 0.58、脚 0.91 / 对方头顶 0.40。
+       ⚠ v7 及以前的最大坑：求解器把「世界 +x 投到屏幕左侧」搞反了
+       （Camera.right = cross(fwd, up)，相机朝 +z 看时 right 指向 -x），
+       台宽约束全程反向 ⇒ 误判"参考图透视无解、只能折中"，机位被压到
+       0.86×W / 6.5m（台宽只有 0.19W、球员显小）。修正符号后加权拟合
+       cost 0.0077（v7 为 0.14+），六个地标同时命中。
+       〔v8b 用户指定俯角 30°〕相机高度上抬：eyeY 3.80 → **7.43**、lookY 1.30 → **1.60**、
+       focal 1.75 → **2.00×vw**。俯角 = atan((eyeY-lookY)/|eyeZ|) = **30.0°**（原 13.9°）。
+       俯角加大后台面透视压缩、显小，故焦距同步 1.75→2.00 补回台宽
+       （0.224W → 0.252W，参考图 0.284W）。
+       ⇒ farY 0.509 / nearY 0.846 / 台宽 0.252W / 己方头顶 0.715、脚 1.036（出画）
+          / 对方头顶 0.332。
+       副作用是好的：分屏竖屏时纵向视野反而比旧机位窄（旧 0.86× 在 195×844
+       视口里纵向 FOV 151°，新 2.00× 只有 92°），不会照进一堆地板。 */
+    const eye = PPD.TTG.v3(camX, 7.43, (side === 0 ? -10.10 : 10.10) + camX * 0.05);
+    const look = PPD.TTG.v3(camX * 0.55, 1.60, 0);
+    const focal = vw * 2.00;
     cam.set(eye, look, vx + vw / 2, vy + vh / 2, focal);
     return cam;
   }
@@ -455,6 +484,18 @@
 
   // 红方（side 0）的相机位于自己身后（世界 +x 在屏幕左侧），
   // 镜像视口后按键方向与屏幕方向一致；蓝方（side 1）无需镜像
+  /* 铺参考图底板：必须在 applyViewMirror **之前**调用（镜像会把它左右翻反）。
+     底板里已经画好球台/球网/光海/光锥/地板/看台，所以后面不再画这些。 */
+  function paintArenaPlate(w, h) {
+    const T = PPD.TTG;
+    if (T && T.plateReady && T.plateReady()) {
+      PPD.ctx.save();
+      PPD.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      T.drawArenaPlate(PPD.ctx, w, h);
+      PPD.ctx.restore();
+    }
+  }
+
   function applyViewMirror(ctx, w) {
     ctx.translate(w, 0);
     ctx.scale(-1, 1);
@@ -481,6 +522,8 @@
       PPD.ctx.rect(side === 0 ? 0 : half, 0, half, h);
       PPD.ctx.clip();
       if (side === 0) applyViewMirror(PPD.ctx, half);
+      // 底片不跟着镜像（否则左橙右青会反），球员/球仍跟着镜像
+      view.plateFlip = side === 0;
       PPD.TTG.drawScene(PPD.ctx, view, half, h);
       PPD.ctx.restore();
       // 分屏分隔线
@@ -663,6 +706,7 @@
     view.cam = cam;
     PPD.ctx.save();
     if (PPD.app.side === 0) applyViewMirror(PPD.ctx, w);
+    view.plateFlip = PPD.app.side === 0;
     PPD.TTG.drawScene(PPD.ctx, view, w, h);
     PPD.ctx.restore();
   }
@@ -671,6 +715,7 @@
     // 人机模式：单人全屏视角（自己=红方）
     const w = PPD.app.resizeW, h = PPD.app.resizeH;
     PPD.ctx.clearRect(0, 0, w, h);
+    paintArenaPlate(w, h);      // 底片在镜像之外铺
     const view = viewModelFromEngine(PPD.app.engine, 0);
     updateTrail(view);
     const cam = makeCam(0, PPD.app.engine.players[0].x, 0, 0, w, h);

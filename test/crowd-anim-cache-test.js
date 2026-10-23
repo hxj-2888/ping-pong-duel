@@ -192,8 +192,11 @@ check('分屏：viewSide 1 首帧各自重建', static2Ctx.counters.arc === stat
 	rightCam.set(TTG.v3(0, 4.8, -5.2), TTG.v3(0, 1.7, 0), halfW + halfW / 2, VH / 2, halfW * 0.9); // cx=960 → vx=640
 	// 无观众（low）路径：floor 缓存平移 + blit 到位
 	TTG.drawFloor(static2Ctx, rightCam, halfW, VH, 2 / 60, 1, null, true);
+	// 〔2026-10-23〕暗场压暗层也会调 setTransform（"先缩放再画圆"画椭圆渐变），
+	// 所以不能再断言"最后一次"是 -vx；改为断言**存在**一次平移 -vx。
+	// 判定意图不变：右半视口必须把缓存平移回视口本地坐标，否则整片空白。
 	check('分屏右半：floor 缓存 setTransform 平移 -vx',
-	  static2Ctx.setTransformArgs.length > 0 && static2Ctx.setTransformArgs[static2Ctx.setTransformArgs.length - 1][4] === -halfW * 2);
+	  static2Ctx.setTransformArgs.some((a) => a[4] === -halfW * 2));
 	check('分屏右半：floor 缓存 blit 到视口 x', static2Ctx.drawImageArgs.length > 0 && static2Ctx.drawImageArgs[0][1] === halfW);
 	// 观众路径：右半视口观众不被屏外剔除（arc>0）+ blit 到位
 	TTG.drawFloor(static2Ctx, rightCam, halfW, VH, 3 / 60, 1, null, false);
