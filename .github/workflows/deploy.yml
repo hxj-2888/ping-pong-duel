@@ -294,7 +294,6 @@ jobs:
           done
           echo "APK 直链未返回 APK（拿到的是 SPA 回退 HTML）"
           exit 1
-
   # ===== 失败通知：创建/关闭 Issue =====
   # 背景：2026-10-23 乒乓站点 CI 失败后未部署，站点静默停在旧版一天无人发现。
   # 工作流失败时自动开 Issue（带失败 job/提交/链接），成功后自动关闭，
@@ -320,13 +319,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: issue.number,
-                body: 已恢复：///actions/runs/,
+                body: `已恢复：${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               });
               await github.rest.issues.update({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: issue.number, state: 'closed',
               });
-              core.info(closed #);
+              core.info(`已关闭 #${issue.number}`);
             }
 
   notify:
@@ -343,16 +342,16 @@ jobs:
         with:
           script: |
             const results = ${{ toJSON(needs) }};
-            const failed = Object.entries(JSON.parse(results))
+            const failed = Object.entries(results)
               .filter(([, v]) => v.result === 'failure')
               .map(([k]) => k);
-            const title = [FAIL] 部署失败： + context.workflow + '（' + context.ref_name + '）';
+            const title = `部署失败：${context.workflow}（${context.ref_name}）`;
             const body = [
-              '**工作流**：' + context.workflow,
-              '**分支**：' + context.ref_name,
-              '**失败 job**：' + (failed.join('、') || '（未知）'),
-              '**提交**：' + context.sha.slice(0, 7),
-              '**运行记录**：' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId,
+              `**工作流**：${context.workflow}`,
+              `**分支**：${context.ref_name}`,
+              `**失败 job**：${failed.join('、') || '（未知）'}`,
+              `**提交**：${context.sha.slice(0, 7)}`,
+              `**运行记录**：${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               '',
               '> 处理完成后本 Issue 会在下次成功部署时自动关闭。',
             ].join('\n');
@@ -366,11 +365,11 @@ jobs:
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: existing.data[0].number, body,
               });
-              core.info('commented on #' + existing.data[0].number);
+              core.info(`已追加评论到 #${existing.data[0].number}`);
             } else {
               const created = await github.rest.issues.create({
                 owner: context.repo.owner, repo: context.repo.repo,
                 title, body, labels: ['deploy-failure'],
               });
-              core.info('created #' + created.data.number);
+              core.info(`已创建 Issue #${created.data.number}`);
             }
