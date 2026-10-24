@@ -38,11 +38,19 @@ function makeCountingCtx(canvas, scale) {
       ctx.setTransformArgs.push([a, b, c, d, e || 0, f || 0]);
     },
     clearRect() {},
+    /* drawFloorBg 台前亮池（v8b）用 save/translate/scale/restore 做椭圆压缩；桩保持无副作用 */
+    save() {}, restore() {}, translate() {}, scale() {},
     createLinearGradient() { return { addColorStop() {} }; },
     createRadialGradient() { return { addColorStop() {} }; },
     fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
     fill() {}, stroke() {},
-    arc() { counters.arc++; },
+    /* 只统计「观众」的 arc：观众用纯色字符串 fillStyle；drawFloorBg 的台前亮池（v8b）
+       用径向渐变对象作 fillStyle 画椭圆，不能混入观众计数，否则 sArc 断言全偏 */
+    arc(r, x, y) {
+      const fs = ctx.fillStyle;
+      if (typeof fs === 'string') counters.arc++;
+      else counters.bgArc = (counters.bgArc || 0) + 1;
+    },
     ellipse() {},
     drawImage() { counters.blit++; ctx.drawImageArgs.push(Array.prototype.slice.call(arguments)); },
     setLineDash() {},

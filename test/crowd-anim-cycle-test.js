@@ -25,6 +25,8 @@ function makeCtx(canvas) {
     canvas, counters,
     getTransform() { return { a: 1, d: 1, e: 0, f: 0 }; },
     setTransform() {}, clearRect() {},
+    /* drawFloorBg 台前亮池（v8b）用 save/translate/scale/restore 做椭圆压缩；桩保持无副作用 */
+    save() {}, restore() {}, translate() {}, scale() {},
     createLinearGradient() { return { addColorStop() {} }; },
     createRadialGradient() { return { addColorStop() {} }; },
     fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
