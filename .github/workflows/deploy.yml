@@ -161,6 +161,18 @@ jobs:
           curl -fsSL --retry 3 -o "public/$APK_NAME" "$base/$APK_NAME"
           ls -l "public/$APK_NAME"
 
+      # ★ 版本指纹：本次部署的 js/render.js 内容哈希。
+      #   2026-10-23 场景改版时 CI 在测试阶段失败，Pages 从未更新，但站点照常打开、
+      #   无任何报错，线上停在 10-18 的旧构建整整一天才被人发现。
+      #   这里记下「应该发布出去的内容」的指纹，由 smoke test 从线上取回实测比对，
+      #   使「部署了但没生效」显式失败，而不是静默通过。
+      #   ⚠ 计算前先 tr -d '\r' 归一换行符，与 smoke test 侧口径一致。
+      - name: Compute build fingerprint
+        run: |
+          FP=$(tr -d '\r' < public/js/render.js | sha256sum | cut -d' ' -f1 | cut -c1-12)
+          echo "BUILD_FP=$FP" | tee -a "$GITHUB_ENV"
+          echo "本次构建 render.js 指纹：$FP"
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
@@ -224,6 +236,32 @@ jobs:
 
       - name: 首页
         run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/"
+
+      # ★ 版本指纹比对：确认线上真的换成了本次提交的构建。
+      #   背景：2026-10-23 CI 在测试阶段失败，Pages 从未更新，但首页/下载页照常
+      #   返回 200，冒烟全绿——线上停留在 10-18 的旧 render.js 一天无人察觉。
+      #   这里从仓库取本次提交的 render.js 算指纹，再从线上取回同一文件重算，
+      #   两者不等即视为部署未生效。CDN 边缘收敛需要时间，故带重试。
+      #   ⚠ 两侧都先归一化换行符（CRLF→LF）再算：Windows 本地 core.autocrlf=true
+      #   会把工作区文件转成 CRLF，与线上 LF 版的哈希不同，不归一会出现假红灯。
+      - name: 线上版本指纹（部署确实生效）
+        run: |
+          norm() { tr -d '\r' | sha256sum | cut -d' ' -f1 | cut -c1-12; }
+          want=$(tr -d '\r' < public/js/render.js | sha256sum | cut -d' ' -f1 | cut -c1-12)
+          echo "期望指纹（本次提交）：$want"
+          for i in $(seq 1 18); do
+            got=$(curl -fsSL --max-time 30 -H 'Cache-Control: no-cache' \
+                    "https://ping-pong-duel.pages.dev/js/render.js?probe=$GITHUB_RUN_ID" \
+                    | norm) || got=""
+            if [ "$got" = "$want" ]; then
+              echo "线上指纹一致（第 $i 次尝试）：$got"
+              exit 0
+            fi
+            echo "第 $i 次：线上 $got ≠ 期望 $want（CDN 传播中），10s 后重试"
+            sleep 10
+          done
+          echo "::error::线上 render.js 与本次提交不一致——部署未生效或边缘未收敛。期望 $want，实际 ${got:-<空>}"
+          exit 1
 
       - name: 下载页
         run: curl -fsSL -o /dev/null --max-time 30 "https://ping-pong-duel.pages.dev/download.html"
