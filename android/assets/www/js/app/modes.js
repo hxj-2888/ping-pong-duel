@@ -92,7 +92,6 @@
   function backToMenu() {
     hideGameOverNow();
     PPD.app.paused = false;
-    if (PPD.cancelTeamIntro) PPD.cancelTeamIntro(); // 返回主菜单：立即关闭开场渲染（若在对局中）
     PPD.app.matchTeams = null;
     PPD.app.settingsPause = false; // 设置即暂停：退出对局时复位
     PPD.app.manualPause = false;   // 说明书即暂停：退出对局时复位
@@ -141,6 +140,8 @@
   }
 
   function startOnlineGame(side) {
+    // P2：进房对局建立时播拨开式转场（联机观众席默认关闭，画面即联机 HUD 场景）
+    if (PPD.cineTransition) PPD.cineTransition();
     PPD.app.mode = 'online';
     PPD.app.side = side;
     PPD.app.lastHitter = -1; // 撞击特效残留修复:新对局复位击球者归属
@@ -204,7 +205,7 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
-    PPD.showTeamIntro(teams); // 开场渲染：双方旗帜/队名，渲染结束进入对局
+    // P2：开场页（teamIntro）由拨开式转场取代——切场景在转场黑屏段完成（app/home.js cineTransition）
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
       'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ,=推球 · .=扣球';
@@ -262,7 +263,7 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
-    PPD.showTeamIntro(teams); // 开场渲染：双方旗帜/队名，渲染结束进入对局
+    // P2：开场页（teamIntro）由拨开式转场取代——切场景在转场黑屏段完成（app/home.js cineTransition）
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
     PPD.ui.hintBar.innerHTML =
@@ -343,11 +344,13 @@
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.pausePanel, false);
-    PPD.showTeamIntro(teams); // 开场渲染：双方旗帜/队名，渲染结束进入对局
+    // P2：开场页（teamIntro）由拨开式转场取代——切场景在转场黑屏段完成（app/home.js cineTransition）
     PPD.updateGameTools();
     const LA = PPD.AIC.resolveLevel(PPD.app.aiLevelA), LB = PPD.AIC.resolveLevel(PPD.app.aiLevelB);
+    const viewLbl = PPD.app.aiView === 'side' ? '看台视角'
+      : (PPD.app.aiFollowSide === 1 ? '球员视角·乙' : '球员视角·甲');
     PPD.ui.hintBar.innerHTML =
-      `甲 ${LA.name} vs 乙 ${LB.name} · 暂停中可调难度`;
+      `甲 ${LA.name} vs 乙 ${LB.name} · ${viewLbl} · 暂停中可调难度`;
     PPD.GameAudio.ensure();
     PPD.showTouch(false);
     if (PPD.Replay) PPD.Replay.begin({ mode: 'aivai', difficulty: 1, side: 0 });

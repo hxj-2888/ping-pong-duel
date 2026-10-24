@@ -409,6 +409,7 @@
     ready() { tone(880, 0.06, 'sine', 0.10, 1320); }, // 进箱提示：柔和短上升音（判定范围显示开启时）
     net() { noise(0.08, 0.3, 500); tone(120, 0.1, 'triangle', 0.2, 60); },
     serve() { noise(0.16, 0.2, 900); },
+    shutter() { noise(0.09, 0.4, 2600); tone(1500, 0.05, 'square', 0.12, 500); }, // P2 转场「纸张拨开」快门音
     fault() { tone(200, 0.22, 'sawtooth', 0.12, 120); },
     score() { tone(660, 0.12, 'sine', 0.2); setTimeout(() => tone(880, 0.18, 'sine', 0.2), 90); },
     applause,

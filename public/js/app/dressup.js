@@ -192,6 +192,8 @@
     }
     if (PPD.ui.dressupPanel) PPD.show(PPD.ui.dressupPanel, true);
     if (PPD.ui.menu) PPD.show(PPD.ui.menu, false);
+    // P1-b 战功合并页：从主菜单进入默认落在「战斗奖励」标签（生涯/回放由各自入口切换）
+    if (PPD.Replay && PPD.Replay.showTab) PPD.Replay.showTab('reward');
     renderDressup();
   }
   function closeDressup() {

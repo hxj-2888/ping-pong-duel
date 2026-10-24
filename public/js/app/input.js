@@ -448,18 +448,19 @@
   bindAIName(PPD.ui.pauseAiNameA, 0);
   bindAIName(PPD.ui.pauseAiNameB, 1);
   window.addEventListener('keydown', (e) => {
-    // Esc：个人生涯合并页 > 无尽人机 > 说明书 > 联机框 > 设置面板 > 比赛中暂停/继续
+    // Esc：战功合并页 > 说明书 > 联机框 > 设置面板 > 比赛中暂停/继续
+    // （P1-b：careerPanel 并入 dressupPanel 战功页；endlessPanel 关卡页已退役）
     if (e.code === 'Escape') {
       if (PPD.Replay && PPD.Replay.isActive() && PPD.Replay.closePlayer) {
         PPD.Replay.closePlayer();
         return;
       }
-      if (PPD.ui.careerPanel && PPD.ui.careerPanel.style.display !== 'none' && PPD.closeCareer) {
-        PPD.closeCareer();
+      if (PPD.ui.dressupPanel && PPD.ui.dressupPanel.style.display !== 'none' && PPD.closeDressup) {
+        PPD.closeDressup();
         return;
       }
-      if (PPD.ui.endlessPanel && PPD.ui.endlessPanel.style.display !== 'none' && PPD.closeEndlessPanel) {
-        PPD.closeEndlessPanel();
+      if (PPD.ui.trainingPanel && PPD.ui.trainingPanel.style.display !== 'none' && PPD.closeTraining) {
+        PPD.closeTraining();
         return;
       }
       if (PPD.ui.manualPanel && PPD.ui.manualPanel.style.display !== 'none' && PPD.closeManual) {

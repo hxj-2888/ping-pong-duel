@@ -1,6 +1,7 @@
 /* 首页布局量测（临时工具，零依赖 playwright-core 从全局 @playwright/cli 借用）：
- * 校验快速开始卡片 / 模拟推演内嵌配置在 320 / 360 / 390 / 430 / 768 / 1280 六档宽度下
+ * 校验场景化主页（P1：左右铭牌/哨子/名字牌/球员弹层）在 320 / 360 / 390 / 430 / 768 / 1280 六档宽度下
  * 无横向溢出、无文字被挤出容器、无内容裁切、触控目标达标。
+ * （横屏化后的目标档位重定在 P4 收尾批次处理；当前档位沿用历史口径）
  * 用法：node tools/pp-layout-probe.cjs
  */
 const path = require('path'), http = require('http'), fs = require('fs'), os = require('os');
@@ -49,15 +50,15 @@ const PROBE = () => {
       out.textOverflow.push({ sel: el.id ? '#' + el.id : el.className || el.tagName, left: Math.round(r.left), right: Math.round(r.right), vw });
     }
   }
-  // 触控目标：色块 ≥32px、其余可点元素 ≥44px
+  // 触控目标：色块 ≥32px、其余可点元素 ≥44px（P1 场景化主页：铭牌/哨子/弹层控件；chip 为纯展示不列入）
   const targets = [
-    ['.quick-seg .seg-btn', 40], ['.quick-card .swatch', 32], ['.sim-start', 44],
-    ['#btnPrimaryAction', 44], ['#btnNetEntry', 44], ['.quick-name', 30],
+    ['.home-side .plate', 44], ['#btnWhistle .ring', 60],
+    ['.home-sheet .swatch', 32], ['.home-sheet .seg-btn', 40], ['#sheetDone', 44],
   ];
   for (const [sel, min] of targets) {
     for (const el of document.querySelectorAll(sel)) {
       const cs = getComputedStyle(el);
-      if (cs.display === 'none' || !el.getClientRects().length) continue;
+      if (cs.display === 'none' || cs.visibility === 'hidden' || !el.getClientRects().length) continue;
       const r = el.getBoundingClientRect();
       out.counts[sel] = out.counts[sel] || { n: 0, minH: 999, w: Math.round(r.width) };
       out.counts[sel].n++;
@@ -65,15 +66,15 @@ const PROBE = () => {
       if (r.height < min - 0.5) out.smallTargets.push({ sel, h: Math.round(r.height), need: min });
     }
   }
-  // 每个分段控件内的档位必须同一行（页面上有 3 个控件：快速开始难度 + 甲/乙，逐个判定）
+  // 弹层难度分段控件：四个档位必须同一行
   out.difficultyRows = [...document.querySelectorAll('.quick-seg')].map((host) =>
     [...new Set([...host.querySelectorAll('.seg-btn')].map((b) => Math.round(b.getBoundingClientRect().top)))].length);
-  // 每行 8 个色块必须同一行
+  // 可见色块行（弹层打开时）：8 个色块必须同一行（隐藏宿主 display:none 自动跳过）
   out.swatchRows = [...document.querySelectorAll('.swatch-row')].map((host) =>
     [...new Set([...host.querySelectorAll('.swatch')].map((b) => Math.round(b.getBoundingClientRect().top)))].length);
-  // 档位/色块/队名文字是否被裁切（scrollWidth 超出即视为省略号截断）
+  // 铭牌/名字牌文字是否被裁切（scrollWidth 超出即视为省略号截断）
   const clipped = [];
-  for (const sel of ['.quick-seg .seg-btn', '.quick-title', '.quick-label', '.btn-main', '.quick-name']) {
+  for (const sel of ['.plate b', '.home-tag span', '#homeChip', '.endless-seg button']) {
     for (const el of document.querySelectorAll(sel)) {
       if (!el.getClientRects().length) continue;
       if (el.scrollWidth > el.clientWidth + 1) {
@@ -82,17 +83,16 @@ const PROBE = () => {
     }
   }
   out.clippedText = clipped;
-  // 摘要标签是否被裁切（省略号）
-  const qs = document.getElementById('quickSummary');
+  // 模式 chip 是否被裁切（省略号）
+  const qs = document.getElementById('homeChip');
   if (qs) {
     const cs = getComputedStyle(qs);
     out.summary = { text: qs.textContent, ellipsis: cs.textOverflow === 'ellipsis', overflowed: qs.scrollWidth > qs.clientWidth + 1 };
   }
-  // 页面级双层滚动检查
-  const ms = document.querySelector('.menu-scroll');
+  // 页面级滚动检查（场景化主页应零滚动：场景全屏 + 浮层绝对定位）
   out.scroll = {
     docScrollable: de.scrollHeight > de.clientHeight + 1,
-    menuScrollable: ms ? ms.scrollHeight > ms.clientHeight + 1 : false,
+    menuScrollable: false,
   };
   return out;
 };
@@ -140,17 +140,17 @@ const PROBE = () => {
     if (errs.length) fail++;
     console.log(lines.join('\n'));
     await pg.screenshot({ path: path.join(os.tmpdir(), 'pp-home-' + W + 'x' + H + '.png'), fullPage: false });
-    // 展开模拟推演后再量一次（内嵌配置区同样不得出界/裁切）
-    await pg.click('#btnAIVsAI');
+    // 打开对方球员弹层后再量一次（难度/配色行同样不得出界/裁切；须可见才有意义）
+    await pg.evaluate(() => { const P = window.PPD; if (P && P.Home) P.Home.openSheet('foe'); });
     await pg.waitForTimeout(450);
     const r2 = await pg.evaluate(PROBE);
-    lines.push('  [展开模拟推演] 出界: ' + (r2.textOverflow.length ? JSON.stringify(r2.textOverflow.slice(0, 4)) : '无') +
+    lines.push('  [球员弹层] 出界: ' + (r2.textOverflow.length ? JSON.stringify(r2.textOverflow.slice(0, 4)) : '无') +
       ' | 难度/色块行数: ' + JSON.stringify(r2.difficultyRows) + '/' + JSON.stringify(r2.swatchRows) +
       ' | 触控不足: ' + (r2.smallTargets.length ? JSON.stringify(r2.smallTargets) : '无'));
     if (r2.textOverflow.length || r2.smallTargets.length ||
       r2.difficultyRows.some((n) => n !== 1) || r2.swatchRows.some((n) => n !== 1)) fail++;
     console.log(lines.slice(-1)[0]);
-    await pg.screenshot({ path: path.join(os.tmpdir(), 'pp-home-sim-' + W + 'x' + H + '.png'), fullPage: false });
+    await pg.screenshot({ path: path.join(os.tmpdir(), 'pp-home-sheet-' + W + 'x' + H + '.png'), fullPage: false });
     await ctx.close();
   }
   await br.close();

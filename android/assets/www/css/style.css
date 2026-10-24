@@ -21,25 +21,6 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
    滚到顶也看不到标题（矮窗口下实测标题停在负偏移且 scrollIntoView 无效）。
    故这里覆盖为 flex-start，改由 .menu-scroll 的 auto 外边距负责"内容较矮时居中"。 */
 #menu { overflow-y: auto; overflow-x: hidden; justify-content: flex-start; }
-.menu-scroll {
-  margin: auto 0;
-  display: flex; flex-direction: column; align-items: center; gap: 22px;
-  padding: 48px 0 28px;
-}
-.logo { text-align: center; }
-.logo h1 { font-size: 52px; letter-spacing: 6px; background: linear-gradient(90deg, var(--red), var(--primary-100), var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.logo p { color: #8fa3c8; letter-spacing: 2px; margin-top: 6px; font-size: 13px; }
-.logo-ball { width: 46px; height: 46px; margin: 0 auto 8px; border-radius: 50%; background: radial-gradient(circle at 32% 30%, #fff, #c9d5e6 70%); box-shadow: 0 0 28px rgba(255,255,255,0.35); display: flex; align-items: center; justify-content: center; color: #334; font-size: 30px; }
-
-.menu-card {
-  width: min(420px, 90vw);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 22px;
-  display: flex; flex-direction: column; gap: 12px;
-  backdrop-filter: blur(8px);
-}
 label { font-size: 13px; color: #b9c6dd; display: flex; flex-direction: column; gap: 6px; }
 input {
   background: rgba(0,0,0,0.3); border: 1px solid var(--line); color: #eef2f8;
@@ -99,10 +80,6 @@ input:focus { border-color: var(--blue); }
   text-align: center; border-radius: 12px; transition: 0.15s;
   background: linear-gradient(135deg, rgba(47,111,224,0.38), rgba(58,134,255,0.20));
   border: 1px solid rgba(90,150,255,0.55);
-}
-.records-block:hover {
-  background: linear-gradient(135deg, rgba(47,111,224,0.52), rgba(58,134,255,0.30));
-  color: #fff;
 }
 .records-block.disabled { opacity: 0.75; cursor: not-allowed; }
 
@@ -719,24 +696,6 @@ canvas#game { touch-action: none; }
 .history-sub { width: 100%; font-size: 11.5px; color: #7f90ad; }
 .history-view { flex: none; }
 .history-note { text-align: center; font-size: 11.5px; color: #7f90ad; }
-
-.endless-panel {
-  position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(8, 12, 22, 0.85); backdrop-filter: blur(6px);
-}
-.endless-card {
-  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-  width: min(680px, 94vw); max-height: 88vh;
-  display: flex; flex-direction: column; gap: 14px;
-  padding: 24px 28px; overflow: hidden;
-}
-.endless-tip { text-align: center; font-size: 12.5px; color: #9fb1cf; line-height: 1.6; }
-.endless-list {
-  flex: 1; overflow-y: auto; display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px; padding: 2px;
-}
 .endless-level { width: 100%; padding: 12px 8px; }
 
 .replay-panel {
@@ -887,36 +846,9 @@ select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   border-bottom: 1px solid var(--line-1);
   padding-bottom: var(--sp-1);
 }
-.menu-nick input {
-  flex: 1; min-width: 0;
-  background: transparent; border: none; border-radius: 0;
-  padding: var(--sp-0) 0;
-  font-size: var(--fs-l1); font-weight: var(--fw-l1); letter-spacing: 1px;
-  color: var(--text-1);
-}
-.menu-nick input::placeholder { color: var(--text-3); font-weight: var(--fw-l3); }
-.menu-nick input:focus { border: none; box-shadow: none; outline: none; }
-.menu-nick:focus-within { border-bottom-color: var(--primary-100); }
-.nick-pencil {
-  flex: none; margin-left: var(--sp-1);
-  font-size: var(--fs-l2); color: var(--text-3);
-  transition: color var(--dur) var(--ease); pointer-events: none;
-}
-.menu-nick:focus-within .nick-pencil { color: var(--primary-100); }
 
 /* ---------- 分组容器与带文字标签的分隔线 ---------- */
 .btn-group { display: flex; flex-direction: column; gap: var(--sp-1); }
-.group-divider {
-  display: flex; align-items: center; gap: var(--sp-1);
-  margin: var(--sp-2) 0 var(--sp-1);
-}
-.group-divider::before, .group-divider::after {
-  content: ''; flex: 1; height: 1px; background: var(--line-1);
-}
-.group-divider span {
-  flex: none; font-size: var(--fs-l4); letter-spacing: 2px;
-  color: var(--text-3);
-}
 
 /* ---------- 模式按钮通用：图标 + 文案 + 灰色功能说明 ---------- */
 .btn-group .btn {
@@ -941,31 +873,6 @@ select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   font-size: var(--fs-l3); font-weight: var(--fw-l3); letter-spacing: 0;
   color: var(--text-2);
 }
-
-/* ============================================================
- * 按钮三级分层：尺寸 > 留白 > 字重 > 颜色
- * 一级 = 主行动（橙金实心，高度约 1.6 倍，视觉孤岛）
- * 二级 = 青绿实心
- * 三级 = 40% 青绿描边
- * ============================================================ */
-
-/* ---------- 一级：主行动按钮（全屏唯一橙金） ---------- */
-.btn-primary-action {
-  display: flex; align-items: center; gap: var(--sp-1);
-  width: 100%; text-align: left;
-  /* 垂直内边距 32px：使总高约为二级按钮(16px 内边距)的 1.6 倍 */
-  padding: var(--sp-4) var(--sp-2);
-  border: none; border-radius: var(--r-btn);
-  background: var(--accent);
-  color: #1A1000;
-  font-size: var(--fs-l2); font-weight: var(--fw-l2); letter-spacing: 0.5px;
-  cursor: pointer;
-  /* 与相邻元素外边距 = 组内间距的 2 倍以上，形成视觉孤岛 */
-  margin: var(--sp-1) 0 var(--sp-3);
-  box-shadow: 0 var(--sp-0) var(--sp-2) rgba(255, 176, 32, 0.22);
-  transition: filter var(--dur) var(--ease), transform var(--dur) var(--ease),
-              box-shadow var(--dur) var(--ease);
-}
 .btn-primary-action .btn-ico { opacity: 1; }
 .btn-primary-action .btn-ico svg { width: 24px; height: 24px; }
 .btn-primary-action .btn-main { font-size: 18px; font-weight: var(--fw-l1); }
@@ -975,14 +882,6 @@ select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   filter: brightness(0.94) saturate(1.05);
   transform: translateY(-2px);
   box-shadow: 0 var(--sp-2) var(--sp-4) rgba(255, 176, 32, 0.34);
-}
-.btn-primary-action:active {
-  transform: scale(0.97);
-  box-shadow: inset 0 2px var(--sp-1) rgba(0, 0, 0, 0.35);
-}
-.btn-primary-action:disabled {
-  opacity: 0.4; cursor: not-allowed; filter: grayscale(1);
-  transform: none; box-shadow: none;
 }
 
 /* ---------- 二级：青绿实心（高频模式） ---------- */
@@ -1049,27 +948,10 @@ select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   display: flex; align-items: center; gap: var(--sp-1); min-width: 0;
   padding: 0 var(--sp-1);
 }
-.quick-title {
-  flex: none; font-size: var(--fs-l3); font-weight: var(--fw-l2);
-  color: var(--text-2); letter-spacing: 1px;
-}
-.quick-summary {
-  flex: 1 1 auto; min-width: 0; text-align: right;
-  font-size: var(--fs-l4); color: var(--primary-100);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 /* 配置行：标签 + 控件等分；子项全部 min-width:0，长文本不会挤出容器 */
 .quick-row {
   display: flex; align-items: center; gap: var(--sp-1);
   min-width: 0;
-}
-.quick-label {
-  flex: none; min-width: 2.4em;
-  font-size: var(--fs-l4); color: var(--text-3); white-space: nowrap;
-}
-.quick-sub {
-  font-size: var(--fs-l4); color: var(--text-3); letter-spacing: 1px;
-  padding: var(--sp-0) var(--sp-1) 0;
 }
 /* 队名输入：两栏等分，永不换行 */
 .quick-name {
@@ -1111,31 +993,15 @@ select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
 
 /* ---------- 模拟推演：原地展开的内嵌配置（甲/乙 各自独立） ---------- */
 .mode-wrap { display: block; min-width: 0; }
-.mode-toggle { width: 100%; }
-.mode-toggle .caret {
-  flex: none; width: 14px; text-align: center;
-  font-size: var(--fs-l3); color: var(--primary-100);
-  transition: transform var(--dur) var(--ease);
-}
-.mode-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
 /* 高度过渡：grid-template-rows 0fr → 1fr，无需 JS 测量高度 */
 .sim-panel {
   display: grid; grid-template-rows: 0fr;
   transition: grid-template-rows var(--dur) var(--ease);
 }
 .sim-panel.open { grid-template-rows: 1fr; }
-.sim-inner {
-  overflow: hidden; min-height: 0;
-  display: flex; flex-direction: column; gap: var(--sp-1);
-  padding: 0;
-}
 .sim-panel.open .sim-inner {
   padding: var(--sp-2) 0 var(--sp-1);
   border-top: 1px solid var(--line-1);
-}
-.sim-start {
-  width: 100%; margin-top: var(--sp-1);
-  min-height: 44px;
 }
 
 /* ---------- 输入框三态（默认 / 聚焦 / 错误） ---------- */
@@ -1179,11 +1045,8 @@ input.invalid, input[aria-invalid="true"] {
   padding: 0 var(--sp-1);
   text-align: left;
 }
-.dash-cell:first-child { padding-left: 0; }
-.dash-cell + .dash-cell { border-left: 1px solid var(--line-1); }
 /* 无内容的档位自动折叠，避免留下空白格子（如网页版无引导文案、无战绩时） */
 .dash-cell[hidden] { display: none; }
-.dash-cell[hidden] + .dash-cell { border-left: none; }
 /* 生涯二级入口独占右侧一格，不与动态信息抢等宽 */
 .dash-entry { flex: none; padding-right: 0; align-items: flex-end; }
 .dash-label {
@@ -1211,11 +1074,6 @@ input.invalid, input[aria-invalid="true"] {
   font-size: var(--fs-l2); font-weight: var(--fw-l1); color: var(--text-1);
   background: conic-gradient(var(--primary-100) calc(var(--pct) * 1%), var(--primary-15) 0);
 }
-.stat-ring::before {
-  content: ''; position: absolute; inset: 5px; border-radius: 50%;
-  background: var(--bg-panel);
-}
-.stat-ring > span { position: relative; z-index: 1; }
 .stat-ring.is-zero { color: var(--text-2); }
 
 /* 微型胜负方块条：最近 10 场分布 */
@@ -1275,13 +1133,7 @@ input.invalid, input[aria-invalid="true"] {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
 }
-.recent-match .recent-title b { color: var(--primary-100); font-weight: var(--fw-l1); }
-.recent-match .recent-title i { color: var(--text-2); font-style: normal; }
 .recent-match .recent-title i.lose { color: var(--state-down); }
-.recent-match .recent-meta {
-  display: block;
-  font-size: var(--fs-l4); font-weight: var(--fw-l4); color: var(--text-3);
-}
 /* 查看回放：三级描边文字按钮 */
 .recent-match .recent-replay {
   margin-top: 2px;
@@ -1294,9 +1146,6 @@ input.invalid, input[aria-invalid="true"] {
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
               transform var(--dur) var(--ease);
 }
-.recent-match .recent-replay[hidden] { display: none; }
-.recent-match .recent-replay:hover { background: var(--primary-08); border-color: var(--primary-60); }
-.recent-match .recent-replay:active { transform: scale(0.97); }
 
 /* 网页版禁用态保持视觉抑制；空态沿用三单元布局 */
 .records-block.disabled { opacity: 0.6; cursor: not-allowed; }
@@ -2007,3 +1856,310 @@ input[type="range"]:focus-visible,
   .ti-count { font-size: 28px; }
   .ti-actions { margin-top: 14px; }
 }
+
+/* ============================================================
+ * 〔P1-b 修复 2026-10-24〕全局 hidden 守卫：
+ * [hidden] 属性必须永远生效——UA 的 [hidden]{display:none} 会被任何
+ * 显式 display（如 .home-mask 的 flex、.home-sheet .f 的 block）覆盖，
+ * 导致透明遮罩全屏拦截点击 / 该隐藏的行不隐藏（真实指针不可交互）。
+ * ============================================================ */
+[hidden] { display: none !important; }
+
+/* ============================================================
+ * 〔P1 场景化主页 2026-10-24〕
+ * 主页 = canvas 菜单场景（renderMenuScene：两球员预备+聚光灯+蓝球台）
+ * + DOM 浮层：左三铭牌 / 右三通道 / 哨子开局 / 跟随球员的名字牌
+ *   / 球员编辑底部弹层 / 顶部模式 chip / 球衣染色层 / 状态 toast。
+ * 容器不遮画布：pointer-events 仅在交互子元素上重新开启。
+ * 视觉规范取自正式画面：青绿强调（--primary-100）统一哨子/选中态/悬停。
+ * ============================================================ */
+.home-stage {
+  display: block;
+  background: none;          /* 掀掉 .panel 不透明径向渐变，透出 canvas 球场 */
+  overflow: hidden;
+  pointer-events: none;      /* 空白区域穿透到画布；交互子元素逐个恢复 */
+}
+.home-stage :where(button, a, input, select, nav, .home-player, .home-mask, .home-hint) {
+  pointer-events: auto;
+}
+/* 点击热区（球员）：盒子中心=投影点上方头顶，宽高由 home.js 按投影缩放写入 */
+.home-player {
+  position: absolute; left: 0; top: 0;
+  width: 150px; height: 250px; margin: 0; padding: 0;
+  background: transparent; border: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-player:focus { outline: none; }
+.home-tag {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px 5px 9px; border-radius: 999px;
+  background: rgba(6, 10, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 14px; font-weight: 700; color: #f1f6f8;
+  white-space: nowrap; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.home-player:hover .home-tag,
+.home-player:focus-visible .home-tag {
+  border-color: var(--primary-100);
+  box-shadow: 0 0 12px rgba(0, 229, 176, 0.25);
+}
+.home-tag .dot {
+  flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--tag-c, #d0321e);
+  box-shadow: 0 0 6px var(--tag-c, rgba(255,255,255,0.4));
+}
+.home-tag .tag-edit {
+  font-size: 12px; font-weight: 400; color: var(--text-3);
+  margin-left: 2px; transition: color var(--dur) var(--ease);
+}
+.home-player:hover .tag-edit, .home-player:focus-visible .tag-edit { color: var(--primary-100); }
+
+/* 顶部模式 chip：哨子将按此开局 */
+.home-chip {
+  position: absolute; left: clamp(12px, 3vw, 48px); top: 16px;
+  padding: 7px 14px; border-radius: 10px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: var(--text-1);
+  background: rgba(6, 10, 18, 0.7);
+  border-left: 3px solid var(--primary-100);
+}
+
+/* 球衣染色层：左右环境色跟随敌我球衣（--me/--foe 由 home.js 写入根元素） */
+.home-tint {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(52% 80% at 0% 58%, color-mix(in srgb, var(--me, #d0321e) 34%, transparent), transparent 72%),
+    radial-gradient(52% 80% at 100% 58%, color-mix(in srgb, var(--foe, #2563eb) 34%, transparent), transparent 72%);
+  transition: background 0.4s;
+  opacity: 0.55;
+}
+
+/* 侧边入口：斜切铭牌（左=成长与体验，右=对战通道） */
+.home-side {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 14px;
+  width: clamp(150px, 19vw, 236px);
+}
+.home-side.left { left: clamp(10px, 3vw, 48px); }
+.home-side.right { right: clamp(10px, 3vw, 48px); }
+.plate {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  padding: 14px 22px 14px 16px; text-align: left;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  border: none; border-left: 3px solid rgba(255, 255, 255, 0.55);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  color: var(--text-1); cursor: pointer;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s,
+              background 0.2s, border-color 0.2s, color 0.2s;
+}
+.home-side.right .plate {
+  flex-direction: row-reverse; text-align: right;
+  padding: 14px 16px 14px 22px; border-left: 0; border-right: 3px solid rgba(255, 255, 255, 0.55);
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
+}
+.plate svg {
+  flex: none; width: 24px; height: 24px;
+  stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.plate b { display: block; font-size: 16px; font-weight: 800; letter-spacing: 0.04em; }
+.plate small { display: block; margin-top: 2px; font-size: 12px; opacity: 0.62; }
+.plate:hover {
+  background: linear-gradient(90deg, rgba(0, 229, 176, 0.22), rgba(255, 255, 255, 0.03));
+  border-color: var(--primary-100);
+}
+.home-side.right .plate:hover { background: linear-gradient(270deg, rgba(0, 229, 176, 0.22), rgba(255, 255, 255, 0.03)); }
+/* 选中通道：青绿描边 + 文字点亮 */
+.home-side.right .plate.on {
+  border-color: var(--primary-100); color: var(--primary-100);
+  background: linear-gradient(270deg, rgba(0, 229, 176, 0.18), rgba(255, 255, 255, 0.03));
+}
+.home-side.right .plate.door { padding-top: 20px; padding-bottom: 20px; }
+.home-side.right .plate.door svg { width: 34px; height: 34px; }
+/* 未解锁通道（无尽未通关地狱）：置灰带锁语义，可点击弹提示 */
+.plate.locked { opacity: 0.45; }
+.plate.locked::after {
+  content: '🔒'; position: absolute; top: 4px; right: 8px; font-size: 11px; line-height: 1;
+}
+.home-side.right .plate.locked::after { right: auto; left: 8px; }
+
+/* 哨子：整页唯一会呼吸的元素（青绿强调） */
+.whistle {
+  position: absolute; left: 50%; bottom: max(2.2vh, 14px); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: none; border: none; color: var(--text-1); cursor: pointer;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+}
+.whistle .ring {
+  width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center;
+  border: 2px solid var(--primary-100); color: var(--primary-100);
+  background: rgba(4, 8, 14, 0.7);
+  box-shadow: 0 0 0 0 rgba(0, 229, 176, 0.5);
+  animation: whistle-pulse 2.4s ease-out infinite;
+  transition: background 0.2s, color 0.2s;
+}
+.whistle svg { width: 34px; height: 34px; }
+.whistle:hover .ring { background: rgba(0, 229, 176, 0.18); }
+.whistle:active .ring { transform: scale(0.95); }
+.whistle:disabled { cursor: default; }
+.whistle:disabled .ring { animation: none; border-color: rgba(255, 255, 255, 0.3); color: rgba(255, 255, 255, 0.45); }
+@keyframes whistle-pulse {
+  70% { box-shadow: 0 0 0 18px rgba(0, 229, 176, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 229, 176, 0); }
+}
+
+/* 首访引导气泡 */
+.home-hint {
+  position: absolute; left: 50%; bottom: calc(max(2.2vh, 14px) + 108px); transform: translateX(-50%);
+  padding: 9px 16px; border-radius: 12px; font-size: 13px; color: var(--text-1);
+  background: rgba(6, 10, 18, 0.88); border: 1px solid var(--line-2);
+  cursor: pointer; white-space: nowrap;
+  animation: hint-float 2.6s ease-in-out infinite;
+}
+.home-hint::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%) rotate(45deg);
+  width: 10px; height: 10px; background: rgba(6, 10, 18, 0.88);
+  border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);
+}
+@keyframes hint-float { 50% { transform: translateX(-50%) translateY(-5px); } }
+
+/* 球员编辑弹层（底部 sheet） */
+.home-mask {
+  position: absolute; inset: 0; z-index: 20;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; transition: opacity 0.22s;
+}
+.home-mask.open { opacity: 1; }
+.home-sheet {
+  width: min(460px, 100vw); max-height: 86vh; overflow-y: auto;
+  background: #0a0f1a; border-top: 3px solid var(--primary-100);
+  border-radius: 16px 16px 0 0;
+  padding: 22px 22px 26px;
+  transform: translateY(30px); transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: text;
+}
+.home-mask.open .home-sheet { transform: none; }
+.home-sheet h2 { font-size: 19px; font-weight: 800; margin-bottom: 16px; color: var(--text-1); }
+.home-sheet .f { display: block; margin-bottom: 16px; font-size: 13px; color: var(--text-2); }
+.home-sheet .f > span { display: block; margin-bottom: 8px; }
+.home-sheet .swatch-row { flex-wrap: wrap; row-gap: 8px; }
+.home-sheet .quick-seg { display: flex; margin: 0; }
+.sheet-done {
+  width: 100%; margin-top: 6px; padding: 13px;
+  background: var(--primary-100); color: #032019; border: none; border-radius: 10px;
+  font-weight: 800; font-size: 15px; cursor: pointer;
+}
+.sheet-done:hover { filter: brightness(1.08); }
+.endless-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.endless-seg button {
+  padding: 10px 4px; background: #05080f; border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px; color: var(--text-1); font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.endless-seg button.on { background: var(--primary-100); color: #032019; border-color: var(--primary-100); }
+.endless-seg button.lock { opacity: 0.45; cursor: not-allowed; }
+
+/* 主页状态 toast（#statusBar 的主页形态：setStatus 落点，自动淡出由 home.js 驱动） */
+.home-toast {
+  position: absolute; left: 50%; top: 64px; transform: translateX(-50%);
+  max-width: min(520px, 90vw);
+  padding: 8px 16px; border-radius: 10px;
+  background: rgba(6, 10, 18, 0.85); color: var(--primary-100);
+  font-size: 13px; text-align: center;
+  opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.home-toast.show { opacity: 1; }
+
+/* 隐藏数据宿主：不参与视觉与交互 */
+.home-hosts { display: none !important; }
+
+/* ============================================================
+ * 〔P1-b 横屏化〕竖屏旋转遮罩：手机竖屏（粗指针 + 窄竖屏）全屏提示旋转；
+ * 桌面窄窗（细指针）不触发。APK 侧由 AndroidManifest sensorLandscape 锁横屏。
+ * ============================================================ */
+.rotate-mask {
+  position: fixed; inset: 0; z-index: 200; display: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: #050a14; color: var(--text-1); text-align: center;
+}
+.rotate-mask .rm-icon { font-size: 44px; line-height: 1; animation: rm-tilt 1.8s ease-in-out infinite; }
+.rotate-mask .rm-text { font-size: 16px; font-weight: 700; line-height: 1.7; color: var(--text-2); letter-spacing: 1px; }
+@keyframes rm-tilt {
+  0%, 18% { transform: rotate(0deg); }
+  55%, 82% { transform: rotate(-90deg); }
+  100% { transform: rotate(-90deg); }
+}
+@media (orientation: portrait) and (max-width: 560px) and (pointer: coarse) {
+  .rotate-mask { display: flex; }
+}
+
+/* 手机端（竖屏临时压缩；全面横屏化与旋转遮罩在 P1 后续批次） */
+@media (max-width: 720px) {
+  .plate small { display: none; }
+  .plate { padding: 12px 16px 12px 12px; gap: 8px; }
+  .home-side.right .plate { padding: 12px 12px 12px 16px; }
+  .plate b { font-size: 14px; }
+  .home-side { width: clamp(104px, 27vw, 150px); }
+  .home-chip { font-size: 12px; padding: 6px 10px; }
+  .home-tag { font-size: 12px; padding: 4px 9px; }
+  .home-player { width: 110px; height: 200px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .whistle .ring, .home-hint { animation: none !important; }
+  .plate, .home-sheet, .home-mask { transition-duration: 0.01ms !important; }
+}
+/* ============================================================
+ * 〔P2 拨开式转场 2026-10-24〕
+ * 哨子开局：主页浮层快速退场（.leaving）→ 短黑屏（.cover）→
+ * 两片黑幕像纸张从中缝向左右拨开（.split，0.5s），露出已坐满观众的比赛画面。
+ * 纯 CSS 位移，零新美术；编排见 app/home.js cineTransition。
+ * ============================================================ */
+.cine-mask {
+  position: fixed; inset: 0; z-index: 90; display: none;
+  pointer-events: none; overflow: hidden;
+}
+.cine-mask.on { display: block; }
+.cine-half {
+  position: absolute; top: 0; bottom: 0; width: 50.6%;
+  background: #020409;
+  transition: transform 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.cine-half.left { left: 0; transform: translateX(0); }
+.cine-half.right { right: 0; transform: translateX(0); }
+.cine-mask.split .cine-half.left { transform: translateX(-102%); }
+.cine-mask.split .cine-half.right { transform: translateX(102%); }
+/* 中缝亮线：黑屏时点亮、拨开时随缝消散（快门感） */
+.cine-seam {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
+  margin-left: -1px; background: var(--primary-100);
+  box-shadow: 0 0 14px rgba(0, 229, 176, 0.65);
+  opacity: 0; transition: opacity 0.18s ease;
+}
+.cine-mask.cover .cine-seam { opacity: 0.9; }
+.cine-mask.split .cine-seam { opacity: 0; }
+
+/* 主页浮层退场（转场黑屏段内完成）：铭牌向两侧滑出、哨子/chip/名字牌淡出 */
+.home-stage.leaving .plate { transition: transform 0.22s cubic-bezier(0.4, 0, 1, 1), opacity 0.18s; }
+.home-stage.leaving .home-side.left .plate { transform: translateX(-130%); opacity: 0; }
+.home-stage.leaving .home-side.right .plate { transform: translateX(130%); opacity: 0; }
+.home-stage.leaving .whistle,
+.home-stage.leaving .home-chip,
+.home-stage.leaving .home-player,
+.home-stage.leaving .home-hint { opacity: 0; transition: opacity 0.16s; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cine-half { transition-duration: 0.01ms !important; }
+}
+
+/* P3 AI对打·视角选择弹层 */
+.aiw-sheet { width: min(420px, 100vw); }
+.aiw-pick { display: grid; gap: 10px; }
+.aiw-pick button {
+  padding: 16px 14px; text-align: left; cursor: pointer;
+  background: #05080f; border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: var(--text-1);
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.aiw-pick button b { display: block; font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+.aiw-pick button small { font-size: 12px; color: var(--text-2); }
+.aiw-pick button:hover { border-color: var(--primary-100); color: var(--primary-100); }
+.sheet-done.ghost { background: #1a2333; color: var(--text-1); }

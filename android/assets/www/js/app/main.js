@@ -6,11 +6,8 @@
   'use strict';
 
   // ---------- 菜单事件 ----------
-  PPD.ui.btnLocal.addEventListener('click', () => {
-    PPD.GameAudio.ensure();
-    PPD.GameAudio.ui();
-    PPD.startLocal();
-  });
+  // P1 场景化主页：本地双人开局由右通道「本地对战」选中 + 哨子承担（app/home.js），
+  // 原 btnLocal 独立按钮已随旧主页退役。
   if (PPD.ui.btnEndless) {
     PPD.ui.btnEndless.addEventListener('click', () => {
       PPD.GameAudio.ensure();
@@ -62,6 +59,15 @@
     PPD.ui.btnAIVsAI.addEventListener('click', () => {
       PPD.GameAudio.ensure();
       PPD.GameAudio.ui();
+      // P3：优先弹「观看视角」选择（看台边线机位 / 球员视角跟随甲/乙），选完经转场开局；
+      // 桩环境无弹层元素时回退为直接开局（甲乙=主页当前难度）。
+      if (PPD.openAIWatchPicker && PPD.openAIWatchPicker()) return;
+      if (!(PPD.ui.simPanel && PPD.ui.simPanel.classList)) {
+        if (PPD.ui.aiLevelA && PPD.ui.aiLevel) PPD.ui.aiLevelA.value = PPD.ui.aiLevel.value;
+        if (PPD.ui.aiLevelB && PPD.ui.aiLevel) PPD.ui.aiLevelB.value = PPD.ui.aiLevel.value;
+        PPD.startAIVsAI();
+        return;
+      }
       setSimOpen(!(PPD.ui.simPanel && PPD.ui.simPanel.classList &&
         PPD.ui.simPanel.classList.contains('open')));
     });
@@ -729,6 +735,9 @@
     get app() { return PPD.app; },
     get ui() { return PPD.ui; },
     GameAudio: PPD.GameAudio,
+    Home: function () { return PPD.Home || null; }, // 场景化主页状态机（home.js；P1）
+    openCareer: (typeof PPD.openCareer === 'function') ? PPD.openCareer : null,
+    closeDressup: (typeof PPD.closeDressup === 'function') ? PPD.closeDressup : null,
     unlockHell: PPD.unlockHell,
     isHellUnlocked: PPD.isHellUnlocked,
     syncHellOptions: PPD.syncHellOptions,

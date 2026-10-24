@@ -426,7 +426,7 @@
     if (!PPD) return;
     if (PPD.ui.menu) PPD.show(PPD.ui.menu, false);
     if (PPD.ui.historyPanel) PPD.show(PPD.ui.historyPanel, false);
-    if (PPD.ui.careerPanel) PPD.show(PPD.ui.careerPanel, false);
+    if (PPD.ui.dressupPanel) PPD.show(PPD.ui.dressupPanel, false);
     if (PPD.ui.gameOver) PPD.show(PPD.ui.gameOver, false);
     if (PPD.ui.netPanel) PPD.show(PPD.ui.netPanel, false);
     if (PPD.ui.netWait) PPD.show(PPD.ui.netWait, false);
@@ -687,7 +687,7 @@
       if (PPD.ui.gameOver) PPD.show(PPD.ui.gameOver, false);
       if (PPD.ui.gameScreen) PPD.show(PPD.ui.gameScreen, false);
       if (PPD.ui.menu) PPD.show(PPD.ui.menu, false);
-      if (PPD.ui.careerPanel) PPD.show(PPD.ui.careerPanel, true);
+      if (PPD.ui.dressupPanel) PPD.show(PPD.ui.dressupPanel, true);
       if (PPD.showTouch) PPD.showTouch(false);
       showTab('history'); // 回放标签保持激活
       list().then((l) => { historyItems = l; renderHistory(); }).catch(() => { /* ignore */ });
@@ -718,13 +718,18 @@
   let historyDeleting = false;
   const historySelected = new Set();
 
-  // 合并页标签切换：'career'=战绩记录 / 'history'=历史回放（高亮 + 显隐标签体）
+  // 战功合并页标签切换（P1-b）：'reward'=战斗奖励 / 'career'=生涯战绩 / 'history'=历史回放
+  // （高亮 + 显隐标签体；reward 为原装扮奖励页，career/history 原样并入）
   function showTab(name) {
     if (!PPD || !PPD.ui) return;
     const isHist = name === 'history';
-    if (PPD.ui.btnCareerTab) PPD.ui.btnCareerTab.classList.toggle('active', !isHist);
+    const isCareer = name === 'career';
+    const isReward = name === 'reward';
+    if (PPD.ui.btnHonorsReward) PPD.ui.btnHonorsReward.classList.toggle('active', isReward);
+    if (PPD.ui.btnCareerTab) PPD.ui.btnCareerTab.classList.toggle('active', isCareer);
     if (PPD.ui.btnHistoryTab) PPD.ui.btnHistoryTab.classList.toggle('active', isHist);
-    if (PPD.ui.careerTab) PPD.show(PPD.ui.careerTab, !isHist);
+    if (PPD.ui.honorsRewardTab) PPD.show(PPD.ui.honorsRewardTab, isReward);
+    if (PPD.ui.careerTab) PPD.show(PPD.ui.careerTab, isCareer);
     if (PPD.ui.historyPanel) PPD.show(PPD.ui.historyPanel, isHist);
   }
   function showCareerTab() { showTab('career'); }
@@ -833,7 +838,7 @@
     historySelected.clear();
     renderHistory();
     // 并入个人生涯页：切到「历史回放」标签（页面保持打开，不单独开页）
-    if (PPD.ui.careerPanel) PPD.show(PPD.ui.careerPanel, true);
+    if (PPD.ui.dressupPanel) PPD.show(PPD.ui.dressupPanel, true);
     if (PPD.ui.menu) PPD.show(PPD.ui.menu, false);
     if (PPD.ui.replayPanel) PPD.show(PPD.ui.replayPanel, false);
     showTab('history');
@@ -1078,7 +1083,17 @@
     if (PPD.ui.btnCareerTab) {
       PPD.ui.btnCareerTab.addEventListener('click', () => {
         if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();
+        // P1-b 战功合并页：生涯列表数据由 openCareer 拉取；直接点标签且列表为空时补拉
+        const listEl = PPD.ui.careerList;
+        if (listEl && !listEl.innerHTML && PPD.openCareer) { PPD.openCareer(); return; }
         showCareerTab();
+      });
+    }
+    // P1-b 战功合并页：战斗奖励标签（原装扮奖励内容）
+    if (PPD.ui.btnHonorsReward) {
+      PPD.ui.btnHonorsReward.addEventListener('click', () => {
+        if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();
+        showTab('reward');
       });
     }
     if (PPD.ui.btnHistoryDelete) {

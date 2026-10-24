@@ -726,10 +726,193 @@
     PPD.ctx.restore();
   }
 
+  // ---------- 主页菜单场景（P0 垂直切片 2026-10-24） ----------
+  // 主页复用比赛美术资产的渲染路径：合成 view（不依赖引擎实例）画「预备球场」——
+  // 两名球员按引擎默认站位（±PLAYER_Z）站预备位、各一束聚光灯（drawScene 尾部
+  // 的 overlay 灯光按 players 画锥形光），无球、无观众（noCrowd）、无比分 HUD。
+  // 队色取主页当前敌我配置（resolveMatchTeams('ai') 只读 teams.js 槽位，无副作用）。
+  // P1 将把待机姿势扩成动作集、并让相机参数随视觉稿精调；此处先给可跑的底线版本。
+  function makeMenuCam(vw, vh) {
+    const cam = new PPD.TTG.Camera();
+    // 对局机位（makeCam：eyeY 7.43 / |z| 10.10 / focal 2.00×vw）的「拉远」变体：
+    // 退后 2.5m + 略抬 + 广角（focal 1.30×vw），两人连同脚下完整入画、留出呼吸边距。
+    const eye = PPD.TTG.v3(0, 8.2, -12.6);
+    const look = PPD.TTG.v3(0, 0.95, 0.2);
+    cam.set(eye, look, vw / 2, vh / 2, vw * 1.30);
+    return cam;
+  }
+
+  // 待机动作集（P1-b 轻量姿势动作，纯时间驱动、零新美术）：
+  // 14s 一轮的动作时间表，两人错相 7s 避免同步机械感——
+  //   0–6s    呼吸 + 重心微摆（横移 ±4cm、侧倾 ±0.06）
+  //   6–7.2s  空挥拍（推球/扣杀逐轮交替：走既有 stroke 动画，球拍随弧线前送上抬）
+  //   8.5–9.6s 蹲起弹跳（0.6s 蹲姿 + 起身，预演低球防守）
+  //   10.5–12s 横向移位还原（±0.14m 往返，步法重心转移）
+  //   12–14s  回中站定
+  // stroke.t/dur 交给 drawCharacter 既有缓动；crouch 为 0/1 二值，平滑由其躯干 lerp 完成。
+  function idleAction(side, t) {
+    const off = side === 0 ? 0 : 7;
+    const T = (t + off) % 14;
+    const cycle = Math.floor((t + off) / 14);
+    let x = 0, lean = 0, crouch = 0, paddleArc = 0;
+    let stroke = { active: false, type: 0, t: 0, dur: 0.5, hit: false };
+    if (T < 6) {
+      const s = Math.sin(T * 1.1);
+      x = s * 0.04;
+      lean = s * 0.06;
+    } else if (T < 7.2) {
+      const p = (T - 6) / 1.2;
+      stroke = { active: true, type: cycle % 2 === 0 ? 0 : 2, t: (T - 6), dur: 1.2, hit: false };
+      paddleArc = Math.sin(p * Math.PI);
+      lean = -0.05 * paddleArc;
+    } else if (T >= 8.5 && T < 9.6) {
+      crouch = (T - 8.5) < 0.6 ? 1 : 0;
+      lean = 0.04;
+    } else if (T >= 10.5 && T < 12) {
+      const p = (T - 10.5) / 1.5;
+      x = Math.sin(p * Math.PI * 2) * 0.14;
+      lean = x * 0.5;
+    }
+    return { x, lean, crouch, stroke, paddleArc };
+  }
+
+  // 待机球员（合成）：与 viewModelFromEngine 的 player 字段同构，
+  // stroke 驱动挥拍动画、idleAction 提供整套待机小动作（P1-b）。
+  function menuIdlePlayer(side, t, teamColor) {
+    const f = side === 0 ? 1 : -1;
+    const R = PPD.TT.RULES;
+    const z = side === 0 ? -R.PLAYER_Z : R.PLAYER_Z;
+    const a = idleAction(side, t);
+    // 球拍：静止在持拍位；空挥拍时随弧线前送 + 上抬（视觉腕点，非判定）
+    const arc = a.paddleArc;
+    return {
+      side,
+      x: a.x,
+      z,
+      vx: 0, vz: 0,
+      lean: a.lean,
+      facing: f,
+      stroke: a.stroke,
+      paddle: {
+        p: { x: a.x + 0.26 - 0.10 * arc, y: 1.02 + 0.18 * arc, z: z + f * (0.34 + 0.30 * arc) },
+        n: { x: 0, y: 1, z: 0 },
+        v: { x: 0, y: 0, z: 0 },
+      },
+      sb: 0.35 * arc, // 挥拍回摆动量（drawCharacter 用作击球后的手臂回摆权重）
+      crouch: a.crouch,
+      run: 0,
+      teamColor: teamColor || null,
+      warnSmash: 0, warnT: 0, exclaimT: 0,
+    };
+  }
+
+  function renderMenuScene(nowMs) {
+    const w = PPD.app.resizeW, h = PPD.app.resizeH;
+    if (!w || !h) return; // 测试桩/未 resize：跳过（NaN/0 都为 falsy）
+    PPD.ctx.clearRect(0, 0, w, h);
+    const t = ((nowMs || Date.now()) % 3600000) / 1000;
+    let teams = null;
+    try { teams = PPD.resolveMatchTeams ? PPD.resolveMatchTeams('ai') : null; } catch (e) { teams = null; }
+    const view = {
+      side: 0,
+      players: [
+        menuIdlePlayer(0, t, teams && teams[0] && teams[0].color),
+        menuIdlePlayer(1, t, teams && teams[1] && teams[1].color),
+      ],
+      ball: null,
+      ballInHand: null,
+      time: t,
+      phase: 'idle',
+      score: [0, 0],
+      server: 0,
+      pointReason: null,
+      fx: [],
+      fan: PPD.app.fan,
+      servePath: null,
+      trail: null,
+      trailHidden: true,
+      low: !!(PPD.app.quality && PPD.app.quality.low),
+      showHitRanges: false,
+      density: PPD.isTouch ? 0.42 : 0.62,
+      noCrowd: true,   // 主页洁净：暂略观众席（观众在对局画面出现）
+      teamFixed: true,
+    };
+    view.cam = makeMenuCam(w, h);
+    // 名字牌投影：球员头顶上方（≈1.95m）世界坐标 → 屏幕坐标，
+    // 供 app/home.js 定位 DOM 名字牌与点击热区（每帧随相机/尺寸更新）。
+    try {
+      const cam = view.cam;
+      PPD.app.menuProj = view.players.map((p) => {
+        const q = cam.project(PPD.TTG.v3(p.x, 1.95, p.z));
+        return q ? { x: q.x, y: q.y, s: q.s } : null;
+      });
+    } catch (e) { PPD.app.menuProj = null; /* 桩环境无投影 */ }
+    // 菜单场景提亮：对局暗场灯光按参考图标定（上缘压暗 0.58 / 四角暗角 0.45），
+    // 主页要「洁净明亮、球员完整可读」——渲染期间临时调低压暗与暗角，finally 恢复。
+    // 菜单走 noCrowd 直绘路径（不进观众席缓存），改值只影响本帧，不污染对局画面。
+    const LA = PPD.TTG.LIGHT_AMB;
+    const saved = {
+      darkTop: LA.darkTop, darkMid: LA.darkMid, darkBottom: LA.darkBottom,
+      vigSide: LA.vigSide, vigCorner: LA.vigCorner,
+    };
+    try {
+      LA.darkTop = 0.30; LA.darkMid = 0.10; LA.darkBottom = 0.12;
+      LA.vigSide = 0.10; LA.vigCorner = 0.26;
+      PPD.TTG.drawScene(PPD.ctx, view, w, h);
+    } finally {
+      LA.darkTop = saved.darkTop; LA.darkMid = saved.darkMid; LA.darkBottom = saved.darkBottom;
+      LA.vigSide = saved.vigSide; LA.vigCorner = saved.vigCorner;
+    }
+  }
+
+
+  // ---------- P3 看台视角：边线高位机位（电视转播位） ----------
+  // 球台纵向摆向不变（甲近乙远）；机位从球场侧面看台高处取景：沿台面宽度方向（x）拉出、
+  // 升高、镜头对准球台中心——成画面：两名球员一左一右、球台横向铺满、球网竖在中央、
+  // 对面看台做背景。参数标定后经浏览器截图校验（P3）。
+  function makeSideCam(vw, vh) {
+    const cam = new PPD.TTG.Camera();
+    const eye = PPD.TTG.v3(5.6, 4.6, 0);      // 台宽（±0.76m）外右侧看台高位
+    const look = PPD.TTG.v3(0, 0.55, 0);      // 台面中心略低（视线俯角覆盖全场）
+    cam.set(eye, look, vw / 2, vh / 2, vw * 1.05);
+    return cam;
+  }
+
+  // AI对打·看台视角渲染：与 renderSingle 同源 view（无镜像、不铺参考图底板——侧面机位与底板机位不符）
+  function renderSide() {
+    const w = PPD.app.resizeW, h = PPD.app.resizeH;
+    if (!w || !h) return;
+    PPD.ctx.clearRect(0, 0, w, h);
+    const view = viewModelFromEngine(PPD.app.engine, 0);
+    updateTrail(view);
+    view.cam = makeSideCam(w, h);
+    PPD.TTG.drawScene(PPD.ctx, view, w, h);
+  }
+
+  // AI对打·球员视角（跟随某一方）：借用该方现有第三人称机位（红方视角镜像、蓝方不镜像）
+  function renderWatch() {
+    const s = PPD.app.aiFollowSide === 1 ? 1 : 0;
+    const w = PPD.app.resizeW, h = PPD.app.resizeH;
+    if (!w || !h) return;
+    PPD.ctx.clearRect(0, 0, w, h);
+    const view = viewModelFromEngine(PPD.app.engine, s);
+    updateTrail(view);
+    const cam = makeCam(s, PPD.app.engine.players[s].x, 0, 0, w, h);
+    view.cam = cam;
+    PPD.ctx.save();
+    if (s === 0) applyViewMirror(PPD.ctx, w);
+    PPD.TTG.drawScene(PPD.ctx, view, w, h);
+    PPD.ctx.restore();
+  }
 
   PPD.renderLocal = renderLocal;
   PPD.renderOnline = renderOnline;
   PPD.renderSingle = renderSingle;
+  PPD.renderMenuScene = renderMenuScene; // 主页菜单场景（P0）
+  PPD.makeMenuCam = makeMenuCam;
+  PPD.renderSide = renderSide;           // P3 AI对打·看台边线机位
+  PPD.makeSideCam = makeSideCam;
+  PPD.renderWatch = renderWatch;         // P3 AI对打·球员视角（跟随甲/乙）
   PPD.updateTrail = updateTrail;       // 回放（replay.js）复用尾影
   PPD.applyViewMirror = applyViewMirror; // 回放复用红方视角镜像
   PPD.viewModelFromEngine = viewModelFromEngine;

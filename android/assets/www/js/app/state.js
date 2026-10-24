@@ -17,21 +17,7 @@
   const ui = {
     menu: document.getElementById('menu'),
     gameScreen: document.getElementById('gameScreen'),
-    nameInput: document.getElementById('nameInput'),
-    btnLocal: document.getElementById('btnLocal'),
-    // 快速开始卡片：一级主行动按钮 + 动态摘要（难度与敌我配色的唯一入口）
-    btnPrimaryAction: document.getElementById('btnPrimaryAction'),
-    primaryActionText: document.getElementById('primaryActionText'),
-    quickSummary: document.getElementById('quickSummary'),
-    recentMatch: document.getElementById('recentMatch'),
-    recentTitle: document.getElementById('recentTitle'),
-    recentMeta: document.getElementById('recentMeta'),
-    btnRecentReplay: document.getElementById('btnRecentReplay'),
-    // 顶部动态信息三栏（G5）：近 10 场趋势 / 提升建议 / 生涯入口
-    dashTrend: document.getElementById('dashTrend'),
-    dashGuide: document.getElementById('dashGuide'),
-    dashEntry: document.getElementById('dashEntry'),
-    // 快速开始卡片内的队伍/队名/难度（摘要标签与开局参数据此生成，均在首屏内联）
+    nameInput: document.getElementById('nameInput'),    // 快速开始卡片内的队伍/队名/难度（摘要标签与开局参数据此生成，均在首屏内联）
     teamMe: document.getElementById('teamMe'),
     teamMeName: document.getElementById('teamMeName'),
     teamOpp: document.getElementById('teamOpp'),
@@ -40,14 +26,8 @@
     teamAName: document.getElementById('teamAName'),
     teamB: document.getElementById('teamB'),
     teamBName: document.getElementById('teamBName'),
-    btnEndless: document.getElementById('btnEndless'),
     aiLevel: document.getElementById('aiLevel'),
-    endlessPanel: document.getElementById('endlessPanel'),
-    endlessList: document.getElementById('endlessList'),
-    btnEndlessBack: document.getElementById('btnEndlessBack'),
     btnAIVsAI: document.getElementById('btnAIVsAI'),
-    simPanel: document.getElementById('simPanel'),      // 模拟推演：原地展开的内嵌配置区
-    btnAIVsAIStart: document.getElementById('btnAIVsAIStart'),
     aiLevelA: document.getElementById('aiLevelA'),
     aiLevelB: document.getElementById('aiLevelB'),
     pauseAiLevelA: document.getElementById('pauseAiLevelA'),
@@ -80,9 +60,7 @@
     lanFirewallNote: document.getElementById('lanFirewallNote'), // 房主面板：手动放行防火墙提醒
     lanFirewallPort: document.getElementById('lanFirewallPort'), // 防火墙提示中的端口号（用实际 PORT，自定义端口时显示真实值）
     // 联机框（主页「联机对战」入口打开的全屏面板，等同新开页面；原 roomPanel 合并为内部等待区）
-    netPanel: document.getElementById('netPanel'),
-    btnNetEntry: document.getElementById('btnNetEntry'),
-    btnNetBack: document.getElementById('btnNetBack'),
+    netPanel: document.getElementById('netPanel'),    btnNetBack: document.getElementById('btnNetBack'),
     btnNetWarn: document.getElementById('btnNetWarn'),
     netWarnNote: document.getElementById('netWarnNote'),
     netWait: document.getElementById('netWait'),
@@ -118,16 +96,7 @@
     flagP1: document.getElementById('flagP1'),   // HUD 左侧小旗帜（队伍旗帜标示）
     flagP2: document.getElementById('flagP2'),   // HUD 右侧小旗帜
     // 对局开场渲染层（双方旗帜 + 队名 + VS，渲染结束进入对局）
-    teamIntro: document.getElementById('teamIntro'),
-    tiFlagL: document.getElementById('tiFlagL'),
-    tiFlagR: document.getElementById('tiFlagR'),
-    tiNameL: document.getElementById('tiNameL'),
-    tiNameR: document.getElementById('tiNameR'),
     // 开场状态区（竖屏）：等宽倒计时数字 + 进度条 + 立即开始/返回主菜单出口
-    tiCount: document.getElementById('tiCount'),
-    tiBar: document.getElementById('tiBar'),
-    tiStart: document.getElementById('tiStart'),
-    tiBack: document.getElementById('tiBack'),
     phaseBanner: document.getElementById('phaseBanner'),
     serveTimer: document.getElementById('serveTimer'),
     pointToast: document.getElementById('pointToast'),
@@ -146,12 +115,9 @@
     serverLine: document.getElementById('setServerLine'), // v2.5:联机服务器线路（线路一 Cloudflare / 线路二 ECS）
     fpsMeter: document.getElementById('fpsMeter'),
     pingMeter: document.getElementById('pingMeter'), // v2.7.2:右上角网络延迟显示（联机模式）
-    serveDot: document.getElementById('serveDot'),
-    tips: document.getElementById('tips'),
-    recordsPanel: document.getElementById('recordsPanel'),
-    // 个人生涯合并页（主菜单蓝块点击展开：战绩记录 + 历史回放 标签，v2.2）
-    careerPanel: document.getElementById('careerPanel'),
-    careerStats: document.getElementById('careerStats'),
+    serveDot: document.getElementById('serveDot'),    // 战功合并页（P1-b：战斗奖励 + 生涯战绩 + 历史回放 三标签；replay.js showTab 驱动）
+    honorsRewardTab: document.getElementById('honorsRewardTab'),
+    btnHonorsReward: document.getElementById('btnHonorsReward'),    careerStats: document.getElementById('careerStats'),
     careerList: document.getElementById('careerList'),
     careerPageLabel: document.getElementById('careerPageLabel'),
     btnCareerPrev: document.getElementById('btnCareerPrev'),
@@ -176,19 +142,10 @@
     btnPlanSave: document.getElementById('btnPlanSave'),
     btnDressupBack: document.getElementById('btnDressupBack'),
     setTrailFx: document.getElementById('setTrailFx'),   // AI 观战暂停:尾影特效开关
-    setSplashFx: document.getElementById('setSplashFx'), // AI 观战暂停:撞击特效开关
-    menuPoints: document.getElementById('menuPoints'),
-    touchControls: document.getElementById('touchControls'),
-    btnLeft: document.getElementById('btnLeft'),
-    btnRight: document.getElementById('btnRight'),
-    btnFwd: document.getElementById('btnFwd'),
-    btnBack: document.getElementById('btnBack'),
-    joyBase: document.getElementById('joyBase'),
+    setSplashFx: document.getElementById('setSplashFx'), // AI 观战暂停:撞击特效开关    touchControls: document.getElementById('touchControls'),    joyBase: document.getElementById('joyBase'),
     joyKnob: document.getElementById('joyKnob'),
     joyArea: document.getElementById('joyArea'),   // 摇杆隐形响应热区（竖屏 160×160）
-    btnCrouch: document.getElementById('btnCrouch'),
-    btnSmash: document.getElementById('btnSmash'),
-    btnPause: document.getElementById('btnPause'),
+    btnCrouch: document.getElementById('btnCrouch'),    btnPause: document.getElementById('btnPause'),
     btnExit: document.getElementById('btnExit'),
     pausePanel: document.getElementById('pausePanel'),
     pauseAITune: document.getElementById('pauseAITune'), // 人机：地狱通关后的电脑 AI 数值调控
@@ -200,13 +157,8 @@
     btnManualBack: document.getElementById('btnManualBack'),
     manualScroll: document.getElementById('manualScroll'),           // 说明书内容滚动区
     manualScrollbar: document.getElementById('manualScrollbar'),     // 说明书滑钮滑轨（手机端）
-    manualScrollThumb: document.getElementById('manualScrollThumb'), // 说明书滑钮
-    // 赛后回放（replay.js）：主菜单「查看历史比赛」+ 结算页「查看回放/保存回放」+ 回放播放器 + 历史列表
-    btnHistory: document.getElementById('btnHistory'),
-    historyPanel: document.getElementById('historyPanel'),
-    historyList: document.getElementById('historyList'),
-    btnHistoryBack: document.getElementById('btnHistoryBack'),
-    btnHistoryDelete: document.getElementById('btnHistoryDelete'),
+    manualScrollThumb: document.getElementById('manualScrollThumb'), // 说明书滑钮    historyPanel: document.getElementById('historyPanel'),
+    historyList: document.getElementById('historyList'),    btnHistoryDelete: document.getElementById('btnHistoryDelete'),
     historyDeleteBar: document.getElementById('historyDeleteBar'),
     historyDeleteHint: document.getElementById('historyDeleteHint'),
     btnHistoryDeleteConfirm: document.getElementById('btnHistoryDeleteConfirm'),
@@ -268,13 +220,15 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.2.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.3.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
     endlessLevel: 1,      // 当前挑战/记录的无尽关卡号（从 1 开始）
     aiLevelA: 1,         // AI 观战：红方 AI 难度
     aiLevelB: 1,         // AI 观战：蓝方 AI 难度
+    aiView: 'player',    // P3 AI对打观看视角：'player'=球员第三人称 | 'side'=看台边线机位
+    aiFollowSide: 0,     // 球员视角跟随哪一方（0=甲/近端 1=乙/远端）
     // AI 观战：在难度基准上的参数微调倍率（暂停面板滑杆，默认 ×1 = 基准）
     aiTuneA: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },
     aiTuneB: { reactMul: 1, catchMul: 1, smashMul: 1, agilityMul: 1 },

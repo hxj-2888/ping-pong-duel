@@ -303,7 +303,7 @@
       }
       return;
     }
-    if (PPD.ui.careerPanel) PPD.show(PPD.ui.careerPanel, true);
+    if (PPD.ui.dressupPanel) PPD.show(PPD.ui.dressupPanel, true);
     if (PPD.ui.menu) PPD.show(PPD.ui.menu, false); // 单开页面：隐藏主菜单
     careerRecords = await fetchRecords(60);
     careerPage = 0;
@@ -313,7 +313,7 @@
 
   function closeCareer() {
     if (PPD.Replay && PPD.Replay.closeHistory) PPD.Replay.closeHistory(); // 复位回放删除态/标签
-    if (PPD.ui.careerPanel) PPD.show(PPD.ui.careerPanel, false);
+    if (PPD.ui.dressupPanel) PPD.show(PPD.ui.dressupPanel, false);
     if (PPD.ui.menu) PPD.show(PPD.ui.menu, true);
   }
 

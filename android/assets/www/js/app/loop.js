@@ -210,7 +210,10 @@
       if (renderNow || PPD.app.resizeDirty) {
         PPD.app.resizeDirty = false;
         lastRender = now;
-        PPD.renderSingle();
+        // P3 观看视角分发：看台=边线机位 / 球员=跟随方第三人称（跟随甲时沿用 renderSingle）
+        if (PPD.app.aiView === 'side' && PPD.renderSide) PPD.renderSide();
+        else if (PPD.app.aiFollowSide === 1 && PPD.renderWatch) PPD.renderWatch();
+        else PPD.renderSingle();
       }
     } else if (PPD.app.mode === 'online' && PPD.app.net && PPD.app.net.connected) {
       // 设置暂停（需求 10）：暂停期间冻结输入发送（服务端继续推进，恢复时快照自动锚定）
@@ -221,6 +224,18 @@
         PPD.app.resizeDirty = false;
         lastRender = now;
         PPD.renderOnline();
+      }
+    } else if (PPD.app.mode === null) {
+      // 主页菜单场景（P0 垂直切片 2026-10-24）：无对局时用合成 view 渲染「预备球场」
+      // （两球员预备 + 聚光灯，无球无观众，见 app/render.js renderMenuScene）。
+      // 仅在主菜单可见时渲染——生涯/训练/装扮等整页面板打开时背后无需画面，省 GPU。
+      if ((renderNow || PPD.app.resizeDirty)
+        && PPD.ui.menu && PPD.ui.menu.style.display !== 'none') {
+        PPD.app.resizeDirty = false;
+        lastRender = now;
+        PPD.renderMenuScene(now);
+        // 场景化主页浮层：名字牌跟随/染色/chip 同步（home.js 提供；桩环境无此函数则跳过）
+        if (PPD.updateHomeTags) PPD.updateHomeTags();
       }
     }
     } catch (e) {

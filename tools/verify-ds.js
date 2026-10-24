@@ -12,16 +12,17 @@ const o = (html.match(/<div/g) || []).length;
 const c = (html.match(/<\/div>/g) || []).length;
 console.log('div 开/闭:', o, '/', c, o === c ? '平衡' : '不平衡!');
 
-const NEW = ['btnPrimaryAction', 'primaryActionText', 'quickSummary', 'recentMatch',
-  'recentTitle', 'recentMeta', 'btnRecentReplay', 'simPanel', 'btnAIVsAIStart',
-  'dashTrend', 'dashGuide', 'dashEntry'];
+const NEW = ['btnWhistle', 'whistleLabel', 'homeChip', 'plMe', 'plFoe', 'tagMeName', 'tagFoeName',
+  'chLocal', 'chNet', 'chEndless', 'homeMask', 'sheetTitle', 'rowNameMe', 'rowNameFoe',
+  'rowDiff', 'rowEndless', 'homeEndlessList', 'sheetDone', 'homeHint', 'statusBar',
+  'honorsRewardTab', 'btnHonorsReward', 'rotateMask'];
 const missNew = NEW.filter((i) => !html.includes('id="' + i + '"'));
-console.log('新增节点:', missNew.length ? '缺失 ' + missNew.join(',') : '全部就位 (' + NEW.length + ')');
+console.log('新增节点（场景化主页 P1）:', missNew.length ? '缺失 ' + missNew.join(',') : '全部就位 (' + NEW.length + ')');
 
-const KEEP = ['btnLocal', 'btnNetEntry', 'btnEndless', 'btnAIVsAI', 'btnTraining',
-  'btnDressup', 'nameInput', 'recordsPanel', 'teamMe', 'aiLevel', 'teamA', 'aiLevelB'];
+const KEEP = ['btnAIVsAI', 'btnTraining', 'btnDressup', 'nameInput', 'teamMe', 'aiLevel',
+  'teamA', 'aiLevelB', 'teamMeName', 'teamOppName', 'teamOpp', 'btnDownloadApk', 'btnManualMenu'];
 const missKeep = KEEP.filter((i) => !html.includes('id="' + i + '"'));
-console.log('原有节点:', missKeep.length ? '缺失 ' + missKeep.join(',') : '全部保留 (' + KEEP.length + ')');
+console.log('原有节点（数据宿主与入口契约）:', missKeep.length ? '缺失 ' + missKeep.join(',') : '全部保留 (' + KEEP.length + ')');
 
 // 难度四档固定为 简单 / 中等 / 困难 / 地狱（第四档不是「大师」）
 //地狱未解锁时 option 文字带解锁后缀，故只查档位名前缀
@@ -30,26 +31,27 @@ const missDiff = DIFF4.filter((t) => !html.includes('>' + t));
 console.log('难度四档:', missDiff.length ? '缺失 ' + missDiff.join(',') : '齐全 (' + DIFF4.length + ')');
 console.log('第四档不是「大师」:', /大师/.test(html) ? '仍出现「大师」文案!' : '无');
 
-// 已删除项不得残留：自定义常规单机 / 底部局前设置面板（注释里的历史说明不算残留）
+// 已删除项不得残留：旧主页结构（P1 场景化主页替换）+ 生涯独立页（P1-b 并入战功页）+ 更早删除项
 const GONE = ['自定义常规单机', 'id="btnAI"', 'setupGroup', 'btnSetupToggle', 'setupSummaryText',
-  'setup-summary', 'pick-row', 'pick-diff'];
+  'setup-summary', 'pick-row', 'pick-diff',
+  'id="btnPrimaryAction"', 'id="quickSummary"', 'id="simPanel"', 'id="btnAIVsAIStart"',
+  'id="btnLocal"', 'id="btnNetEntry"', 'id="btnEndless"', 'id="endlessPanel"',
+  'id="recordsPanel"', 'id="dashTrend"', 'id="recentMatch"',
+  'id="careerPanel"', 'id="btnCareerBack"', 'id="btnHonorsCareer"'];
 const stripComments = (s) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 const htmlCode = stripComments(html);
 const stillThere = GONE.filter((t) => htmlCode.includes(t) || css.includes(t));
 console.log('已删除项残留:', stillThere.length ? '仍存在 ' + stillThere.join(',') : '无残留 (' + GONE.length + ' 项已清)');
 
-const LABELS = ['本地双人对战（分屏）', '模拟推演（AI vs AI）', '能力训练', '装扮系统', '联机对战'];
+const LABELS = ['能力训练', 'AI对打', '战功系统', '本地对战', '联机对战', '无尽挑战', '吹哨开始'];
 const missLbl = LABELS.filter((t) => !html.includes(t));
 console.log('按钮文案:', missLbl.length ? '被改动 ' + missLbl.join(',') : '符合预期 (' + LABELS.length + ')');
 
-// G1：主按钮不得出现暗示存档的措辞
-const FORBIDDEN = ['继续生涯', '继续游戏（主菜单）', '恢复', '载入'];
-const bad = FORBIDDEN.filter((t) => {
-  const i = html.indexOf('id="primaryActionText"');
-  if (i < 0) return false;
-  return html.slice(i, i + 200).includes(t);
-});
-console.log('主按钮存档措辞:', bad.length ? '出现 ' + bad.join(',') : '无（符合 G1）');
+// G1：哨子文案不得出现暗示存档的措辞
+const FORBIDDEN = ['继续生涯', '继续游戏（主菜单）', '恢复存档', '载入'];
+const whistleIdx = html.indexOf('id="whistleLabel"');
+const bad = FORBIDDEN.filter((t) => whistleIdx >= 0 && html.slice(whistleIdx, whistleIdx + 120).includes(t));
+console.log('哨子存档措辞:', bad.length ? '出现 ' + bad.join(',') : '无（符合 G1）');
 
 console.log('\n=== 2. 令牌体系 ===');
 const TOKENS = ['--bg-base', '--bg-panel', '--bg-elevated', '--primary-100', '--primary-60',
@@ -67,32 +69,29 @@ console.log('--accent 定义:', accentDefs, '(应为 1)');
 console.log('var(--accent) 引用:', accentRefs, '(应仅用于一级主按钮)');
 console.log('#ffd166 / 旧金色字面量残留:', (css.match(/#ffd166|rgba\(255,\s*209,\s*102/gi) || []).length, '(应为 0)');
 
-console.log('\n=== 4. 视觉层级：尺寸 > 留白 > 字重 > 颜色 ===');
-// 按钮高度：主按钮垂直 padding 32px vs 二/三级 16px
-const pa = /\.btn-primary-action\s*\{[^}]*padding:\s*var\(--sp-4\)\s+var\(--sp-2\)/.test(css);
-const l2 = /\.btn-group-primary \.btn\s*\{[^}]*padding:\s*var\(--sp-2\)/.test(css);
-const l3 = /\.btn-group-secondary \.btn\s*\{[^}]*padding:\s*var\(--sp-2\)/.test(css);
-console.log('主按钮垂直 padding 32px:', pa);
-console.log('二级按钮垂直 padding 16px:', l2);
-console.log('三级按钮垂直 padding 16px:', l3);
-// 主按钮字号与字重均高于次级
-const mainFs = /\.btn-primary-action \.btn-main\s*\{[^}]*font-size:\s*18px/.test(css);
-console.log('主按钮文案 18px/700（大于二级 15px/600）:', mainFs);
-// 视觉孤岛：主按钮外边距 ≥ 组内间距 2 倍
-const island = /\.btn-primary-action\s*\{[^}]*margin:\s*var\(--sp-1\)\s+0\s+var\(--sp-3\)/.test(css);
-console.log('主按钮下方外边距 24px = 组内间距 8px 的 3 倍:', island);
-// 手机端仍保持层级
-const mobileKeep = /\.btn-primary-action \{ padding: var\(--sp-3\) var\(--sp-2\); \}/.test(css);
-console.log('手机端主按钮 padding 24px（不被压平）:', mobileKeep);
+console.log('\n=== 4. 视觉层级（场景化主页 P1）：哨子唯一强调，铭牌分层 ===');
+// 哨子：整页唯一呼吸元素（青绿描边 + 脉冲），通道选中态用同一强调色
+const whistleRing = /\.whistle \.ring\s*\{[^}]*border:\s*2px solid var\(--primary-100\)/.test(css);
+console.log('哨子环 青绿描边（唯一强调）:', whistleRing);
+console.log('哨子脉冲动画:', /@keyframes whistle-pulse/.test(css));
+console.log('通道选中态 .on 青绿点亮:', /\.home-side\.right \.plate\.on\s*\{[^}]*var\(--primary-100\)/.test(css));
+console.log('铭牌悬停青绿渐变:', /\.plate:hover\s*\{[^}]*rgba\(0, 229, 176, 0\.22\)/.test(css));
+console.log('未解锁通道置灰带锁:', /\.plate\.locked[\s\S]{0,200}content:\s*'🔒'/.test(css));
+console.log('名字牌悬停/聚焦青绿描边:', /\.home-player:hover \.home-tag[\s\S]{0,200}border-color:\s*var\(--primary-100\)/.test(css));
+console.log('哨子文案 ✎ 角标常驻:', /tag-edit/.test(html) && /\.tag-edit/.test(css));
+// 主容器透出画布：不透明背景被掀掉、交互子元素恢复指针事件
+console.log('主页容器透明（透出球场画布）:', /\.home-stage\s*\{[^}]*background:\s*none/.test(css));
+console.log('容器穿透 + 子元素恢复指针:', /home-stage\s*\{[^}]*pointer-events:\s*none/.test(css) &&
+  /home-stage :where\(button, a, input, select, nav, \.home-player, \.home-mask, \.home-hint\)/.test(css));
 
 console.log('\n=== 5. 交互四态 + 焦点环 ===');
 const d = (name, re) => console.log(name + ':', re.test(css));
-d('一级按钮 悬停/按下/禁用',  /\.btn-primary-action:hover[\s\S]*\.btn-primary-action:active[\s\S]*\.btn-primary-action:disabled/);
-d('二级按钮 悬停/按下/禁用',  /\.btn-group-primary \.btn:hover[\s\S]*\.btn-group-primary \.btn:active[\s\S]*\.btn-group-primary \.btn:disabled/);
-d('三级按钮 悬停/按下/禁用',  /\.btn-group-secondary \.btn:hover[\s\S]*\.btn-group-secondary \.btn:active[\s\S]*\.btn-group-secondary \.btn:disabled/);
-d('按下缩放 97%',            /transform:\s*scale\(0\.97\)/);
+d('铭牌 悬停/选中/锁定',      /\.plate:hover[\s\S]*\.home-side\.right \.plate\.on[\s\S]*\.plate\.locked/);
+d('哨子 悬停/按下/禁用',      /\.whistle:hover \.ring[\s\S]*\.whistle:active \.ring[\s\S]*\.whistle:disabled/);
+d('弹层 开合过渡',            /\.home-mask\.open[\s\S]*\.home-mask \.open \.home-sheet|\.home-mask\.open \.home-sheet/);
+d('按下缩放 95%',            /\.whistle:active \.ring\s*\{[^}]*scale\(0\.95\)/);
 d('键盘焦点环 2px+2px 偏移', /outline:\s*2px solid var\(--primary-100\)[\s\S]*outline-offset:\s*2px/);
-d('禁用降至 40% 透明度',     /opacity:\s*0\.4/);
+d('禁用/锁定降透明度',        /opacity:\s*0\.4|\.plate\.locked\s*\{[^}]*opacity:\s*0\.45/);
 
 console.log('\n=== 6. 8px 网格（禁止 10px/18px 等零散值） ===');
 // 在我新增的设计系统区块内检查零散间距
@@ -103,9 +102,9 @@ const straySpacing = (block.match(/(?:gap|padding|margin)[^;{]*:\s*[^;]*?\b(?:10
 console.log('新增区块内零散间距值:', straySpacing.length ? straySpacing.slice(0, 8).join(' | ') : '无');
 
 console.log('\n=== 7. E 区副页面外壳统一性 ===');
-// 每个副页面卡片都应带 shell-card，且顶部栏带 shell-head
-const PANELS = ['careerPanel', 'trainingPanel', 'dressupPanel', 'settingsPanel',
-  'manualPanel', 'pausePanel', 'endlessPanel', 'netPanel'];
+// 每个副页面卡片都应带 shell-card，且顶部栏带 shell-head（P1-b：careerPanel 并入 dressupPanel 战功页）
+const PANELS = ['trainingPanel', 'dressupPanel', 'settingsPanel',
+  'manualPanel', 'pausePanel', 'netPanel'];
 const shellCard = (html.match(/shell-card/g) || []).length;
 const shellHead = (html.match(/shell-head/g) || []).length;
 const shellFoot = (html.match(/shell-foot/g) || []).length;
@@ -125,7 +124,7 @@ while ((m = headRe.exec(html)) !== null) {
   if (bi >= 0 && ti >= 0 && bi < ti) backBeforeTitle++;
   else if (bi >= 0 && ti < 0) backBeforeTitle++; // 无标题的头部不计
 }
-console.log('返回控件位于标题左侧的头部数:', backBeforeTitle, '(应为 6：6 个带返回的页面)');
+console.log('返回控件位于标题左侧的头部数:', backBeforeTitle, '(应为 4：训练/战功/说明书/联机)');
 
 // 破坏性操作应使用 foot-danger 且位于底部操作栏
 const dangerInFoot = /<div class="shell-foot">[\s\S]*?foot-danger[\s\S]*?<\/div>/.test(html);
@@ -134,11 +133,16 @@ const dangerCount = (html.match(/foot-danger/g) || []).length;
 console.log('foot-danger 数量:', dangerCount, '(全部洗点 / 退出比赛)');
 
 console.log('\n=== 8. E2/E3 统一控件 ===');
-console.log('积分胶囊:', (html.match(/points-capsule/g) || []).length, '(训练 + 装扮 = 2)');
-// 分段选择器宿主：画质 + 帧率 + 快速开始难度 + 模拟推演甲/乙 = 5
-console.log('分段选择器宿主:', (html.match(/segmented-host/g) || []).length, '(画质 + 帧率 + 快速开始难度 + 甲/乙 = 5)');
+console.log('积分胶囊:', (html.match(/points-capsule/g) || []).length, '(训练 + 战功 = 2)');
+// 分段选择器宿主：画质 + 帧率 + 球员弹层难度 = 3（P1：推演甲/乙直开不再有独立宿主）
+console.log('分段选择器宿主:', (html.match(/segmented-host/g) || []).length, '(画质 + 帧率 + 弹层难度 = 3)');
 // 原生 select 保留并隐藏：画质 + 帧率 + 难度(3) + 队伍(4) = 9
 console.log('原生 select 保留并隐藏:', (html.match(/class="visually-hidden"/g) || []).length, '(应为 9)');
+// P1-b 战功合并页：三标签（战斗奖励 + 生涯战绩 + 历史回放）
+console.log('战功页三标签:', /id="btnHonorsReward"/.test(html) && /id="btnCareerTab"/.test(html) &&
+  /id="btnHistoryTab"/.test(html) && /id="honorsRewardTab"/.test(html));
+// P1-b 竖屏旋转遮罩（手机竖屏提示，桌面窄窗不受影响）
+console.log('旋转遮罩样式:', /\.rotate-mask[\s\S]{0,400}?orientation: portrait[\s\S]{0,120}?pointer: coarse/.test(css));
 const cs = css.indexOf('E3 统一控件');
 const ce = css.indexOf('E4 通用状态标记');
 const ctrl = css.slice(cs, ce);
@@ -155,18 +159,47 @@ for (const st of ['state-active', 'state-owned', 'state-max', 'state-locked']) {
   console.log(st.padEnd(14), '含角标/图标（非仅靠颜色）:', hasBadge);
 }
 
-console.log('\n=== 10. 快速开始卡片（难度 + 敌我配色唯一入口） ===');
-// 全页敌我配色入口唯一：me/opp 两行在快速开始卡片内，甲/乙在模拟推演内嵌配置内
+console.log('\n=== 10. 场景化主页（P1）：难度/配色收敛进球员弹层，开局由哨子承担 ===');
+// 配色入口：弹层 我方/敌方 2 行 + 隐藏宿主 甲/乙 2 行（契约保留，不再展示）
 const swatchHosts = (html.match(/class="swatch-row"/g) || []).length;
-console.log('色块行数:', swatchHosts, '(快速开始 我方/敌方 2 + 模拟推演 甲/乙 2 = 4)');
-console.log('底部局前设置面板已移除:', !/id="setupGroup"/.test(html) && !/setup-summary/.test(html));
-console.log('模拟推演为原地展开（不跳页）:', /id="simPanel"/.test(html) && /class="sim-panel"/.test(html));
-// 移动端硬性约束：溢出防护 / 触控下限 / 窄屏降档 / 安全区
-console.log('难度行等分且 min-width:0:', /\.quick-seg\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0/.test(css));
-console.log('摘要标签省略号截断:', /\.quick-summary\s*\{[^}]*text-overflow:\s*ellipsis/.test(css));
-console.log('根容器禁横向溢出:', /#menu\s*\{[^}]*overflow-x:\s*hidden/.test(css));
-console.log('窄屏（≤360px）字号下沉一档:', /max-width:\s*360px[\s\S]{0,1400}?\.quick-seg \.seg-btn \{ font-size: 11px/.test(css));
+console.log('色块行数:', swatchHosts, '(球员弹层 我方/敌方 2 + 隐藏宿主 甲/乙 2 = 4)');
+console.log('旧局前设置面板已移除:', !/id="setupGroup"/.test(html) && !/setup-summary/.test(html));
+console.log('模拟推演内嵌展开区已退役（AI对打直开）:', !/id="simPanel"/.test(html) && !/sim-panel/.test(html));
+console.log('无尽关卡页已退役（关卡进对方球员弹层）:', !/id="endlessPanel"/.test(html));
+// 数据契约：难度与队伍仍读同一批隐藏宿主（开局接口零改动）
+console.log('数据宿主齐全（aiLevel/团队 select 恒在）:',
+  /id="aiLevel"/.test(html) && /id="teamMe"/.test(html) && /id="teamOpp"/.test(html) &&
+  /id="aiLevelA"/.test(html) && /id="aiLevelB"/.test(html));
+console.log('隐藏宿主不参与视觉:', /\.home-hosts \{ display: none/.test(css));
+// 移动端硬性约束：溢出防护 / 触控下限 / 窄屏降档 / 安全区（沿用竖屏旧规，横屏化在后续批次）
+console.log('根容器禁横向溢出:', /#menu\s*\{[^}]*overflow/.test(css) && /home-stage\s*\{[^}]*overflow:\s*hidden/.test(css));
 console.log('触控目标 ≥44px（竖屏）:', /\.btn, \.tool-btn, \.seg-btn, \.swatch, \.tbtn \{ min-height: 44px; \}/.test(css));
 console.log('色块高度 ≥32px:', /\.swatch\s*\{[^}]*min-height:\s*32px/.test(css) || /\.swatch \{ min-height: 32px; \}/.test(css));
 console.log('锁定档位置灰样式:', /\.seg-btn\.locked/.test(css));
+console.log('弹层无尽关卡锁定态:', /\.endless-seg button\.lock/.test(css));
 console.log('分段控件键盘 ←/→ 支持:', /ArrowLeft/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/main.js'), 'utf8')));
+console.log('名字牌跟随投影钩子:', /menuProj/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/render.js'), 'utf8')) &&
+  /updateHomeTags/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/loop.js'), 'utf8')));
+console.log('主页 toast 落点存在（statusBar 修复）:', /id="statusBar"/.test(html) && /\.home-toast/.test(css));
+
+console.log('\n=== 11. P2 拨开式转场（黑屏 → 纸张从中缝拨开） ===');
+console.log('转场结构（cineMask/左右黑幕/中缝线）:', /id="cineMask"/.test(html) &&
+  /class="cine-half left"/.test(html) && /class="cine-seam"/.test(html));
+console.log('拨开样式（.split 左右滑出）:', /\.cine-mask\.split \.cine-half\.left[\s\S]{0,120}?translateX\(-102%\)/.test(css) &&
+  /\.cine-mask\.split \.cine-half\.right[\s\S]{0,120}?translateX\(102%\)/.test(css));
+console.log('浮层退场样式（.leaving）:', /\.home-stage\.leaving \.home-side\.left \.plate/.test(css) &&
+  /\.home-stage\.leaving \.whistle/.test(css));
+console.log('开场页退役（modes 不再调 showTeamIntro）:',
+  !/showTeamIntro/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/modes.js'), 'utf8')));
+console.log('联机进房播转场:', /cineTransition/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/modes.js'), 'utf8')));
+console.log('编排与快门音:', /cineTransition/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/home.js'), 'utf8')) &&
+  /shutter\(\)/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/audio.js'), 'utf8')));
+
+console.log('\n=== 12. P3 AI对打·观看视角（看台边线机位 / 球员视角跟随） ===');
+console.log('视角选择弹层（三选一+取消）:', /id="aiWatchMask"/.test(html) && /id="aiwSide"/.test(html) &&
+  /id="aiwFollowA"/.test(html) && /id="aiwFollowB"/.test(html) && /id="aiwCancel"/.test(html));
+console.log('边线机位与视角渲染:', /makeSideCam/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/render.js'), 'utf8')) &&
+  /renderSide/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/loop.js'), 'utf8')) &&
+  /renderWatch/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/loop.js'), 'utf8')));
+console.log('视角状态字段:', /aiView/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/state.js'), 'utf8')));
+console.log('视角标注进 hint:', /看台视角/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/modes.js'), 'utf8')));
