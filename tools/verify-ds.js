@@ -203,3 +203,13 @@ console.log('边线机位与视角渲染:', /makeSideCam/.test(require('fs').rea
   /renderWatch/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/loop.js'), 'utf8')));
 console.log('视角状态字段:', /aiView/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/state.js'), 'utf8')));
 console.log('视角标注进 hint:', /看台视角/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/app/modes.js'), 'utf8')));
+
+console.log('\n=== 13. 联机框重构（2026-10-25）：创建/加入标签 + 四位输入 + 双哨子 + 高级折叠 ===');
+console.log('两标签与双视图:', /id="netTabCreate"/.test(html) && /id="netTabJoin"/.test(html) && /id="netCreateView"/.test(html) && /id="netJoinView"/.test(html));
+console.log('四位独立输入框:', (html.match(/class="net-digit"/g) || []).length === 4 && /id="netDigits"/.test(html));
+console.log('双哨子准备视图:', /id="netReady"/.test(html) && /id="nrWhistleMe"/.test(html) && /id="nrWhistleFoe"/.test(html));
+console.log('玻璃卡片+场景背景:', /net-glass/.test(html) && /backdrop-filter: blur\(10px\)/.test(css) && /radial-gradient\(52% 80% at 0% 58%/.test(css));
+console.log('Beta 标签替代首屏警告:', /id="netBeta"/.test(html) && /net-beta-note/.test(css));
+console.log('高级折叠（开发项收纳）:', /id="netAdvanced"/.test(html) && /id="setServerLine"/.test(html) && /id="btnNetMode"/.test(html) && /id="lanFirewallNote"/.test(html));
+console.log('双端 ready 协议镜像:', /msg.t === 'ready'/.test(require('fs').readFileSync(path.join(ROOT, 'src/room-core.js'), 'utf8')) && /msg.t === 'ready'/.test(require('fs').readFileSync(path.join(ROOT, 'server.js'), 'utf8')));
+console.log('旧 id 契约保留:', ['btnHost','btnJoin','joinInput','roomCode','roomHint','netWait','netOperate','lanUrls','btnNetMode','netStatus','btnNetBack'].every((id) => html.includes('id="' + id + '"')));

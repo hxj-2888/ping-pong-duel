@@ -27,7 +27,7 @@
     <!-- 顶部当前模式 chip：哨子将按此开局（默认 单机对战 · 当前难度） -->
     <div id="homeChip" class="home-chip">单机对战 · 中等</div>
     <!-- 规则说明：与模式标签同款卡片，位于其正下方（2026-10-25 用户反馈：入口从右上角移此并放大） -->
-    <button id="btnManualMenu" class="home-manual-card" type="button" title="规则说明" style="display:none">📖 规则说明</button>
+    <button id="btnManualMenu" class="home-manual-card" type="button" title="规则说明" style="display:none">规则说明</button>
 
     <!-- 球衣染色层：左右两侧环境色跟随敌我球衣（--me/--foe 由 home.js 写入） -->
     <div class="home-tint" aria-hidden="true"></div>
@@ -153,72 +153,124 @@
 
     <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
     <div class="row apk-row">
-      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v331.apk" download="PingPongDuel-v331.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v340.apk" download="PingPongDuel-v340.apk" style="display:none">📱 下载安卓版（直接安装）</a>
       <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
     </div>
   </div>
 
-  <!-- 联机框（主页「联机对战」入口打开，等同新开页面）：模式切换/建房/加入/房主等待/教程全部收纳 -->
+  <!-- 联机框（主页「联机对战」通道门打开，等同新开页面；2026-10-25 视觉统一重做）：
+       场景背景（左红右蓝渐变+顶部聚光）+ 玻璃卡片；创建/加入两标签；
+       配对成功进入「双哨子准备」；开发项（线路/本地公网/防火墙/LAN 地址）收进默认折叠的「高级」。
+       net.js 引用的 id（btnHost/btnJoin/joinInput/roomCode/roomHint/netWait/netOperate/
+       lanTargetRow/lanTargetInput/lanUrls/lanFirewallNote/lanFirewallPort/btnNetMode/btnNetWarn/
+       netWarnNote/netStatus/btnNetBack）全部保留。 -->
   <div id="netPanel" class="net-panel" style="display:none">
-    <div class="net-card shell-card">
+    <div class="net-card shell-card net-glass">
       <div class="net-header shell-head">
-        <button id="btnNetBack" class="btn shell-back">← 返回主菜单</button>
-        <h2 class="shell-title">联机对战</h2>
+        <button id="btnNetBack" class="btn shell-back net-back">← 返回主菜单</button>
+        <h2 class="shell-title">联机对战<span id="netBeta" class="net-beta" title="点看说明">Beta</span></h2>
         <div class="shell-context"></div>
       </div>
-      <div class="shell-body">
-      <div style="font-size:12px;color:#e8b64c;margin-bottom:10px;line-height:1.5">⚠ 联机功能持续开发中，当前体验可能较差</div>
-      <!-- 操作区（建房进入等待态后整体隐藏：房主无需再输房间号，需求 11） -->
+      <div id="netBetaNote" class="net-beta-note" hidden>联机功能持续打磨中：跨网联机依赖 Cloudflare/ECS 中继，高峰期可能有延迟波动。局域网内两台设备联机不受影响（选择「高级 → 联机：本地」）。</div>
+
+      <!-- 操作区（建房成功后由 net.js 整体隐藏：netOperate） -->
       <div id="netOperate">
-      <!-- 模式切换：本地/公网 + 公网 ⚠ 说明（点击展开，再点收回） -->
-      <div class="net-mode-row">
-        <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
-        <button id="btnNetWarn" class="btn small net-warn" style="display:none" title="说明">⚠</button>
-      </div>
-      <div id="netWarnNote" class="net-warn-note" style="display:none">⚠ 玩家量过大将导致服务器负载卡顿</div>
-      <!-- v2.5：联机服务器线路选择（公网模式生效）——线路一 Cloudflare（全球边缘）/
-           线路二 ECS（国内低延迟自建）；自动=跟随页面（ECS 站走 ECS、Cloudflare 站走 Cloudflare） -->
-      <div class="row net-line-row" style="justify-content:center;gap:8px;margin:2px 0 4px">
-        <label style="font-size:13px;color:#cfe0ff;display:flex;align-items:center;gap:8px">联机线路
-          <select id="setServerLine"
-            style="padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(0,0,0,0.3);color:#eef2f8;font-size:13px">
-            <option value="auto">自动</option>
-            <option value="cloudflare">线路一 · Cloudflare</option>
-            <option value="ecs">线路二 · ECS</option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <button id="btnHost" class="btn primary">创建联机房间</button>
-        <button id="btnJoin" class="btn">加入房间</button>
-      </div>
-      <div class="row">
-        <input id="joinInput" maxlength="4" placeholder="输入 4 位房间码">
-      </div>
-      <!-- 本地联机：对方设备地址（本地模式下显示，可填 IP 或 IP:端口，支持 IP+房间码加入） -->
-      <div class="row lan-target-row" id="lanTargetRow" style="display:none">
-        <input id="lanTargetInput" placeholder="对方设备地址（如 192.168.1.5:8765，可留空）" spellcheck="false" autocapitalize="off" autocomplete="off">
-      </div>
-      </div>
-      <!-- 房主等待区（原独立等待面板合并进来）：本地联机网址显示在房间码上方 -->
-      <div id="netWait" style="display:none">
-        <div id="lanUrls" class="lan-urls" style="display:none"></div>
-        <div id="roomCode" class="room-code">----</div>
-        <p id="roomHint">等待对手加入…</p>
-        <!-- 房主开联机时的解禁提醒：仅文字提示，绝不自动修改防火墙 -->
-        <div id="lanFirewallNote" class="lan-firewall-note" style="display:none">
-          <div class="lan-fw-title">⚠ 请手动放行防火墙（游戏不会自动修改）</div>
-          <p>首次联机：以管理员身份运行一次 <b>tools\局域网放行.cmd</b>，或在「控制面板 → Windows Defender 防火墙 → 允许应用」中放行 TCP <span id="lanFirewallPort">8765</span>，否则对方连不上（症状：一直"连接中"/超时）。</p>
-          <p>地址有多个 = 电脑有多个网卡（WLAN / 以太网 / Radmin VPN），把<b>与对方同一网络</b>的那个地址连同 4 位房间码发给对方。</p>
+        <div class="net-tabs" role="tablist">
+          <button id="netTabCreate" class="net-tab on" type="button" role="tab" aria-selected="true">创建房间</button>
+          <button id="netTabJoin" class="net-tab" type="button" role="tab" aria-selected="false">加入房间</button>
         </div>
-        <p class="small">让朋友在本机/局域网输入房间码加入<br>（同一网络下直接访问本机 IP:端口）</p>
+
+        <!-- 创建视图：一个大按钮，创建后切到 netWait 等待区（大房间码） -->
+        <div id="netCreateView" class="net-view">
+          <button id="btnHost" class="btn primary net-cta" type="button">创建房间</button>
+          <p class="net-view-hint">创建后把 4 位房间码发给朋友</p>
+        </div>
+
+        <!-- 加入视图：4 位房间码拆四个独立数字框（自动聚焦/粘贴/输完自动提交） -->
+        <div id="netJoinView" class="net-view" hidden>
+          <div class="net-digits" id="netDigits">
+            <input class="net-digit" type="text" maxlength="1" inputmode="numeric" autocapitalize="characters" autocomplete="off" aria-label="房间码第 1 位">
+            <input class="net-digit" type="text" maxlength="1" inputmode="numeric" autocapitalize="characters" autocomplete="off" aria-label="房间码第 2 位">
+            <input class="net-digit" type="text" maxlength="1" inputmode="numeric" autocapitalize="characters" autocomplete="off" aria-label="房间码第 3 位">
+            <input class="net-digit" type="text" maxlength="1" inputmode="numeric" autocapitalize="characters" autocomplete="off" aria-label="房间码第 4 位">
+          </div>
+          <!-- 真实宿主：net.js 读取 joinInput；四框合成写回（保留原契约） -->
+          <input id="joinInput" class="visually-hidden" maxlength="4" placeholder="输入 4 位房间码" aria-hidden="true" tabindex="-1">
+          <button id="btnJoin" class="btn primary net-cta" type="button">加入房间</button>
+          <div id="netJoinErr" class="net-join-err" hidden></div>
+        </div>
+
+        <!-- 本地联机：对方设备地址（本地模式下显示） -->
+        <div class="row lan-target-row" id="lanTargetRow" style="display:none">
+          <input id="lanTargetInput" placeholder="对方设备地址（如 192.168.1.5:8765，可留空）" spellcheck="false" autocapitalize="off" autocomplete="off">
+        </div>
       </div>
+
+      <!-- 房主等待区（创建成功后显示）：大房间码 + 复制 + 等待提示；LAN 地址收进高级 -->
+      <div id="netWait" style="display:none">
+        <div class="net-code-row">
+          <div id="roomCode" class="room-code">----</div>
+          <button id="btnCopyCode" class="net-copy" type="button" title="复制房间码">⧉ 复制</button>
+        </div>
+        <p id="roomHint" class="net-wait-hint">等待对手加入…</p>
+        <p class="net-wait-sub">对方在「加入房间」输入房间码即可</p>
+      </div>
+
+      <!-- 双哨子准备（配对成功后，双方各吹哨才开始；同一世界的准备状态） -->
+      <div id="netReady" class="net-ready" hidden>
+        <div class="nr-row">
+          <div class="nr-side">
+            <div class="nr-name" id="nrNameMe">我</div>
+            <button id="nrWhistleMe" class="nr-whistle" type="button" aria-label="吹哨准备">
+              <span class="ring"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
+              <span class="nr-label" id="nrLabelMe">吹哨准备</span>
+            </button>
+          </div>
+          <div class="nr-vs">VS</div>
+          <div class="nr-side">
+            <div class="nr-name" id="nrNameFoe">对手</div>
+            <div id="nrWhistleFoe" class="nr-whistle ghost" aria-hidden="true">
+              <span class="ring"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
+              <span class="nr-label" id="nrLabelFoe">等待对方</span>
+            </div>
+          </div>
+        </div>
+        <p class="nr-hint">双方都吹哨后开始对战</p>
+      </div>
+
+      <!-- 高级（默认折叠）：线路（带延迟）/ 本地公网 / 防火墙 / LAN 地址 -->
+      <details class="net-advanced" id="netAdvanced">
+        <summary>高级选项</summary>
+        <div class="net-adv-body">
+          <div class="net-line-row">
+            <label class="net-line-label">联机线路
+              <select id="setServerLine">
+                <option value="auto">自动（测速选最快）</option>
+                <option value="cloudflare">线路一 · Cloudflare</option>
+                <option value="ecs">线路二 · ECS</option>
+              </select>
+            </label>
+            <span id="netLinePing" class="net-line-ping" title="当前线路往返延迟">—</span>
+          </div>
+          <div class="net-mode-row">
+            <button id="btnNetMode" class="btn small" style="display:none">联机:本地</button>
+            <button id="btnNetWarn" class="btn small net-warn" style="display:none" title="说明">⚠</button>
+          </div>
+          <div id="netWarnNote" class="net-warn-note" style="display:none">⚠ 玩家量过大将导致服务器负载卡顿</div>
+          <div id="lanFirewallNote" class="lan-firewall-note" style="display:none">
+            <div class="lan-fw-title">⚠ 请手动放行防火墙（游戏不会自动修改）</div>
+            <p>首次联机：以管理员身份运行一次 <b>tools\局域网放行.cmd</b>，或在「控制面板 → Windows Defender 防火墙 → 允许应用」中放行 TCP <span id="lanFirewallPort">8765</span>，否则对方连不上（症状：一直"连接中"/超时）。</p>
+            <p>地址有多个 = 电脑有多个网卡（WLAN / 以太网 / Radmin VPN），把<b>与对方同一网络</b>的那个地址连同 4 位房间码发给对方。</p>
+          </div>
+          <div id="lanUrls" class="lan-urls" style="display:none"></div>
+        </div>
+      </details>
+
       <div id="netStatus" class="status"></div>
-      </div>
     </div>
   </div>
 
-  <!-- 游戏画面 -->
+  <!-- 游戏画面 -->  <!-- 游戏画面 -->
   <div id="gameScreen" style="display:none">
     <div id="hud">
       <div class="player-box">

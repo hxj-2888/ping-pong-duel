@@ -576,6 +576,9 @@ function handleClientMessage(client, msg) {
     const room = {
       code,
       engine: TT.createEngine(),
+      slots: [false, false], // 〔2026-10-25〕与 room-core 对齐：已占用席位
+      ready: [false, false], // 〔2026-10-25 双哨子〕配对后的准备状态
+      readyStarted: false,   // 双方已 ready 且已广播 start
       clients: [null, null],
       lastSnap: '',
       lastSeen: [Date.now(), Date.now()], // 每席位最近活跃/断线时刻(审计 #6:断线宽限与僵尸清扫依据)
@@ -588,7 +591,7 @@ function handleClientMessage(client, msg) {
     room.clients[0] = client;
     room.lastSeen[0] = Date.now();
     room.skins[0] = sanitizeSkin(msg.skin);
-    broadcast(room, { t: 'room', code, side: 0, name: client.name, wait: true, skins: room.skins });
+    broadcast(room, { t: 'room', code, side: 0, name: client.name, wait: true, skins: room.skins, started: room.readyStarted });
     return;
   }
   if (msg.t === 'join') {
@@ -625,12 +628,28 @@ function handleClientMessage(client, msg) {
     // 优先落位到请求的 side(接管成功则空出);否则按现有占位分配
     client.side = (wantSide >= 0 && !room.clients[wantSide]) ? wantSide : (room.clients[0] ? 1 : 0);
     room.clients[client.side] = client;
+    if (room.slots) room.slots[client.side] = true;
     room.lastSeen[client.side] = Date.now();
     room.skins[client.side] = sanitizeSkin(msg.skin); // 联机皮肤同步(v2.0)
     // v2.7.0-fix:等待标志与 room-core 对齐——仅双方席位都占用才 wait:false（原无条件 false，
     // 导致 host 断线重连带 side 回房时"独自开局"）；单人 join/重连回到等待面板
     const waiting = !(room.clients[0] && room.clients[1]);
-    broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: waiting, skins: room.skins });
+    // 〔2026-10-25 双哨子〕已开局房间（readyStarted）：join 响应带 started，客户端跳过准备视图
+    broadcast(room, { t: 'room', code, side: client.side, name: client.name, wait: waiting, skins: room.skins, started: room.readyStarted });
+    return;
+  }
+  // 〔2026-10-25 双哨子〕配对后的准备：一方吹哨 → 广播 ready；双方都吹 → 广播 start 开局。
+  // readyStarted 后不再处理（重连走 state 快照路径，不回准备视图）。与 src/room-core.js 镜像。
+  if (msg.t === 'ready' && client.room && client.side >= 0) {
+    const room = client.room;
+    if (!room.readyStarted) {
+      room.ready[client.side] = true;
+      broadcast(room, { t: 'ready', side: client.side });
+      if (room.ready[0] && room.ready[1] && (!room.slots || (room.slots[0] && room.slots[1]))) {
+        room.readyStarted = true;
+        broadcast(room, { t: 'start' });
+      }
+    }
     return;
   }
   if (client.room) {

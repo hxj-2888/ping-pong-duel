@@ -69,6 +69,9 @@ function makeElement(id) {
     },
     addEventListener(type, fn) { (handlers[type] = handlers[type] || []).push(fn); },
     dispatch(type, ev) { for (const fn of handlers[type] || []) fn(ev); },
+    focus() {}, // 真实 DOM 均有 focus；桩提供空实现（四位输入框自动前进等）
+    select() {},
+    click() { this.dispatch('click', {}); }, // 四位输入完成后自动提交经此触发
     getContext: () => makeCtx2d(),
     // 难度下拉的地狱 option 桩（syncHellOption 查询 option[value="3"]）
     // <select> 的 options 集合：buildSegmented / syncHellOption 都要读
@@ -107,6 +110,10 @@ const ELEMENT_IDS = [
   'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomCode', 'roomHint', 'statusBar',
   // 联机框（主页「联机通道门」打开，等同新开页面）：模式切换/建房/加入/等待/教程
   'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus', 'netOperate',
+  // 联机框 2026-10-25 重构：创建/加入标签、四位输入、双哨子准备、Beta、高级折叠
+  'netTabCreate', 'netTabJoin', 'netCreateView', 'netJoinView', 'netDigits', 'netJoinErr',
+  'netReady', 'nrNameMe', 'nrNameFoe', 'nrWhistleMe', 'nrWhistleFoe', 'nrLabelMe', 'nrLabelFoe',
+  'netBeta', 'netBetaNote', 'btnCopyCode', 'netLinePing', 'netAdvanced',
   'lanTargetRow', 'lanTargetInput', 'lanUrls', 'lanFirewallNote',
   // 说明书（独立全屏页面）：电脑/手机统一在主页设置按钮下方；滑钮滚动
   'manualPanel', 'btnManualMenu', 'btnManualBack', 'manualScroll', 'manualScrollbar', 'manualScrollThumb',
@@ -155,9 +162,17 @@ function boot(opts) {
   elements.get('aiLevel').value = '1';
   elements.get('aiLevel').selectedIndex = 1;
   // 场景化主页（P1）：右三通道的 data-mode（桩不解析 HTML 属性，手工镜像真实页面）
+  elements.get('netBetaNote').hidden = true; // 模拟 HTML hidden 属性（桩不解析 HTML）
   elements.get('chLocal').dataset.mode = 'local';
   elements.get('chNet').dataset.mode = 'online';
   elements.get('chEndless').dataset.mode = 'endless';
+  // 联机框四位输入框（桩不解析 HTML，预置 4 个 input 子元素；wireNetPanelUI 启动时据此绑定）
+  const netDigitsHost = elements.get('netDigits');
+  for (let i = 0; i < 4; i++) {
+    const d = makeElement('netDigit' + i);
+    d.tagName = 'INPUT';
+    netDigitsHost.appendChild(d);
+  }
   // bgmAudio：<audio> 元素桩（play/pause/paused/src/volume/loop）
   const bgm = elements.get('bgmAudio');
   Object.assign(bgm, {
@@ -839,12 +854,40 @@ async function main() {
     H.selectMode('ai');
     H.openSheet('foe');
     check('对方球员弹层打开且含难度行',
-      t.elements.get('homeMask').hidden === false && t.elements.get('rowDiff').style.display !== 'none');
+      t.elements.get('homeMask').hidden === false && t.elements.get('rowDiff').hidden !== true);
     H.openSheet('me');
-    check('我方球员弹层：无难度行（难度仅对方球员）', t.elements.get('rowDiff').style.display === 'none');
+    check('我方球员弹层：无难度行（难度仅对方球员）', t.elements.get('rowDiff').hidden === true);
     H.closeSheet();
     await sleep(260); // 弹层收起有 220ms 过渡
     check('弹层完成关闭', t.elements.get('homeMask').hidden === true);
+  }
+
+  // ---------- 2a. 联机框重构（2026-10-25）：创建/加入标签 + 四位输入 + 双哨子准备 ----------
+  {
+    const t = await boot();
+    const H = t.ppd.Home();
+    H.selectMode('online'); // 通道门：浮层滑走 240ms 后打开联机框
+    await sleep(320);
+    check('通道门打开联机框且默认创建标签', t.elements.get('netPanel').style.display !== 'none' &&
+      t.elements.get('netTabCreate').classList.contains('on') && t.elements.get('netJoinView').hidden === true);
+    // 切加入标签：四框可见
+    t.elements.get('netTabJoin').dispatch('click', {});
+    check('切到加入标签：加入视图可见（四框）', t.elements.get('netJoinView').hidden === false &&
+      t.elements.get('netCreateView').hidden === true);
+    // 四位数字框：逐格输入合成写回 joinInput
+    const digitEls = t.elements.get('netDigits').children.filter((c) => c.tagName === 'INPUT');
+    check('四位输入框存在', digitEls.length === 4);
+    for (let i = 0; i < 4; i++) { digitEls[i].value = String(i + 1); digitEls[i].dispatch('input', {}); }
+    check('四框合成写回 joinInput', t.elements.get('joinInput').value === '1234');
+    // Beta 标签展开说明
+    t.elements.get('netBeta').dispatch('click', {});
+    check('Beta 标签展开完整说明', t.elements.get('netBetaNote').hidden === false);
+    // 双哨子准备视图：showNetReady 后我方哨子点击进入已准备态
+    t.ppd.showNetReady();
+    check('双哨子准备视图打开', t.elements.get('netReady').style.display !== 'none');
+    t.elements.get('nrWhistleMe').dispatch('click', {});
+    check('我方哨子点击进入已准备态（未连服务器不开局）',
+      t.elements.get('nrWhistleMe').classList.contains('ready') && t.app.mode === null);
   }
 
   // ---------- 2.1 人机对战 ----------
@@ -1153,7 +1196,7 @@ async function main() {
     check('选中无尽：chip 显示无尽-N', t.elements.get('homeChip').textContent.indexOf('无尽-') !== -1);
     H.openSheet('foe');
     check('无尽模式下对方球员弹层为关卡列表（非难度）',
-      t.elements.get('rowEndless').style.display !== 'none' && t.elements.get('rowDiff').style.display === 'none');
+      t.elements.get('rowEndless').hidden !== true && t.elements.get('rowDiff').hidden === true);
     H.closeSheet();
     await sleep(260);
     t.click('btnWhistle');

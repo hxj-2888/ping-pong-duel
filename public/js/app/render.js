@@ -839,12 +839,12 @@
       teamFixed: true,
     };
     view.cam = makeMenuCam(w, h);
-    // 名字牌投影（P1-b 修正）：head=头顶 1.72m（名字牌底边紧贴此点）、body=躯干 0.95m（点击热区中心）。
-    // 供 app/home.js 每帧定位 DOM（随相机/尺寸更新）。
+    // 名字牌投影（2026-10-25 再修）：head=头顶上方 8cm（1.80m，tag 底边贴此点——透视自动让
+    // 远端/近端都紧贴头顶）、body=躯干 0.95m（点击热区中心）。
     try {
       const cam = view.cam;
       PPD.app.menuProj = view.players.map((p) => {
-        const head = cam.project(PPD.TTG.v3(p.x, 1.72, p.z));
+        const head = cam.project(PPD.TTG.v3(p.x, 1.8, p.z));
         const body = cam.project(PPD.TTG.v3(p.x, 0.95, p.z));
         if (!head || !body) return null;
         return { x: head.x, y: head.y, bx: body.x, by: body.y, s: head.s };

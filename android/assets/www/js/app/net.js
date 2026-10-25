@@ -197,6 +197,11 @@
           if (m.side === 1) PPD.app.names[1] = m.name;
         }
         PPD.show(PPD.ui.netWait, false);
+        // 〔2026-10-25 双哨子准备〕配对成功先回准备视图（双方吹哨 ready 协议）才开局；
+        // 旧客户端不发 ready：靠首帧 state（下方 state 处理）或 join 响应 started 自动跟随开局。
+        if (!m.started && PPD.app.mode !== 'online' && PPD.ui.netReady) {
+          showNetReady();
+        } else {
         PPD.app.lastStateAt = Date.now(); // 开局数据流基线：4s 内必有首帧快照
         if (PPD.app.mode !== 'online' || PPD.ui.gameScreen.style.display === 'none') {
           PPD.startOnlineGame(PPD.app.side); // 内部会隐藏主菜单与联机框
@@ -214,6 +219,7 @@
         }
         // v2.7.0-fix:进房（对局建立/恢复）后补发握手/重连期间缓存的输入帧（NetClient 出站队列）
         if (net.flushPending) net.flushPending();
+        } // 既有开局路径闭合（双哨子 else 分支）
       }
     });
     net.on('pong', (m) => {
@@ -240,6 +246,14 @@
     });
     net.on('state', (m) => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换:退出后迟到的快照不得再执行(审计 #5)
+      // 〔2026-10-25〕旧客户端不发 ready：对端（旧版）开局后 state 开始流动——
+      // 准备视图还开着就自动跟随进入对局（混版本兼容，不中断联机流程）。
+      if (PPD.app.mode !== 'online' && PPD.ui.netReady &&
+          !PPD.ui.netReady.hidden && PPD.ui.netReady.style.display !== 'none') {
+        PPD.show(PPD.ui.netReady, false);
+        PPD.app.lastStateAt = Date.now();
+        PPD.startOnlineGame(PPD.app.side);
+      }
       // 联机皮肤同步(v2.1):服务器广播双方装配特效(尾影/溅射),存对手皮肤供溅射归属
       if (m.skins) PPD.app.oppSkin = m.skins[1 - PPD.app.side] || null;
       PPD.app.lastStateAt = Date.now(); // 看门狗基线：服务端 Alarm 保证 ≥2Hz
@@ -452,6 +466,23 @@
         }
       }
     });
+    // 〔2026-10-25 双哨子〕对方吹哨（服务器广播 ready）→ 点亮对方哨子；双方齐 → start
+    net.on('ready', (m) => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return;
+      if (m.side === PPD.app.side) return; // 自己的回声
+      PPD.app._netFoeReady = true;
+      if (PPD.ui.nrWhistleFoe) PPD.ui.nrWhistleFoe.classList.add('ready');
+      if (PPD.ui.nrLabelFoe) PPD.ui.nrLabelFoe.textContent = '已准备';
+      maybeNetStart();
+    });
+    net.on('start', () => {
+      if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return;
+      PPD.show(PPD.ui.netReady, false);
+      if (PPD.app.mode !== 'online') {
+        PPD.app.lastStateAt = Date.now();
+        PPD.startOnlineGame(PPD.app.side); // 内含拨开式转场
+      }
+    });
     net.on('peer_left', () => {
       if (PPD.app.net !== net || token !== PPD.app.netSessionToken) return; // 会话已切换(审计 #5)
       PPD.showOverlay('对手已离开', '可返回菜单重新开始。', '返回菜单', PPD.backToMenu);
@@ -476,6 +507,11 @@
         return;
       }
       PPD.setStatus(msg);
+      // 〔2026-10-25〕加入视图内联错误文案（房间不存在/房间已满/连接失败…）
+      if (PPD.ui.netJoinErr && PPD.ui.netJoinView && !PPD.ui.netJoinView.hidden) {
+        PPD.ui.netJoinErr.textContent = msg;
+        PPD.ui.netJoinErr.hidden = false;
+      }
       // 自动重连期间原房间已被清理/席位被占：放弃并回菜单（不再挂起重连状态）
       if (PPD.app.reconnecting && (e.e === '房间不存在' || e.e === '房间已满')) {
         PPD.app.reconnecting = false;
@@ -587,4 +623,139 @@
   }
 
   PPD.setupNet = setupNet;
+
+  // ---------- 双哨子准备视图（2026-10-25） ----------
+  function showNetReady() {
+    PPD.show(PPD.ui.netOperate, false);
+    PPD.show(PPD.ui.netWait, false);
+    PPD.show(PPD.ui.netReady, true);
+    PPD.app._netMeReady = false;
+    PPD.app._netFoeReady = false;
+    if (PPD.ui.nrNameMe) PPD.ui.nrNameMe.textContent = PPD.app.names[0] || '我';
+    if (PPD.ui.nrNameFoe) PPD.ui.nrNameFoe.textContent = '对手';
+    if (PPD.ui.nrWhistleMe) PPD.ui.nrWhistleMe.classList.remove('ready');
+    if (PPD.ui.nrLabelMe) PPD.ui.nrLabelMe.textContent = '吹哨准备';
+    if (PPD.ui.nrWhistleFoe) PPD.ui.nrWhistleFoe.classList.remove('ready');
+    if (PPD.ui.nrLabelFoe) PPD.ui.nrLabelFoe.textContent = '等待对方';
+  }
+  function maybeNetStart() {
+    if (!PPD.app._netMeReady || !PPD.app._netFoeReady) return;
+    PPD.show(PPD.ui.netReady, false);
+    if (PPD.app.mode !== 'online') {
+      PPD.app.lastStateAt = Date.now();
+      PPD.startOnlineGame(PPD.app.side);
+    }
+  }
+  PPD.showNetReady = showNetReady;
+
+  // ---------- 联机框静态 UI（tabs / 四位数字框 / 复制 / Beta / 哨子 / 线路延迟） ----------
+  (function wireNetPanelUI() {
+    if (typeof document === 'undefined' || !document.getElementById) return;
+    const gid = (id) => document.getElementById(id);
+    const tabC = gid('netTabCreate'), tabJ = gid('netTabJoin');
+    const vC = gid('netCreateView'), vJ = gid('netJoinView');
+    function setTab(create) {
+      if (tabC) { tabC.classList.toggle('on', create); tabC.setAttribute('aria-selected', String(create)); }
+      if (tabJ) { tabJ.classList.toggle('on', !create); tabJ.setAttribute('aria-selected', String(!create)); }
+      if (vC) vC.hidden = !create;
+      if (vJ) vJ.hidden = create;
+      const err = gid('netJoinErr');
+      if (err) err.hidden = true;
+    }
+    if (tabC) tabC.addEventListener('click', () => { if (PPD.GameAudio) PPD.GameAudio.ui(); setTab(true); });
+    if (tabJ) tabJ.addEventListener('click', () => { if (PPD.GameAudio) PPD.GameAudio.ui(); setTab(false); });
+
+    // 四位独立数字框：自动前进 / Backspace 后退 / 粘贴分发 / 输完自动提交；写回 joinInput 宿主
+    const digitsHost = gid('netDigits');
+    const digits = digitsHost ? Array.prototype.slice.call(digitsHost.children).filter((el) => el.tagName === 'INPUT') : [];
+    const joinInput = gid('joinInput');
+    if (digits.length === 4 && joinInput) {
+      const sync = () => { joinInput.value = digits.map((d) => d.value).join('').toUpperCase(); };
+      const autoSubmit = () => { const b = gid('btnJoin'); if (joinInput.value.length === 4 && b) b.click(); };
+      digits.forEach((d, i) => {
+        d.addEventListener('input', () => {
+          d.value = d.value.replace(/[^0-9a-z]/gi, '').toUpperCase().slice(0, 1);
+          if (d.value && i < 3) digits[i + 1].focus();
+          sync();
+          autoSubmit();
+        });
+        d.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && !d.value && i > 0) digits[i - 1].focus();
+        });
+        d.addEventListener('paste', (e) => {
+          const txt = ((e.clipboardData || window.clipboardData) && (e.clipboardData || window.clipboardData).getData('text')) || '';
+          const clean = txt.replace(/[^0-9a-z]/gi, '').toUpperCase().slice(0, 4);
+          if (!clean) return;
+          e.preventDefault();
+          for (let k = 0; k < 4; k++) digits[k].value = clean[k] || '';
+          digits[Math.min(clean.length, 3)].focus();
+          sync();
+          autoSubmit();
+        });
+      });
+    }
+
+    // 复制房间码（复用 net.js 内既有 copyText 思路：clipboard API → 兜底）
+    const cp = gid('btnCopyCode');
+    if (cp) cp.addEventListener('click', () => {
+      const code = (gid('roomCode') || {}).textContent || '';
+      const done = () => { if (PPD.setStatus) PPD.setStatus('房间码已复制：' + code); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(done, () => {
+          try { const ta = document.createElement('textarea'); ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch (e) { /* ignore */ }
+        });
+      } else {
+        try { const ta = document.createElement('textarea'); ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch (e) { /* ignore */ }
+      }
+    });
+
+    // Beta 说明展开
+    const beta = gid('netBeta'), note = gid('netBetaNote');
+    if (beta && note) beta.addEventListener('click', () => { note.hidden = !note.hidden; });
+
+    // 双哨子：我方点击 → ready 协议
+    const wm = gid('nrWhistleMe');
+    if (wm) wm.addEventListener('click', () => {
+      if (PPD.app._netMeReady) return;
+      PPD.app._netMeReady = true;
+      wm.classList.add('ready');
+      const lb = gid('nrLabelMe');
+      if (lb) lb.textContent = '已准备';
+      if (PPD.GameAudio) PPD.GameAudio.ui();
+      if (PPD.app.net && PPD.app.net.connected) PPD.app.net.send({ t: 'ready' });
+      maybeNetStart();
+    });
+
+    // 线路延迟测量（no-cors fetch 计时；60s 缓存）+ auto 测速选优缓存
+    const LINE_PING = PPD.netLineCache = { cloudflare: -1, ecs: -1, at: 0 };
+    const pingEl = gid('netLinePing');
+    function pingLine(url) {
+      const t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+      return fetch(url + '?p=' + Date.now(), { cache: 'no-store', mode: 'no-cors' })
+        .then(() => Math.round((window.performance && performance.now ? performance.now() : Date.now()) - t0))
+        .catch(() => -1);
+    }
+    function updatePingBadge() {
+      if (!pingEl) return;
+      const line = (PPD.app && PPD.app.serverLine) || 'auto';
+      let v = -1;
+      if (line === 'cloudflare') v = LINE_PING.cloudflare;
+      else if (line === 'ecs') v = LINE_PING.ecs;
+      else v = (LINE_PING.cloudflare >= 0 && LINE_PING.ecs >= 0)
+        ? Math.min(LINE_PING.cloudflare, LINE_PING.ecs)
+        : Math.max(LINE_PING.cloudflare, LINE_PING.ecs);
+      pingEl.textContent = v >= 0 ? v + 'ms' : '—';
+    }
+    PPD.netMeasureLines = function () {
+      if (Date.now() - LINE_PING.at < 60000) { updatePingBadge(); return; }
+      LINE_PING.at = Date.now();
+      pingLine('https://ping-pong-duel.pages.dev/').then((ms) => { LINE_PING.cloudflare = ms; updatePingBadge(); });
+      pingLine('https://searchdelta.online/').then((ms) => { LINE_PING.ecs = ms; updatePingBadge(); });
+      updatePingBadge();
+    };
+    const lineSel = gid('setServerLine');
+    if (lineSel) lineSel.addEventListener('change', () => { if (PPD.netMeasureLines) PPD.netMeasureLines(); });
+    // 显式初始化为「创建房间」标签（不依赖 HTML 静态 class；测试桩环境同样成立）
+    if (tabC && tabC.classList) setTab(true);
+  })();
 })();

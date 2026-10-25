@@ -202,6 +202,12 @@
     // 实测"房间不存在"；分片需"房间码级路由"设计留待后续）。统一走全局 game-room 实例，与 v2.6 一致。
     if (app.serverLine === 'cloudflare') return 'wss://ping-pong-duel.pages.dev/ws';
     if (app.serverLine === 'ecs') return 'wss://searchdelta.online/ws';
+    // auto（默认）：跟随页面平台；若两条线路测速可用且差距 ≥40ms，自动选更快的一条
+    const lc = (typeof PPD !== 'undefined' && PPD.netLineCache) || null;
+    if (lc && lc.cloudflare >= 0 && lc.ecs >= 0) {
+      if (lc.cloudflare + 40 < lc.ecs) return 'wss://ping-pong-duel.pages.dev/ws';
+      if (lc.ecs + 40 < lc.cloudflare) return 'wss://searchdelta.online/ws';
+    }
     if (isLocalHost) {
       return 'wss://ping-pong-duel.pages.dev/ws'; // 桌面端切公网：默认直连 Cloudflare
     }
@@ -220,7 +226,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.3.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.4.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分

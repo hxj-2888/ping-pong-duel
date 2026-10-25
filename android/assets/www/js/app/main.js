@@ -30,6 +30,19 @@
     PPD.show(PPD.ui.netWait, false);
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netOperate, true); // 恢复操作区（下次建房/加入可再操作）
+    // 〔2026-10-25〕重置创建/加入标签与双哨子准备视图、加入错误提示
+    if (PPD.ui.netReady) PPD.show(PPD.ui.netReady, false);
+    if (PPD.ui.netJoinErr) PPD.ui.netJoinErr.hidden = true;
+    if (PPD.ui.netTabCreate && PPD.ui.netTabCreate.classList) {
+      PPD.ui.netTabCreate.classList.add('on');
+      PPD.ui.netTabCreate.setAttribute('aria-selected', 'true');
+    }
+    if (PPD.ui.netTabJoin && PPD.ui.netTabJoin.classList) {
+      PPD.ui.netTabJoin.classList.remove('on');
+      PPD.ui.netTabJoin.setAttribute('aria-selected', 'false');
+    }
+    if (PPD.ui.netCreateView) PPD.ui.netCreateView.hidden = false;
+    if (PPD.ui.netJoinView) PPD.ui.netJoinView.hidden = true;
     PPD.show(PPD.ui.menu, true); // 联机框等同新开页面：关闭后恢复主菜单
     // 审计 #4/#5:退出联机 → 递增会话 token(本连接在途消息回调全部作废)+ 清理会话定时器。
     // 不递增 token 的话,陈旧 joinTimer 会在 12s/6s 后触发 net.connect() 复活已关闭连接
@@ -81,6 +94,7 @@
   }
 
   PPD.closeNetPanel = closeNetPanel;
+  PPD.refreshNetModeBtn = refreshNetModeBtn; // home.js 通道门打开时同步 本地/公网 按钮态
 
   // ---------- 一级主行动按钮（G1/G3）：无战局保留系统，用“快速开始” ----------
   // 动态摘要实时显示当前局前配置（模式 · 我方 vs 敌方 · 难度），随快速开始卡片内的配置联动。
@@ -738,6 +752,7 @@
     Home: function () { return PPD.Home || null; }, // 场景化主页状态机（home.js；P1）
     openCareer: (typeof PPD.openCareer === 'function') ? PPD.openCareer : null,
     closeDressup: (typeof PPD.closeDressup === 'function') ? PPD.closeDressup : null,
+    showNetReady: (typeof PPD.showNetReady === 'function') ? PPD.showNetReady : null,
     unlockHell: PPD.unlockHell,
     isHellUnlocked: PPD.isHellUnlocked,
     syncHellOptions: PPD.syncHellOptions,

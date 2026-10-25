@@ -141,6 +141,18 @@ export class RoomCore {
           }
         }
       }
+    } else if (att.room && msg.t === 'ready') {
+      // 〔2026-10-25 双哨子〕配对后的准备：一方吹哨 → 广播 ready；双方都吹 → 广播 start 开局。
+      // readyStarted 后不再处理（重连走 state 快照路径，不回准备视图）。
+      const rroom = this.rooms.get(att.room);
+      if (rroom && att.side >= 0 && !rroom.readyStarted) {
+        rroom.ready[att.side] = true;
+        this.broadcast(rroom, { t: 'ready', side: att.side });
+        if (rroom.ready[0] && rroom.ready[1] && rroom.slots[0] && rroom.slots[1]) {
+          rroom.readyStarted = true;
+          this.broadcast(rroom, { t: 'start' });
+        }
+      }
     } else if (att.room && msg.t === 'rematch') {
       const room = this.rooms.get(att.room);
       if (room && room.engine.phase === 'over') {
@@ -179,6 +191,8 @@ export class RoomCore {
       code,
       engine: TT.createEngine(),
       slots: [false, false], // 已占用席位（持久化，驱逐恢复后据此分配/判满）
+      ready: [false, false], // 〔2026-10-25 双哨子〕配对后的准备状态（开局前使用）
+      readyStarted: false,   // 双方已 ready 且已广播 start（此后不再走准备流程）
       clients: [null, null],
       names: ['', ''],
       lastSnap: '',
@@ -233,10 +247,11 @@ export class RoomCore {
     room.lastSeen[side] = now;
     room.skins[side] = sanitizeSkin(msg.skin); // 联机皮肤同步(v2.0)
     this.setAtt(ws, { room: code, side, name });
+    // 〔2026-10-25 双哨子〕已开局房间（readyStarted）：join 响应带 started，客户端跳过准备视图
     // 仅 1 人在房时为等待态（wait:true）——覆盖"房主重连到空房/对手离开后只剩一人"，
     // 让该客户端回到等待面板而不是孤身进入对局
     const waiting = !(room.slots[0] && room.slots[1]);
-    this.broadcast(room, { t: 'room', code, side, name, wait: waiting, skins: room.skins });
+    this.broadcast(room, { t: 'room', code, side, name, wait: waiting, skins: room.skins, started: room.readyStarted });
     this.stepRoom(room);
   }
 

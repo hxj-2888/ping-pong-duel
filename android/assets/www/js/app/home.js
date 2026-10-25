@@ -65,8 +65,17 @@
   function openNetDoor() {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
-    PPD.show(PPD.ui.netPanel, true);
-    if (PPD.ui.serverLine) PPD.ui.serverLine.value = PPD.app.serverLine || 'auto';
+    // 〔2026-10-25 通道门转场〕主页浮层滑走 → 联机卡片从右侧滑入（同一世界的门）
+    const menuEl = PPD.ui.menu;
+    if (menuEl && menuEl.classList) menuEl.classList.add('leaving');
+    setTimeout(() => {
+      PPD.show(PPD.ui.netPanel, true);
+      PPD.show(menuEl, false);
+      if (menuEl && menuEl.classList) menuEl.classList.remove('leaving');
+      if (PPD.refreshNetModeBtn) PPD.refreshNetModeBtn();
+      if (PPD.ui.serverLine) PPD.ui.serverLine.value = PPD.app.serverLine || 'auto';
+      if (PPD.netMeasureLines) PPD.netMeasureLines();
+    }, 240);
   }
 
   function refreshLocks() {
@@ -189,13 +198,16 @@
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
     if (el.sheetTitle) el.sheetTitle.textContent = who === 'me' ? '我方球员' : '对方球员';
-    PPD.show(el.rowNameMe, who === 'me');
-    PPD.show(el.rowNameFoe, who === 'foe');
-    PPD.show(el.swatchMe, who === 'me');
-    PPD.show(el.swatchOpp, who === 'foe');
+    // 〔2026-10-25 修复〕这些行带 hidden 属性：必须切属性而非 style.display——
+    // 全局守卫 [hidden]{display:none!important} 会让 PPD.show 的 display 切换失效，
+    // 对方弹层的名字框/球衣色块曾因此永远不可见（"无法改名/换衣"）。
+    if (el.rowNameMe) el.rowNameMe.hidden = who !== 'me';
+    if (el.rowNameFoe) el.rowNameFoe.hidden = who !== 'foe';
+    if (el.swatchMe) el.swatchMe.hidden = who !== 'me';
+    if (el.swatchOpp) el.swatchOpp.hidden = who !== 'foe';
     // mode-aware：难度只对人机的对方球员；无尽关卡只在无尽模式对方球员；本地/联机只有改名换衣
-    PPD.show(el.rowDiff, who === 'foe' && mode === 'ai');
-    PPD.show(el.rowEndless, who === 'foe' && mode === 'endless');
+    if (el.rowDiff) el.rowDiff.hidden = !(who === 'foe' && mode === 'ai');
+    if (el.rowEndless) el.rowEndless.hidden = !(who === 'foe' && mode === 'endless');
     if (who === 'foe' && mode === 'endless') renderEndlessList();
     clearTimeout(sheetTimer);
     el.mask.hidden = false;
@@ -274,7 +286,7 @@
       player.style.height = h + 'px';
       player.style.transform = 'translate(' + Math.round(pr.bx - w / 2) + 'px,' + Math.round(pr.by - h * 0.52) + 'px)';
     }
-    if (tag) tag.style.transform = 'translate(' + Math.round(pr.x) + 'px,' + Math.round(pr.y) + 'px) translate(-50%,-124%)';
+    if (tag) tag.style.transform = 'translate(' + Math.round(pr.x) + 'px,' + Math.round(pr.y) + 'px) translate(-50%,-100%)';
   }
   function setTagColor(node, color) {
     if (!node || !node.querySelector) return;
@@ -299,8 +311,8 @@
       : (typedFoe && !isDefaultColorName ? typedFoe : '电脑');
     if (el.tagMeName && el.tagMeName.textContent !== meName) el.tagMeName.textContent = meName;
     if (el.tagFoeName && el.tagFoeName.textContent !== foName) el.tagFoeName.textContent = foName;
-    setTagColor(el.plMe, teamColor(el.teamMe));
-    setTagColor(el.plFoe, teamColor(el.teamOpp));
+    setTagColor(el.tagMe, teamColor(el.teamMe));
+    setTagColor(el.tagFoe, teamColor(el.teamOpp));
     // 球衣染色层：--me/--foe 写根元素（.home-tint 渐变引用；变化才写，避免每帧重绘）
     const meC = teamColor(el.teamMe) || '#d0321e';
     const foC = teamColor(el.teamOpp) || '#2563eb';
