@@ -1,6 +1,6 @@
 # AGENTS.md — 乒乓对决
 
-> **当前版本**：3.2.1 · `androidVersionCode` 29 · 最后更新：2026-10-18
+> **当前版本**：3.5.1 · `androidVersionCode` 36 · 最后更新：2026-10-25
 > **一句话**：ITTF 标准球台 + 火柴人物理骨架的双人乒乓球（单机 / 本地分屏 / 局域网与公网联机），零依赖前端 + Cloudflare Durable Object 后端。
 > **接手入口**：[`README.md`](README.md) → [`修改记录.md`](修改记录.md)（含「项目状态」固定章节：结构 / 部署 / 联机 / 测试 / 待办 / 踩坑）→ 本文。
 
@@ -21,7 +21,7 @@
 | 目的 | 命令 |
 |---|---|
 | 本地起服务 | `npm start`（`node server.js`，默认 <http://localhost:8765>） |
-| **全量门禁** | `npm run test:all`（32 项测试 + 引擎镜像校验） |
+| **全量门禁** | `npm run test:all`（31 项测试 + 引擎镜像校验） |
 | 版本一致性 | `npm run test:ver` |
 | 引擎镜像字节一致 | `npm run test:sync` |
 | 公网协议冒烟 | `npm run test:ws`（默认连 `wss://ping-pong-duel.pages.dev/ws`） |
@@ -33,12 +33,18 @@
 
 ### 什么算"绿"
 
-- `npm run test:all` 全过，**除两项既有失败**：
-  - `physics-boundary-test`（台面走位）
-  - `browser-smoke`（虚线勾选框禁用断言）
-  这两项与基线一致即视为无回归，**但必须在记录里写明"较基线的 2 项既有失败未变"**。
-  出现第 3 项失败 = 回归。
-- `npm run test:ver` 9 项全绿（版本副本一致）。
+- `npm run test:all` **31 项全过，零失败**（2026-10-25 起；此前的两项既有失败已修，见下）。
+- 历史背景（勿再照抄旧基线）：`physics-boundary-test` 的「台面外侧可走到球网线」与
+  `browser-smoke` 的两条「虚线勾选框禁用」曾长期是"既有失败"。二者都是**测试用例过期**，
+  不是产品缺陷，已在 3.5.1 修正：
+  - 物理：该用例在默认的 **发球相** 里长时间按前进，v2.7.0 起的 `SERVE_Z_SAFE`
+    站位钳制（发球方持球期间钳到 |z|≥1.25）会把它按回 -1.25。用例改为显式置
+    `play` 相并在每帧维持（球抬高、相位不跳），测的才是"移动边界"本身。
+  - 冒烟：v2.7.2 已**解除**虚线解锁门槛（`syncHitRangeToggle()` 恒 `disabled=false`，
+    见 `修改记录-归档.md`「虚线指示限制解除」），旧断言仍在要求"禁用"。已改为断言"恒可用"。
+- 以后若出现失败，先判断是**产品回归**还是**用例过期**（对照 `修改记录.md` / 归档里的
+  需求变更），不要直接把"既有失败"当成可接受基线写进记录。
+- `npm run test:ver` 12 项全绿（版本副本一致）。
 - `npm run test:sync` 引擎镜像字节一致。
 - 布局改动必须过 320 / 360 / 390 / 430 / 768 / 1280 六档实测：无横向滚动、无出界、无文字裁切。
 
@@ -79,7 +85,7 @@
 | `server.js` | 本地联机 WebSocket + 静态服务（**双端之一**） |
 | `src/room-core.js` · `src/room.js` · `src/index.js` | Cloudflare DO 房间逻辑（**双端之二**） |
 | `public/_worker.js` | Pages 高级模式：静态资源 + WS 转发到 DO |
-| `test/` | 32 项测试，见 `package.json` 的 `test:all` |
+| `test/` | 31 项测试（+ 引擎镜像校验 = 32 段），见 `package.json` 的 `test:all` |
 | `tools/set-version.js` · `tools/autosync.js` · `tools/check-engine-sync.js` | 版本 / 同步 / 镜像校验 |
 | `android/` | APK 构建（`build.cmd`）+ `assets/www` 资产副本 |
 
@@ -103,4 +109,4 @@
 - [ ] `sw.js` 缓存名跟着版本走了吗？
 - [ ] 布局改动跑了六档实测吗？首屏零滚动吗？
 - [ ] 这次改动有没有越界碰到玩法参数？
-- [ ] 两项既有失败之外，有没有新增失败？
+- [ ] `npm run test:all` 是否 31 项全过（零失败）？若有失败，是产品回归还是用例过期？

@@ -340,12 +340,15 @@ async function main() {
     await sleep(2400); // 等对局开场渲染结束（introActive 释放物理冻结）再进入后续用例
     check('本地模式已启动', t.app.mode === 'local' && !!t.app.engine);
     check('判定范围虚线默认关闭', t.app.showHitRanges === false);
-    check('虚线未解锁（未击败困难）：设置勾选框禁用', t.elements.get('setShowHitRanges').disabled === true);
+    // v2.7.2 起虚线限制已解除（state.js syncHitRangeToggle 恒 disabled=false，
+    // 见 修改记录-归档「虚线指示限制解除：所有人可自由开关」）——未通关困难也可开关。
+    check('虚线限制已解除（v2.7.2）：未击败困难也可开关，勾选框可用',
+      t.elements.get('setShowHitRanges').disabled === false);
     t.runFrames(3);
     check('默认关闭：左上角判定面板隐藏', t.elements.get('hitRangeInfo').style.display === 'none');
-    // 设置面板：通关困难解锁虚线后 → 开启 → 立即生效；再关闭
-    t.ppd.unlockHell(); // 击败困难 → 解锁地狱与判定范围虚线
-    check('虚线解锁后：设置勾选框可用', t.elements.get('setShowHitRanges').disabled === false);
+    // 设置面板：开启虚线 → 立即生效；再关闭（解锁态不再是前提，v2.7.2）
+    t.ppd.unlockHell(); // 击败困难 → 解锁地狱（虚线早已不依赖它）
+    check('通关困难后：设置勾选框仍可用', t.elements.get('setShowHitRanges').disabled === false);
     t.elements.get('btnSettings').dispatch('click', {});
     check('设置面板打开', t.elements.get('settingsPanel').style.display !== 'none');
     t.elements.get('setShowHitRanges').checked = true;
@@ -1114,14 +1117,16 @@ async function main() {
       }),
     });
     check('启动：localStorage 被清（初始未解锁）', t.ppd.isHellUnlocked() === false && t.ppd.isHellCleared() === false);
-    check('解锁前：虚线勾选框禁用', t.elements.get('setShowHitRanges').disabled === true);
+    // v2.7.2 起虚线不再需要解锁：初始即可用，与通关状态无关（此处只验「不被锁」）
+    check('虚线勾选框恒可用（v2.7.2 解除限制，与解锁态无关）',
+      t.elements.get('setShowHitRanges').disabled === false);
     await sleep(10); // 等待 syncUnlocksFromRecords 异步完成
     check('记录含困难获胜 → 地狱解锁', t.ppd.isHellUnlocked() === true);
     check('记录含地狱获胜 → 地狱通关', t.ppd.isHellCleared() === true);
     const opts = ['aiLevel', 'aiLevelA', 'aiLevelB', 'pauseAiLevelA', 'pauseAiLevelB']
       .map((id) => t.elements.get(id).querySelector('option[value="3"]'));
     check('解锁后：5 个难度下拉全部可用', opts.every((o) => o.disabled === false));
-    check('解锁后：虚线勾选框可用（击败困难同步解锁）', t.elements.get('setShowHitRanges').disabled === false);
+    check('解锁后：虚线勾选框仍可用', t.elements.get('setShowHitRanges').disabled === false);
   }
 
   // ---------- 2.76 手机端（file:// 安卓版）个人生涯：本地优先存 localStorage，无需后端 ----------

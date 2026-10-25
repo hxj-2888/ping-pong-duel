@@ -43,3 +43,7 @@ android/release.keystore.old-*
 
 # 移动端布局截图（本地人工复核产物）
 .tmp_pp/
+
+# 本地提交信息临时文件（勿入库）
+commit-msg.tmp.txt
+

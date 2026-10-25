@@ -415,18 +415,30 @@ const DT = 1 / 120;
   const e = TT.createEngine();
   const p = e.players[0];
   const TW = R.TABLE_WIDTH / 2, TL = R.TABLE_LENGTH / 2;
+  // 本组只验「移动边界」，必须在**对打相**里跑：
+  // v2.7.0 起发球相有 SERVE_Z_SAFE 站位钳制（发球方持球期间身体钳到 |z|≥1.25，
+  // 否则解不出合法发球、持球点越网）。默认引擎开局即 serve 相，长时间按方向键会
+  // 先打完一分再回到 serve，从而被钳到 z=-1.25 —— 那不是移动边界的问题。
+  // 这里显式置 play 相并每帧维持（球留在手里=不触发判分，相位就不会跳）。
+  const holdPlay = () => {
+    e.phase = 'play';
+    e.ball.inHand = false;
+    e.ball.pos.y = 1.5;        // 抬高球：落地判分不会插进来
+    e.ball.vel = { x: 0, y: 0, z: 0 };
+  };
   // 台面中间：向前最多走到台面端线（含身体余量）
   p.x = 0; p.padX = 0; p.z = -1.5;
-  for (let i = 0; i < 300; i++) { TT.setInput(e, 0, { f: 1 }); TT.step(e, DT); }
+  for (let i = 0; i < 300; i++) { holdPlay(); TT.setInput(e, 0, { f: 1 }); TT.step(e, DT); }
   check('台面中间向前止步于台面端线（含身体余量）', Math.abs(p.z + TL + R.PLAYER_BODY_D) < 0.02);
   // 台面外侧：可以一直走到球网线
   p.x = 1.2; p.padX = 1.38; p.z = -1.37;
-  for (let i = 0; i < 300; i++) { TT.setInput(e, 0, { f: 1 }); TT.step(e, DT); }
+  for (let i = 0; i < 300; i++) { holdPlay(); TT.setInput(e, 0, { f: 1 }); TT.step(e, DT); }
   check('台面外侧可走到球网线（己方半场）', p.z > -0.2 && p.z <= -0.05);
   // 侧面切回台面宽度内：应贴边平滑滑动，而不是被“赶回”端线
   let maxJump = 0;
   for (let i = 0; i < 120; i++) {
     const z0 = p.z;
+    holdPlay();
     TT.setInput(e, 0, { l: 1 });
     TT.step(e, DT);
     maxJump = Math.max(maxJump, Math.abs(p.z - z0));
