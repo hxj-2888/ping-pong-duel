@@ -9,13 +9,7 @@
   let ctx = null;
   let master = null;
   let noiseBuf = null;
-  // 〔2026-10-25 音效双轨〕sfxStyle: 'synth'（默认，WebAudio 合成，原设计）| '8bit'（CC0 采样）
-  // 采样来自 OpenGameArt「3 Ping Pong Sounds 8 bit style」by captaincrunch80（CC0，audio/*.ogg）。
-  // 解码失败（file:// 下 fetch 被拦等）自动回落合成，不打断游戏。
-  let sfxStyle = 'synth';
-  try { sfxStyle = localStorage.getItem('ppd_sfx_style') === '8bit' ? '8bit' : 'synth'; } catch (e) { /* ignore */ }
-  let samples = null;
-  let samplesTried = false;
+
   // 音效开关（设置面板，localStorage 持久化）：muted=true 时游戏音效静音
   let muted = false;
   try { muted = typeof localStorage !== 'undefined' && localStorage.getItem('ppd_sound_on') === '0'; } catch (e) { /* ignore */ }
@@ -194,28 +188,8 @@
 
   // （原体育赛事风格合成音乐已移除，背景音乐仅使用真实音频 audio/music.mp4）
 
-  function loadSamples() {
-    if (samplesTried || !ctx || typeof fetch !== 'function') return;
-    samplesTried = true;
-    const files = { plop: 'audio/ping_pong_8bit_plop.ogg', beeep: 'audio/ping_pong_8bit_beeep.ogg', peep: 'audio/ping_pong_8bit_peeeeeep.ogg' };
-    samples = {};
-    Object.keys(files).forEach((k) => {
-      fetch(files[k]).then((r) => r.arrayBuffer()).then((ab) => new Promise((res, rej) => {
-        ctx.decodeAudioData(ab, res, rej);
-      })).then((buf) => { samples[k] = buf; }).catch(() => { samples[k] = null; });
-    });
-  }
-  function playSample(name) {
-    if (sfxStyle !== '8bit' || muted || !ctx || !samples || !samples[name]) return false;
-    const src = ctx.createBufferSource();
-    src.buffer = samples[name];
-    src.connect(master);
-    src.start();
-    return true;
-  }
   function ensure() {
     loadBGM(); // raw 音乐挂接（元素兜底 + ctx 就绪时触发 WebAudio 解码）
-    loadSamples();
     if (ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -429,20 +403,14 @@
     setMusicOn, isMusicOn() { return musicOn; },
     setMusicVol, getMusicVol() { return musicVol; },
     setSfxVol, getSfxVol() { return sfxVol; },
-    setSfxStyle(v) {
-      sfxStyle = v === '8bit' ? '8bit' : 'synth';
-      try { localStorage.setItem('ppd_sfx_style', sfxStyle); } catch (e) { /* ignore */ }
-      if (sfxStyle === '8bit') loadSamples();
-      return sfxStyle;
-    },
-    getSfxStyle() { return sfxStyle; },
+
     musicMode, bgmPath, bgmInfo, // musicMode 恒为 'raw'；bgmPath: buffer/element/none
     setIntensity,
-    hit() { if (playSample('plop')) return; noise(0.06, 0.35, 1800); tone(260, 0.07, 'square', 0.12, 90); },
-    bounce() { if (playSample('plop')) return; tone(420, 0.045, 'sine', 0.18, 240); },
+    hit() { noise(0.06, 0.35, 1800); tone(260, 0.07, 'square', 0.12, 90); },
+    bounce() { tone(420, 0.045, 'sine', 0.18, 240); },
     ready() { tone(880, 0.06, 'sine', 0.10, 1320); }, // 进箱提示：柔和短上升音（判定范围显示开启时）
-    net() { if (playSample('peep')) return; noise(0.08, 0.3, 500); tone(120, 0.1, 'triangle', 0.2, 60); },
-    serve() { if (playSample('beeep')) return; noise(0.16, 0.2, 900); },
+    net() { noise(0.08, 0.3, 500); tone(120, 0.1, 'triangle', 0.2, 60); },
+    serve() { noise(0.16, 0.2, 900); },
     shutter() { noise(0.09, 0.4, 2600); tone(1500, 0.05, 'square', 0.12, 500); }, // P2 转场「纸张拨开」快门音
     fault() { tone(200, 0.22, 'sawtooth', 0.12, 120); },
     score() { tone(660, 0.12, 'sine', 0.2); setTimeout(() => tone(880, 0.18, 'sine', 0.2), 90); },

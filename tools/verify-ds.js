@@ -135,9 +135,9 @@ console.log('foot-danger 数量:', dangerCount, '(全部洗点 / 退出比赛)')
 console.log('\n=== 8. E2/E3 统一控件 ===');
 console.log('积分胶囊:', (html.match(/points-capsule/g) || []).length, '(训练 + 战功 = 2)');
 // 分段选择器宿主：画质 + 帧率 + 球员弹层难度 = 3（P1：推演甲/乙直开不再有独立宿主）
-console.log('分段选择器宿主:', (html.match(/segmented-host/g) || []).length, '(画质 + 帧率 + 弹层难度 + 图标风格 + 音效风格 = 5)');
-// 原生 select/input 保留并隐藏：难度(3) + 队伍(4) + 画质 + 帧率 + 图标风格 + 音效风格 + joinInput(联机四框宿主) = 12
-console.log('原生 select/input 保留并隐藏:', (html.match(/class="visually-hidden"/g) || []).length, '(应为 12)');
+console.log('分段选择器宿主:', (html.match(/segmented-host/g) || []).length, '(画质 + 帧率 + 弹层难度 + 图标风格 = 4)');
+// 原生 select/input 保留并隐藏：难度(3) + 队伍(4) + 画质 + 帧率 + 图标风格 + joinInput(联机四框宿主) = 11
+console.log('原生 select/input 保留并隐藏:', (html.match(/class="visually-hidden"/g) || []).length, '(应为 11)');
 
 console.log('\n=== 14. 图标双轨（2026-10-25）：原设计 ↔ game-icons 图标库 ===');
 console.log('data-icon 容器:', (html.match(/data-icon="/g) || []).length, '(铭牌 6 + 哨子 3 + 设置 1 = 10)');
@@ -145,8 +145,8 @@ console.log('icons.js 模块（ALT 双轨 + 切换 API）:', /ALT\s*=\s*\{/.test
 console.log('设置面板图标风格分段:', /id="iconStyle"/.test(html) && /data-segmented-for="iconStyle"/.test(html));
 console.log('alt 风格 CSS 覆盖:', /data-icon-style="alt"\] \[data-icon\] svg/.test(css));
 console.log('署名归档（CC BY 3.0）:', fs.existsSync(path.join(ROOT, 'docs/ICON-CREDITS.md')) && fs.existsSync(path.join(ROOT, 'docs/ICON-LICENSE.txt')));
-console.log('音效双轨（合成/8-bit 采样）:', /setSfxStyle/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/audio.js'), 'utf8')) && /id="sfxStyle"/.test(html) && fs.existsSync(path.join(ROOT, 'public/audio/ping_pong_8bit_plop.ogg')));
-console.log('采样文件 CC0（3 个 ogg）:', ['plop','beeep','peeeeeep'].every((n) => fs.existsSync(path.join(ROOT, 'public/audio/ping_pong_8bit_' + n + '.ogg'))));
+console.log('游戏 UI 无素材出处字样（MIT，项目级注明）:', !/game-icons|CC0|CC BY|opengameart|captaincrunch80/i.test(html.replace(/<!--[\s\S]*?-->/g, '')));
+console.log('8-bit 采样已拔除（文件/代码无残留）:', !fs.existsSync(path.join(ROOT, 'public/audio/ping_pong_8bit_plop.ogg')) && !/loadSamples|playSample|setSfxStyle/.test(require('fs').readFileSync(path.join(ROOT, 'public/js/audio.js'), 'utf8')));
 // P1-b 战功合并页：三标签（战斗奖励 + 生涯战绩 + 历史回放）
 console.log('战功页三标签:', /id="btnHonorsReward"/.test(html) && /id="btnCareerTab"/.test(html) &&
   /id="btnHistoryTab"/.test(html) && /id="honorsRewardTab"/.test(html));

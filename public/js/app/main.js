@@ -533,14 +533,7 @@
   PPD.ui.btnSettings.addEventListener('click', openSettings);
   PPD.ui.btnSettingsGame.addEventListener('click', openSettings);
   PPD.ui.btnSettingsClose.addEventListener('click', () => { PPD.GameAudio.ui(); closeSettings(); });
-  // 〔2026-10-25〕音效风格双轨：合成（原设计）/ 8-bit 采样（CC0），即时生效 + 本地记忆
-  if (PPD.ui.sfxStyle) {
-    PPD.ui.sfxStyle.value = PPD.GameAudio.getSfxStyle ? PPD.GameAudio.getSfxStyle() : 'synth';
-    PPD.ui.sfxStyle.addEventListener('change', () => {
-      const v = PPD.GameAudio.setSfxStyle ? PPD.GameAudio.setSfxStyle(PPD.ui.sfxStyle.value) : 'synth';
-      PPD.setStatus('音效风格：' + (v === '8bit' ? '8-bit 采样（CC0 · captaincrunch80）' : '合成音效（原设计）'));
-    });
-  }
+
   // 判定范围虚线：局内随时可关（设置面板开关，立即生效 + 本地记忆）
   PPD.ui.setShowHitRanges.addEventListener('change', () => {
     PPD.app.showHitRanges = PPD.ui.setShowHitRanges.checked;
