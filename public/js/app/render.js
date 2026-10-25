@@ -222,7 +222,7 @@
         sb: p.swingBack,
         crouch: p.crouch,  // 蹲下（Ctrl）：渲染层画蹲姿
         run: p.run,        // 跑步（Shift）
-        // v2.1 特效分离：装扮仅尾影/溅射特效，球衣与拍面主色恒=队服（旗帜队色），不再注入 paddleSkin/shirtSkin
+        // v2.1 特效分离：战斗奖励仅尾影/溅射特效，球衣与拍面主色恒=队服（旗帜队色），不再注入 paddleSkin/shirtSkin
         // 队伍旗帜队色（本地/人机/AI 观战按本局队伍注入，随旗帜同步球服颜色；联机无 matchTeams → 默认红蓝）
         teamColor: (PPD.app.matchTeams && PPD.app.matchTeams[p.side]) ? PPD.app.matchTeams[p.side].color : null,
         // 问号(扣杀/低平预警)仅在判定指示开启时显示；感叹号(反击成功)始终显示(v2.0)
@@ -275,7 +275,7 @@
       sb: p.sb,
       crouch: safeNum(p.cq, 0),  // 蹲下（Ctrl）：渲染层画蹲姿
       run: safeNum(p.rn, 0),     // 跑步（Shift）
-      // v2.1 特效分离：装扮仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
+      // v2.1 特效分离：战斗奖励仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
     }));
     let ball = null, ballInHand = null;
     if (snap.b) {
@@ -342,7 +342,7 @@
         // 蹲下/跑步钳制 0~1：alpha 负外推（时钟略落后于上一快照）时防止状态值越界
         crouch: Math.max(0, Math.min(1, lerp(a.cq != null ? a.cq : 0, p.cq))),
         run: Math.max(0, Math.min(1, lerp(a.rn != null ? a.rn : 0, p.rn))),
-        // v2.1 特效分离：装扮仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
+        // v2.1 特效分离：战斗奖励仅尾影/溅射，球衣与拍面恒=队服；联机无队伍，默认红蓝
       };
     });
     let ball = null, ballInHand = null;

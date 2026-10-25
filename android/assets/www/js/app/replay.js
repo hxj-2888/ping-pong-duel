@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
  * app/replay.js — 赛后回放：录制 / 本地存储 / 播放 / 视频导出
  *
  * 设计：
@@ -719,7 +719,7 @@
   const historySelected = new Set();
 
   // 战功合并页标签切换（P1-b）：'reward'=战斗奖励 / 'career'=生涯战绩 / 'history'=历史回放
-  // （高亮 + 显隐标签体；reward 为原装扮奖励页，career/history 原样并入）
+  // （高亮 + 显隐标签体；reward = 战功系统·战斗奖励，career/history 原样并入）
   function showTab(name) {
     if (!PPD || !PPD.ui) return;
     const isHist = name === 'history';
@@ -1089,7 +1089,7 @@
         showCareerTab();
       });
     }
-    // P1-b 战功合并页：战斗奖励标签（原装扮奖励内容）
+    // P1-b 战功合并页：战斗奖励标签（尾影/撞击特效兑换 + 奖励方案）
     if (PPD.ui.btnHonorsReward) {
       PPD.ui.btnHonorsReward.addEventListener('click', () => {
         if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();

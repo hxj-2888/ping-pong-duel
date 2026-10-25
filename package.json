@@ -1,7 +1,7 @@
 {
   "name": "ping-pong-duel",
-  "version": "3.4.2",
-  "androidVersionCode": 34,
+  "version": "3.5.0",
+  "androidVersionCode": 35,
   "description": "双人联机乒乓球游戏 · ITTF 标准尺寸 · 火柴人物理骨架 · 观众席欢呼 · 发球瞄准/跑步/蹲下 · 零依赖",
   "main": "server.js",
   "scripts": {
@@ -22,7 +22,8 @@
     "dev:room": "wrangler dev --config wrangler.room.toml",
     "dev:pages": "wrangler pages dev public",
     "preview": "node tools/shot.js",
-    "probe:mobile": "node tools/pp-probe.cjs"
+    "probe:mobile": "node tools/pp-probe.cjs",
+    "record:demo": "node tools/record-demo.cjs"
   },
   "license": "MIT"
 }

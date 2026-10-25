@@ -216,7 +216,7 @@
     const add = (d, fn) => parts.push({ d, fn });
     const dAt = (p) => cam.depth(p);
     const col = STICK[pl.side];
-    // 队服（app/teams.js 按本局双方队伍注入）：球衣与拍面主色恒=旗帜队色，装扮不可覆盖（特效分离 v2.1）
+    // 队服（app/teams.js 按本局双方队伍注入）：球衣与拍面主色恒=旗帜队色，战斗奖励不可覆盖（特效分离 v2.1）
     const teamCol = pl.teamColor || col.shirt;
     const shirtCol = teamCol;
     const lineR = 0.042; // 骨线粗（加粗圆头）
@@ -304,7 +304,7 @@
         const size = R.BLADE_WID * q.s * 1.15;
         ctx.save();
         ctx.translate(q.x, q.y);
-        ctx.fillStyle = pl.teamColor || col.paddleFace; // 拍面主色恒=队服（旗帜队色，装扮不覆盖 v2.1）
+        ctx.fillStyle = pl.teamColor || col.paddleFace; // 拍面主色恒=队服（旗帜队色，战斗奖励不覆盖 v2.1）
         ctx.strokeStyle = 'rgba(15,20,30,0.65)';
         ctx.lineWidth = Math.max(1, size * 0.045);
         ctx.beginPath();

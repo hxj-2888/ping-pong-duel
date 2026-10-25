@@ -153,7 +153,7 @@
 
     <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
     <div class="row apk-row">
-      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v342.apk" download="PingPongDuel-v342.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v350.apk" download="PingPongDuel-v350.apk" style="display:none">📱 下载安卓版（直接安装）</a>
       <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
     </div>
   </div>
@@ -577,7 +577,8 @@
     </div>
   </div>
 
-  <!-- 战功系统（P1-b 合并页：战斗奖励 + 生涯战绩 + 历史回放 三标签；原 careerPanel 整体并入，奖励页承接原装扮内容） -->
+  <!-- 战功系统（P1-b 合并页：战斗奖励 + 生涯战绩 + 历史回放 三标签；原 careerPanel 整体并入，
+       奖励页承接原装扮页的特效兑换内容。对外文案统一「战功系统」，内部 id 仍沿用 dressup* 契约） -->
   <div id="dressupPanel" class="career-panel pure-panel" style="display:none">
     <div class="career-card shell-card">
       <div class="career-header shell-head">
@@ -596,15 +597,15 @@
         <button id="btnHistoryTab" class="career-tab-btn" type="button">历史回放</button>
       </div>
       <div class="shell-body">
-        <!-- 战斗奖励（原装扮：特效兑换 + 方案；生涯与回放数据在另两个标签） -->
+        <!-- 战斗奖励（尾影/溅射特效兑换 + 奖励方案；生涯与回放数据在另两个标签） -->
         <div id="honorsRewardTab" class="career-tab-body">
           <div id="dressupList" class="training-list"></div>
-          <!-- 方案区：独立底部卡片，与上方装扮列表以 1px 分隔线区隔 -->
+          <!-- 方案区：独立底部卡片，与上方奖励列表以 1px 分隔线区隔 -->
           <div class="plan-section">
-            <h3 class="training-h sticky-group">装扮方案（每类选一组合，至多 8 个）</h3>
+            <h3 class="training-h sticky-group">奖励方案（每类选一组合，至多 8 个）</h3>
             <div class="plan-form">
               <input id="planNameInput" type="text" maxlength="12" placeholder="方案名（如：火焰橙）">
-              <button id="btnPlanSave" class="btn small">保存当前装扮为方案</button>
+              <button id="btnPlanSave" class="btn small">保存当前奖励为方案</button>
             </div>
             <div id="planList" class="training-list"></div>
           </div>

@@ -6,16 +6,10 @@
   'use strict';
 
   // ---------- 菜单事件 ----------
-  // P1 场景化主页：本地双人开局由右通道「本地对战」选中 + 哨子承担（app/home.js），
-  // 原 btnLocal 独立按钮已随旧主页退役。
-  if (PPD.ui.btnEndless) {
-    PPD.ui.btnEndless.addEventListener('click', () => {
-      PPD.GameAudio.ensure();
-      PPD.GameAudio.ui();
-      openEndlessPanel();
-    });
-  }
-  // ---------- 联机框（主页「联机对战」入口，等同新开页面） ----------
+  // P1 场景化主页：模式选择与开局全部由 app/home.js 承担——
+  //   右三通道（本地对战 / 联机对战 / 无尽挑战）选中模式，哨子按所选模式开局。
+  // 原 btnLocal / btnEndless / btnNetEntry 独立按钮已随旧主页退役，此处不再绑定。
+  // ---------- 联机框（主页「联机对战」通道门，等同新开页面） ----------
   if (PPD.ui.btnNetEntry) {
     PPD.ui.btnNetEntry.addEventListener('click', () => {
       PPD.GameAudio.ensure();
@@ -96,82 +90,13 @@
   PPD.closeNetPanel = closeNetPanel;
   PPD.refreshNetModeBtn = refreshNetModeBtn; // home.js 通道门打开时同步 本地/公网 按钮态
 
-  // ---------- 一级主行动按钮（G1/G3）：无战局保留系统，用“快速开始” ----------
-  // 动态摘要实时显示当前局前配置（模式 · 我方 vs 敌方 · 难度），随快速开始卡片内的配置联动。
-  // 点击按卡片内当前难度 + 配色直接开局，不弹二次难度弹窗。
-  function setupConfigSummary() {
-    // 队名优先取自定义队名（限 6 字），空则回落到该队的默认名（与 teams.js 的槽位逻辑一致）
-    function teamLabel(nameInput, sel) {
-      const typed = nameInput && typeof nameInput.value === 'string' ? nameInput.value.trim() : '';
-      if (typed) return typed;
-      if (sel && sel.options && sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]) {
-        return String(sel.options[sel.selectedIndex].textContent || '').trim();
-      }
-      return '';
-    }
-    const me = teamLabel(PPD.ui.teamMeName, PPD.ui.teamMe);
-    const opp = teamLabel(PPD.ui.teamOppName, PPD.ui.teamOpp);
-    // 难度文案：按 value 找对应 option（比 selectedIndex 稳，程序化回填 value 也能取到），
-    // 文字去掉「（…解锁）」补充与锁标记，只留档位名
-    let diff = '';
-    const sel = PPD.ui.aiLevel;
-    if (sel && sel.options) {
-      const opt = Array.prototype.slice.call(sel.options)
-        .find((o) => String(o.value) === String(sel.value));
-      if (opt) diff = String(opt.textContent || '').replace(/（[^）]*）/g, '').replace(/🔒/g, '').trim();
-    }
-    if (!diff && PPD.AIC && PPD.AIC.levelName) {
-      try { diff = PPD.AIC.levelName(sel ? sel.value : '1'); } catch (e) { /* ignore */ }
-    }
-    return { me: me || '我的队伍', opp: opp || '电脑', diff: diff || '中等' };
-  }
-  function refreshPrimaryAction() {
-    if (!PPD.ui.primaryActionText) return;
-    // G1：固定为“快速开始”——不使用暗示存档的“继续/恢复/载入”措辞
-    PPD.ui.primaryActionText.textContent = '快速开始';
-    if (PPD.ui.quickSummary) {
-      const c = setupConfigSummary();
-      PPD.ui.quickSummary.textContent = '常规单机 · ' + c.me + ' vs ' + c.opp + ' · ' + c.diff;
-    }
-  }
-  if (PPD.ui.btnPrimaryAction) {
-    PPD.ui.btnPrimaryAction.addEventListener('click', () => {
-      PPD.GameAudio.ensure();
-      PPD.GameAudio.ui();
-      PPD.startAI(); // 直接使用当前局前配置开局，不跳二次确认页
-    });
-  }
-
-  // 卡片内任一配置变化（难度 / 双方队伍下拉 / 双方队名）都实时刷新摘要：
-  // 摘要、分段控件与开局参数同读一份 state，不存在第二处配置来源。
-  [PPD.ui.aiLevel, PPD.ui.teamMe, PPD.ui.teamMeName,
-    PPD.ui.teamOpp, PPD.ui.teamOppName].forEach((el) => {
-    if (!el || !el.addEventListener) return;
-    const sync = () => refreshPrimaryAction();
-    el.addEventListener('change', sync);
-    el.addEventListener('input', sync);
-  });
-  refreshPrimaryAction();
-
-  // 首屏宫格（竖屏 2×2）：入口数为奇数时标记最后一个，让它占满整行避免半行空位
-  const MENU_GRID_CELLS = ['btnLocal', 'btnAIVsAI', 'btnTraining', 'btnDressup', 'btnEndless'];
-  function syncMenuGridLast() {
-    const cells = [];
-    for (const id of MENU_GRID_CELLS) {
-      const el = PPD.$id(id);
-      if (el) cells.push(el);
-    }
-    if (!cells.length) return;
-    let n = 0, last = null;
-    for (const el of cells) {
-      if (el.removeAttribute) el.removeAttribute('data-grid-last');
-      const hidden = !!(el.style && el.style.display === 'none') || el.hidden === true;
-      if (!hidden) { n++; last = el; }
-    }
-    // 偶数个入口正好排满 2 列，不需要通栏；奇数个才让最后一个占满整行
-    if (n % 2 === 1 && last && last.setAttribute) last.setAttribute('data-grid-last', '1');
-  }
-  PPD.refreshPrimaryAction = refreshPrimaryAction;
+  // ---------- 旧主页残留已清（2026-10-25 审查） ----------
+  // P1 场景化主页替换掉的那批入口在这里彻底移除，不再留「查不到宿主元素所以静默不生效」
+  // 的半死代码：快速开始卡片（btnPrimaryAction / quickSummary / setupConfigSummary /
+  // refreshPrimaryAction）、首屏宫格末位标记（MENU_GRID_CELLS / syncMenuGridLast，
+  // 对应 CSS .menu-card > .btn-group > .btn[data-grid-last] 一并删除）、
+  // 无尽人机关卡页（endlessPanel / endlessList / btnEndlessBack，关卡改在对方球员弹层里选）。
+  // 开局入口现在是：右三通道选模式 + 哨子（app/home.js）。
 
   // ---------- E3 统一控件 ----------
   // ② 滑条：把当前值写进 --val，驱动轨道“左侧主色填充 / 右侧 20% 白”
@@ -283,14 +208,13 @@
   buildSegmented();
   PPD.buildSegmented = buildSegmented;
 
-  // ---------- 无尽人机：主页入口 / 关卡页 / AI 观战动态选项 ----------
+  // ---------- 无尽人机：入口解锁态 / AI 观战动态选项 ----------
   function refreshAIEntries() {
-    // 无尽人机入口：通关地狱后解锁；常规单机唯一入口是快速开始卡片，不再有第二个入口
-    if (PPD.ui.btnEndless) PPD.show(PPD.ui.btnEndless, PPD.isHellCleared());
-    refreshPrimaryAction();
-    syncMenuGridLast();   // 无尽人机入口显隐会改变宫格末位，需重算
+    // 无尽通道的解锁态由 app/home.js 的 refreshLocks 管（置灰 + 🔒，点击提示解锁条件）；
+    // 关卡选择在「对方球员」弹层里（app/home.js renderEndlessList），此页已无独立关卡页。
+    if (PPD.Home && PPD.Home.refreshLocks) PPD.Home.refreshLocks();
   }
-  syncMenuGridLast();
+  refreshAIEntries();
 
   function syncEndlessAIOptions() {
     const hell = PPD.isHellCleared();
@@ -319,56 +243,10 @@
     refreshSegmented();
   }
 
-  function renderEndlessPanel() {
-    const list = PPD.ui.endlessList;
-    if (!list) return;
-    const highest = PPD.getEndlessHighest ? PPD.getEndlessHighest() : 0;
-    const maxLevel = highest + 1;
-    const parts = [];
-    for (let n = 1; n <= maxLevel; n++) {
-      parts.push(`<button type="button" class="btn endless-level" data-level="${n}">无尽-${n} 挑战</button>`);
-    }
-    list.innerHTML = parts.length
-      ? parts.join('')
-      : '<div class="career-empty">请先通关地狱模式解锁无尽人机</div>';
-  }
-
-  function openEndlessPanel() {
-    if (!PPD.isHellCleared()) {
-      PPD.setStatus('请先通关地狱模式');
-      return;
-    }
-    renderEndlessPanel();
-    PPD.show(PPD.ui.endlessPanel, true);
-    PPD.show(PPD.ui.menu, false);
-    PPD.show(PPD.ui.netPanel, false);
-    PPD.show(PPD.ui.netWait, false);
-  }
-
-  function closeEndlessPanel() {
-    PPD.show(PPD.ui.endlessPanel, false);
-    PPD.show(PPD.ui.menu, true);
-  }
-
-  if (PPD.ui.endlessList) {
-    PPD.ui.endlessList.addEventListener('click', (e) => {
-      const btn = e.target && e.target.closest ? e.target.closest('.endless-level') : null;
-      if (btn && btn.dataset && btn.dataset.level) {
-        if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();
-        PPD.startEndless(parseInt(btn.dataset.level, 10) || 1);
-      }
-    });
-  }
-  if (PPD.ui.btnEndlessBack) {
-    PPD.ui.btnEndlessBack.addEventListener('click', () => {
-      if (PPD.GameAudio && PPD.GameAudio.ui) PPD.GameAudio.ui();
-      closeEndlessPanel();
-    });
-  }
   PPD.refreshAIEntries = refreshAIEntries;
   PPD.syncEndlessAIOptions = syncEndlessAIOptions;
-  PPD.openEndlessPanel = openEndlessPanel;
-  PPD.closeEndlessPanel = closeEndlessPanel;
+
+
 
   if (PPD.ui.btnNetBack) {
     PPD.ui.btnNetBack.addEventListener('click', () => {
@@ -596,8 +474,8 @@
     if (PPD.ui.apkHelpLink) PPD.show(PPD.ui.apkHelpLink, true); // 百度/微信等浏览器下载被拦时，引导到下载帮助页
   }
 
-  // 手机端：隐藏「本地双人（分屏）」入口（v1.6 取消手机分屏作战，需求 11；电脑端本地双人保留）
-  if (PPD.ui.btnLocal && PPD.isTouch) PPD.show(PPD.ui.btnLocal, false);
+  // 手机端不提供本地双人（分屏）——v1.6 起取消手机分屏作战（需求 11）。
+  // 主页的「本地对战」通道在触屏设备上同样按此规则隐藏，入口见 app/home.js / CSS 断点。
 
   // ---------- 说明书（独立全屏页面，等同新开页面；主页通用说明已全部移除） ----------
   // 平台分流：打开时按设备过滤胶囊（data-platform=pc/mobile/both）
@@ -713,12 +591,12 @@
   PPD.refreshAIEntries();
   // 背景音乐：页面打开即播（浏览器自动播放策略拦截时，首次交互立即恢复出声）
   PPD.GameAudio.autoplayMusic();
-  // 通关记录：进入主菜单时拉取后端并渲染（失败静默）
-  if (PPD.refreshRecords) PPD.refreshRecords();
+  // 解锁判定兜底：从持久化记录推导地狱解锁/通关（localStorage 被清也不会上锁）
+  // 注：主页仪表块退役后，战绩不再需要「进主页就拉一次」——它只在打开
+  // 战功系统 · 生涯战绩 标签时按需拉取（app/records.js openCareer），这里只做解锁推导。
+  if (PPD.syncUnlocksFromRecords) PPD.syncUnlocksFromRecords();
   // 养成系统：进入主菜单时刷新积分余额（网页版自动隐藏，v1.8.0）
   if (PPD.refreshPoints) PPD.refreshPoints();
-  // 解锁判定兜底：从持久化记录推导地狱解锁/通关（localStorage 被清也不会上锁）
-  if (PPD.syncUnlocksFromRecords) PPD.syncUnlocksFromRecords();
   // 设置面板版本号（与 package.json / AndroidManifest 一致，单一来源 PPD.app.version）
   if (PPD.ui.appVersion) PPD.ui.appVersion.textContent = 'v' + (PPD.app.version || '');
   // 调试：?auto=ai 自动进入人机对战（便于截图/自动化验证）

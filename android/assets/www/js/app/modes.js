@@ -134,9 +134,10 @@
     PPD.show(PPD.ui.menu, true);
     PPD.show(PPD.ui.netPanel, false);
     PPD.show(PPD.ui.netWait, false);
-    PPD.show(PPD.ui.endlessPanel, false);
     PPD.showTouch(false);
-    if (PPD.refreshRecords) PPD.refreshRecords(); // 个人生涯：返回主页时刷新
+    // 战绩不再在回主页时拉取（主页仪表块已退役）：打开「战功系统 · 生涯战绩」标签时才拉，
+    // 这里只重算解锁态，保证刚打完的那一局立刻反映到地狱/无尽通道的锁态上。
+    if (PPD.syncUnlocksFromRecords) PPD.syncUnlocksFromRecords();
   }
 
   function startOnlineGame(side) {
@@ -295,7 +296,6 @@
     PPD.app.lastPhase = -1;
     PPD.app.lastEventKeys.clear();
     PPD.AIC.reset();
-    PPD.show(PPD.ui.endlessPanel, false);
     PPD.show(PPD.ui.menu, false);
     PPD.show(PPD.ui.gameScreen, true);
     PPD.show(PPD.ui.overlay, false);

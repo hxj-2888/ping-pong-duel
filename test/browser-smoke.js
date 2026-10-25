@@ -137,7 +137,7 @@ const ELEMENT_IDS = [
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
   'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/60/无上限)
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
-  'dressupPanel', 'btnDressupBack',
+  'dressupPanel', 'btnDressupBack', 'btnDressup', // 战功系统页（入口 btnDressup 的网页版置灰态在 2.7 段断言）
   'honorsRewardTab', 'btnHonorsReward', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', // 战功合并页（P1-b：战斗奖励 + 生涯战绩 + 历史回放）
   'careerTab', 'btnCareerTab', 'btnHistoryTab', // 合并页标签（生涯战绩 / 历史回放 / 战斗奖励）
   'historyPanel', 'historyList', // 历史回放标签体（并入战功页）
@@ -1148,6 +1148,34 @@ async function main() {
     check('网页版：生涯入口显示「探索中」', t.elements.get('overlay').style.display !== 'none' &&
       t.elements.get('overlayTitle').textContent.indexOf('探索中') !== -1);
     t.elements.get('overlayBtn').dispatch('click', {});
+    // 战功系统（2026-10-25）：入口置灰但不抹除，点开只弹「战功系统 · 探索中」（不再是「装扮系统」）
+    const btnD = t.elements.get('btnDressup');
+    check('网页版：战功系统入口仍存在（未抹除）', !!btnD);
+    check('网页版：战功系统入口置灰（.web-locked + data-web-locked）',
+      !!btnD && btnD.classList.contains('web-locked') && btnD.getAttribute('data-web-locked') === '1');
+    t.elements.get('btnDressup').dispatch('click', {});
+    await sleep(10);
+    const ovTitle = t.elements.get('overlayTitle').textContent;
+    check('网页版：战功系统弹层标题为「战功系统 · 探索中」', ovTitle.indexOf('战功系统') !== -1 &&
+      ovTitle.indexOf('探索中') !== -1 && ovTitle.indexOf('装扮') === -1);
+    check('网页版：战功系统弹层正文不含旧「装扮系统」字样',
+      t.elements.get('overlayText').textContent.indexOf('装扮') === -1);
+    check('网页版：战功系统弹层不改页面（战功页保持关闭）',
+      t.elements.get('dressupPanel').style.display !== '' &&   // 未被 show(el,true) 打开（沙箱初始为 undefined）
+      t.elements.get('menu').style.display !== 'none');        // 主菜单仍在
+    t.elements.get('overlayBtn').dispatch('click', {});
+  }
+  // 桌面版（非网页版）：战功系统入口不置灰，正常开页
+  {
+    const t = await boot();
+    const btnD = t.elements.get('btnDressup');
+    check('桌面版：战功系统入口不置灰', !!btnD && !btnD.classList.contains('web-locked'));
+    t.elements.get('btnDressup').dispatch('click', {});
+    await sleep(10);
+    check('桌面版：战功系统页正常打开（落在战斗奖励标签）',
+      t.elements.get('dressupPanel').style.display !== 'none' &&
+      t.elements.get('honorsRewardTab').style.display !== 'none');
+    t.elements.get('btnDressupBack').dispatch('click', {});
   }
 
   // ---------- 2.8 地狱通关 → 人机暂停变「电脑 AI 数值调控」 ----------

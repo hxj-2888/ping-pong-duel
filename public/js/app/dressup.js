@@ -1,12 +1,20 @@
 /* ============================================================
- * app/dressup.js — 装扮系统页（v2.0）：外观库存/装配卸下 + 装扮方案
+ * app/dressup.js — 战功系统页「战斗奖励」标签的实现（v3.5.0 更名收口）
  * 通过共享对象 PPD 访问公共状态与接口。能力训练已独立到 app/training.js。
+ *
+ * 命名：页面对外是「战功系统」（P1-b 合并页：战斗奖励 / 生涯战绩 / 历史回放 三标签），
+ *   本文件只负责其中「战斗奖励」标签体（尾影/溅射特效兑换 + 奖励方案）。
+ *   文件名与 PPD.openDressup / PPD.ui.dressupPanel 等既有 id 保持不变——它们是
+ *   数据与事件契约（state.js / records.js / replay.js / input.js 共用），改名只会制造
+ *   无谓的跨端漂移风险；对外文案与注释统一按「战功系统 · 战斗奖励」表述。
+ *
  * - 兑换 → 入持有库存(owned)，不自动装配；玩家在库存中自行「装配/卸下」。
- * - 装扮页已移除退款功能(v2.0)；训练页"全部洗点"也只退训练积分、不再退外观积分。
- * - 特效分离(v2.1)：装扮只保留 尾影/撞击溅射 特效类；球衣与拍面主色恒=队服(旗帜队色)，
- *   球拍皮肤与上衣换色已删除，装扮不再覆盖队服颜色。
- * - 装扮方案：从 2 类(尾影/溅射)各选 1 组合(至少 1 类至多 2 类)，自定义名，最多 8 个。
- * - 网页版禁用（数据只留本地应用端）。
+ * - 已移除退款功能(v2.0)；训练页"全部洗点"也只退训练积分、不再退外观积分。
+ * - 特效分离(v2.1)：只保留 尾影/撞击溅射 特效类；球衣与拍面主色恒=队服(旗帜队色)，
+ *   球拍皮肤与上衣换色已删除，不再覆盖队服颜色。
+ * - 奖励方案：从 2 类(尾影/溅射)各选 1 组合(至少 1 类至多 2 类)，自定义名，最多 8 个。
+ * - 网页版：入口置灰（不隐藏、不抹除），点开只弹「战功系统 · 探索中」说明；
+ *   奖励/生涯/回放数据只留本地应用端。
  * ============================================================ */
 (function () {
   'use strict';
@@ -25,7 +33,7 @@
 
   // ---------- 兑换(入库存) ----------
   function own(type, id, cost) {
-    if (type !== 'trail') return; // v2.1：装扮仅尾影/溅射两类
+    if (type !== 'trail') return; // v2.1：仅尾影/溅射两类特效
     if (PPD.app.points < cost) { PPD.setStatus('积分不足，无法兑换'); return; }
     const o = PPD.app.owned;
     if (!o.trail.includes(id)) o.trail.push(id);
@@ -77,7 +85,7 @@
     PPD.setStatus('撞击溅射已卸下（恢复波纹）');
   }
 
-  // ---------- 装扮方案（v2.1：仅 尾影/溅射 两类） ----------
+  // ---------- 奖励方案（v2.1：仅 尾影/溅射 两类） ----------
   function savePlan() {
     const name = (PPD.ui.planNameInput && PPD.ui.planNameInput.value.trim()) || '';
     if (!name) { PPD.setStatus('请先输入方案名'); return; }
@@ -165,7 +173,7 @@
       '<h3 class="sticky-group">尾影特效</h3>' + trailHtml +
       '<h3 class="sticky-group">球台撞击特效</h3>' + splashHtml;
 
-    // 装扮方案列表
+    // 奖励方案列表
     const plansHtml = PPD.app.plans.map((p, i) => {
       const parts = [];
       if (p.trail) { const n = nameOf(TRAILS, p.trail); if (n) parts.push(n); }
@@ -176,16 +184,17 @@
         '<button class="btn small" data-action="plan-apply" data-idx="' + i + '">应用</button>' +
         '<button class="btn small" data-action="plan-delete" data-idx="' + i + '">删除</button></span></div>';
     }).join('');
-    if (PPD.ui.planList) PPD.ui.planList.innerHTML = plansHtml || '<div class="career-empty">还没有装扮方案</div>';
+    if (PPD.ui.planList) PPD.ui.planList.innerHTML = plansHtml || '<div class="career-empty">还没有奖励方案</div>';
   }
 
   function openDressup() {
     PPD.GameAudio.ensure();
     PPD.GameAudio.ui();
+    // 网页版：入口置灰但仍可点（不抹除），点开只给说明——数据（奖励/生涯/回放）只留本地应用端。
     if (PPD.isWebVersion) {
       if (PPD.showOverlay) {
-        PPD.showOverlay('装扮系统 · 探索中',
-          '装扮系统网页版正在探索中，暂不对网页版开放。\n外观库存、装配与装扮方案仅保存在本地应用端（桌面版 / 手机 APK）。',
+        PPD.showOverlay('战功系统 · 探索中',
+          '战功系统网页版正在探索中，暂不对网页版开放。\n战斗奖励（尾影/撞击特效与奖励方案）、生涯战绩与历史回放仅保存在本地应用端（桌面版 / 手机 APK）。',
           '知道了', () => {});
       }
       return;
@@ -203,6 +212,27 @@
   }
 
   // ---------- 事件绑定 ----------
+  // 网页版：入口置灰（.web-locked，不隐藏也不移除），鼠标悬停给出「探索中」说明。
+  // 置灰只改观感与提示，入口本身照常可点——点开由 openDressup 给说明弹层。
+  // ⚠ 不设 aria-disabled：该属性会把元素变成"禁用"，读屏与自动化（Playwright 等）
+  //   都会拒绝点击，与「置灰但仍可点开看说明」的意图相反。语义改用 data-web-locked
+  //   标记 + 可见的「探索中」小签 + title 说明。
+  function applyWebLockState() {
+    const btn = PPD.ui.btnDressup;
+    if (!btn || !btn.classList) return;
+    const web = !!PPD.isWebVersion;
+    btn.classList.toggle('web-locked', web);
+    if (btn.setAttribute) {
+      if (web) btn.setAttribute('data-web-locked', '1');
+      else if (btn.removeAttribute) btn.removeAttribute('data-web-locked');
+    }
+    if (btn.title !== undefined) {
+      btn.title = web ? '战功系统网页版正在探索中，暂不对网页版开放（点开查看说明）' : '';
+    }
+  }
+  PPD.applyWebLockState = applyWebLockState;
+  applyWebLockState();
+
   if (PPD.ui.btnDressup) {
     PPD.ui.btnDressup.addEventListener('click', () => { if (PPD.GameAudio) PPD.GameAudio.ensure(); openDressup(); });
   }

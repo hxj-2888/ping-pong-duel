@@ -228,7 +228,7 @@
     } else if (PPD.app.mode === null) {
       // 主页菜单场景（P0 垂直切片 2026-10-24）：无对局时用合成 view 渲染「预备球场」
       // （两球员预备 + 聚光灯，无球无观众，见 app/render.js renderMenuScene）。
-      // 仅在主菜单可见时渲染——生涯/训练/装扮等整页面板打开时背后无需画面，省 GPU。
+      // 仅在主菜单可见时渲染——战功/训练等整页面板打开时背后无需画面，省 GPU。
       if ((renderNow || PPD.app.resizeDirty)
         && PPD.ui.menu && PPD.ui.menu.style.display !== 'none') {
         PPD.app.resizeDirty = false;

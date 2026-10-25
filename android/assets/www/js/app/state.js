@@ -123,11 +123,10 @@
     careerPageLabel: document.getElementById('careerPageLabel'),
     btnCareerPrev: document.getElementById('btnCareerPrev'),
     btnCareerNext: document.getElementById('btnCareerNext'),
-    btnCareerBack: document.getElementById('btnCareerBack'),
     careerTab: document.getElementById('careerTab'),             // 战绩记录标签体
     btnCareerTab: document.getElementById('btnCareerTab'),       // 标签按钮：战绩记录
     btnHistoryTab: document.getElementById('btnHistoryTab'),     // 标签按钮：历史回放
-    // 养成系统（v2.0：能力训练页 + 装扮系统页，单开页面）
+    // 养成系统（v2.0：能力训练页 + 战功系统页，单开页面）
     btnTraining: document.getElementById('btnTraining'),
     trainingPanel: document.getElementById('trainingPanel'),
     trainingPoints: document.getElementById('trainingPoints'),
@@ -227,7 +226,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.4.2',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.5.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -294,11 +293,11 @@
     // frameRate=渲染帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
-    // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 装扮方案 + 能力训练等级（localStorage 持久化,网页版禁用）
+    // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 奖励方案 + 能力训练等级（localStorage 持久化,网页版禁用）
     points: 0,            // 积分余额(ppd_points)；初始 0，靠对战/首次通关奖励赚取（已有本地数据时以本地为准）
     owned: { trail: [], splash: false }, // 持有库存(兑换入库存,不自动装配)；v2.1 特效分离:仅尾影/溅射
     equip: { trail: null, splash: false }, // 当前装配(玩家自行选择;联机同步给对手)；球衣/拍面恒=队服(旗帜队色)
-    plans: [],            // 装扮方案(最多 8):[{ name, trail, splash }]
+    plans: [],            // 奖励方案(最多 8):[{ name, trail, splash }]（战功系统 · 战斗奖励）
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
     bonus: { hard: false, hell: false }, // 首次通关奖励已领标记(人机击败困难+50/地狱+100,一次性)
     fxShow: { trail: true, splash: true }, // v2.7.0：特效显示开关（设置面板 尾影/撞击特效，全局生效并记忆，所有模式通用）
@@ -391,7 +390,7 @@
   } catch (e) { /* ignore */ }
   if (ui.serverLine) ui.serverLine.value = app.serverLine;
 
-  // ---------- 养成系统（v2.0：积分/持有库存/当前装配/装扮方案/能力等级，localStorage 记忆；网页版禁用） ----------
+  // ---------- 养成系统（v2.0：积分/持有库存/当前装配/奖励方案/能力等级，localStorage 记忆；网页版禁用） ----------
   const POINTS_KEY = 'ppd_points';
   const OWNED_KEY = 'ppd_owned';
   const EQUIP_KEY = 'ppd_equip';
