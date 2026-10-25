@@ -18,7 +18,7 @@
        DOM 浮层 = 左三铭牌（成长与体验）/ 右三通道（对战）/ 哨子开局 / 跟随球员的名字牌 / 球员编辑弹层。
        数据契约保留：难度与队伍仍是隐藏 <select> 宿主（aiLevel/teamMe/teamOpp...），弹层控件写回宿主并派发 change。 -->
   <div id="menu" class="panel home-stage">
-    <button id="btnSettings" class="settings-btn" title="设置">⚙</button>
+    <button id="btnSettings" class="settings-btn" title="设置" data-icon="settings">⚙</button>
     <!-- 电脑端说明书按钮：设置在设置按钮正下方、同尺寸（手机端入口在触控底栏） -->
 
     <!-- 主页状态提示（P1 修复：原 statusBar 元素缺失导致主页 setStatus 提示被静默丢弃） -->
@@ -41,15 +41,15 @@
 
     <!-- 左：三个互相独立的入口（成长与体验） -->
     <nav class="home-side left" aria-label="成长与体验">
-      <button id="btnTraining" class="plate" type="button">
+      <button id="btnTraining" class="plate" type="button" data-icon="train">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
         <span><b>能力训练</b><small>提升球员属性</small></span>
       </button>
-      <button id="btnAIVsAI" class="plate" type="button">
+      <button id="btnAIVsAI" class="plate" type="button" data-icon="ai">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M12 3v4M9 13h.01M15 13h.01M9 16h6"/></svg>
         <span><b>AI对打</b><small>两个AI对打 · 只观看</small></span>
       </button>
-      <button id="btnDressup" class="plate" type="button">
+      <button id="btnDressup" class="plate" type="button" data-icon="honors">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 17l.8 2.2L21 20l-2.2.8L18 23l-.8-2.2L15 20l2.2-.8z"/></svg>
         <span><b>战功系统</b><small>生涯与战斗奖励</small></span>
       </button>
@@ -57,15 +57,15 @@
 
     <!-- 右：三个对战通道（点选模式，哨子开局；联机为通道门，点击直达联机框） -->
     <nav class="home-side right" aria-label="对战通道">
-      <button id="chLocal" class="plate" type="button" data-mode="local">
+      <button id="chLocal" class="plate" type="button" data-mode="local" data-icon="local">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 20c0-3 2-5 5-5M21 20c0-3-2-5-5-5"/></svg>
         <span><b>本地对战</b><small>同一台设备双人</small></span>
       </button>
-      <button id="chNet" class="plate door" type="button" data-mode="online">
+      <button id="chNet" class="plate door" type="button" data-mode="online" data-icon="net">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M10 12h11M17 8l4 4-4 4"/></svg>
         <span><b>联机对战</b><small>通道门 · 房间码联机</small></span>
       </button>
-      <button id="chEndless" class="plate" type="button" data-mode="endless">
+      <button id="chEndless" class="plate" type="button" data-mode="endless" data-icon="endless">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12c-2-3-3.5-4-5.5-4a4 4 0 0 0 0 8c2 0 3.5-1 5.5-4zm0 0c2 3 3.5 4 5.5 4a4 4 0 0 0 0-8c-2 0-3.5 1-5.5 4z"/></svg>
         <span><b>无尽挑战</b><small>一路打下去</small></span>
       </button>
@@ -73,7 +73,7 @@
 
     <!-- 哨子：整页唯一会呼吸的元素，按当前模式开局 -->
     <button id="btnWhistle" class="whistle" type="button" aria-label="吹哨开始">
-      <span class="ring"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
+      <span class="ring" data-icon="whistle"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
       <span id="whistleLabel">吹哨开始</span>
     </button>
 
@@ -153,7 +153,7 @@
 
     <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
     <div class="row apk-row">
-      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v340.apk" download="PingPongDuel-v340.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v341.apk" download="PingPongDuel-v341.apk" style="display:none">📱 下载安卓版（直接安装）</a>
       <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
     </div>
   </div>
@@ -222,7 +222,7 @@
           <div class="nr-side">
             <div class="nr-name" id="nrNameMe">我</div>
             <button id="nrWhistleMe" class="nr-whistle" type="button" aria-label="吹哨准备">
-              <span class="ring"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
+              <span class="ring" data-icon="whistle"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
               <span class="nr-label" id="nrLabelMe">吹哨准备</span>
             </button>
           </div>
@@ -230,7 +230,7 @@
           <div class="nr-side">
             <div class="nr-name" id="nrNameFoe">对手</div>
             <div id="nrWhistleFoe" class="nr-whistle ghost" aria-hidden="true">
-              <span class="ring"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
+              <span class="ring" data-icon="whistle"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="17" cy="29" r="11"/><path d="M27 21l16-7v11l-13 7"/><circle cx="17" cy="29" r="2.5"/></svg></span>
               <span class="nr-label" id="nrLabelFoe">等待对方</span>
             </div>
           </div>
@@ -464,6 +464,18 @@
         <label class="tune-row">音效音量 <input id="setSfxVol" type="range" min="0" max="100" step="5" value="50"><b>50%</b></label>
         <div class="settings-group-title">性能</div>
         <!-- 分段选择器由 app/main.js 依据下方 select 的选项生成，select 保留供既有逻辑读写 -->
+        <div class="setting-row">图标风格 <span class="segmented-host" data-segmented-for="iconStyle"></span>
+          <select id="iconStyle" class="visually-hidden">
+            <option value="org" selected>原设计</option>
+            <option value="alt">图标库 · game-icons</option>
+          </select>
+        </div>
+        <div class="setting-row">音效风格 <span class="segmented-host" data-segmented-for="sfxStyle"></span>
+          <select id="sfxStyle" class="visually-hidden">
+            <option value="synth" selected>合成音效</option>
+            <option value="8bit">8-bit 采样 · CC0</option>
+          </select>
+        </div>
         <div class="setting-row">画质 <span class="segmented-host" data-segmented-for="quality"></span>
           <select id="quality" class="visually-hidden">
             <option value="high" selected>高画质</option>
@@ -683,6 +695,7 @@
   <script src="js/app/loop.js"></script>
   <script src="js/app/home.js"></script>
   <script src="js/app/main.js"></script>
+  <script src="js/app/icons.js"></script>
   <!-- raw 游戏音乐：<audio> 元素播放 mp4（含视频轨的视频容器取其音频），随音乐按钮开始/暂停 -->
   <audio id="bgmAudio" loop preload="auto" style="display:none"></audio>
   <!-- 真实掌声 WAV 兜底：WebView/file:// 下 fetch 被拦截时用 <audio> 元素直载（与 BGM 同策略） -->

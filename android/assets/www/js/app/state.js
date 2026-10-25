@@ -72,6 +72,7 @@
     settingsPanel: document.getElementById('settingsPanel'),
     btnSettingsClose: document.getElementById('btnSettingsClose'),
     setShowHitRanges: document.getElementById('setShowHitRanges'),
+    sfxStyle: document.getElementById('sfxStyle'), // 〔2026-10-25〕音效风格分段宿主（合成/8-bit）
     setMusic: document.getElementById('setMusic'),
     setSound: document.getElementById('setSound'),
     setMusicVol: document.getElementById('setMusicVol'),
@@ -226,7 +227,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.4.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.4.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分

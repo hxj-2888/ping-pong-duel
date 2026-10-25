@@ -2059,6 +2059,11 @@ input[type="range"]:focus-visible,
 .endless-seg button.on { background: var(--primary-100); color: #032019; border-color: var(--primary-100); }
 .endless-seg button.lock { opacity: 0.45; cursor: not-allowed; }
 
+/* 〔2026-10-25 图标双轨〕data-icon-style="alt"（game-icons 实心图标）：
+   内联 path 已带 fill="currentColor"；覆盖线条风格约束（stroke 关闭）。 */
+body[data-icon-style="alt"] [data-icon] svg { fill: currentColor; stroke: none; }
+body[data-icon-style="alt"] .settings-btn svg { width: 20px; height: 20px; display: block; }
+
 /* 主页状态 toast（#statusBar 的主页形态：setStatus 落点，自动淡出由 home.js 驱动） */
 .home-toast {
   position: absolute; left: 50%; top: 64px; transform: translateX(-50%);
