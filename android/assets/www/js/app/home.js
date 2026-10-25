@@ -15,6 +15,7 @@
   const el = {
     chip: $('homeChip'),
     plMe: $('plMe'), plFoe: $('plFoe'),
+    tagMe: $('tagMe'), tagFoe: $('tagFoe'),
     tagMeName: $('tagMeName'), tagFoeName: $('tagFoeName'),
     whistle: $('btnWhistle'), whistleLabel: $('whistleLabel'),
     chLocal: $('chLocal'), chNet: $('chNet'), chEndless: $('chEndless'),
@@ -70,7 +71,12 @@
 
   function refreshLocks() {
     if (el.chEndless && el.chEndless.classList) {
-      el.chEndless.classList.toggle('locked', !PPD.isHellCleared());
+      const locked = !PPD.isHellCleared();
+      el.chEndless.classList.toggle('locked', locked);
+      // 锁定态悬停说明解锁条件（触屏点击本就有 toast 提示）
+      if (el.chEndless.title !== undefined) {
+        el.chEndless.title = locked ? '通关地狱模式解锁' : '';
+      }
     }
   }
 
@@ -224,6 +230,9 @@
   }
   wirePlayer(el.plMe, 'me');
   wirePlayer(el.plFoe, 'foe');
+  // 名字牌已从热区拆出（独立定位）：点击 tag 同样打开编辑弹层
+  wirePlayer(el.tagMe, 'me');
+  wirePlayer(el.tagFoe, 'foe');
 
   // 撞色互换：捕获阶段先处理——目标色与另一槽位相同时，另一槽位让出（换成我方原色），
   // 随后 teams.js 的色块监听照常把当前槽位写成目标色；两侧持久化均由既有 change 流程完成
@@ -251,14 +260,21 @@
     const t = TEAMS().find((x) => x && x.id === (sel && sel.value));
     return t ? t.color : null;
   }
-  function placeTag(node, q) {
-    if (!q || typeof q.x !== 'number' || !isFinite(q.x)) return;
-    // 投影缩放 q.s ≈ 焦距/深度；以近景 s≈130 为基准 1.0，远端自然变小
-    const k = Math.max(0.5, Math.min(1.3, (q.s || 110) / 130));
-    const w = Math.round(150 * k), h = Math.round(250 * k);
-    node.style.width = w + 'px';
-    node.style.height = h + 'px';
-    node.style.transform = 'translate(' + Math.round(q.x - w / 2) + 'px,' + Math.round(q.y - h * 0.16) + 'px)';
+  // 〔2026-10-25〕名字牌与热区分开定位：
+  //   tag  → 底边中心贴头顶投影（pr.x/pr.y），紧贴球员头顶不再悬空；
+  //   热区 → 中心对准躯干投影（pr.bx/pr.by），罩住身体供点击。
+  function placeTag(side, pr) {
+    const player = side === 0 ? el.plMe : el.plFoe;
+    const tag = side === 0 ? el.tagMe : el.tagFoe;
+    if (!pr || typeof pr.x !== 'number' || !isFinite(pr.x)) return;
+    const k = Math.max(0.5, Math.min(1.3, (pr.s || 110) / 130));
+    if (player) {
+      const w = Math.round(150 * k), h = Math.round(250 * k);
+      player.style.width = w + 'px';
+      player.style.height = h + 'px';
+      player.style.transform = 'translate(' + Math.round(pr.bx - w / 2) + 'px,' + Math.round(pr.by - h * 0.52) + 'px)';
+    }
+    if (tag) tag.style.transform = 'translate(' + Math.round(pr.x) + 'px,' + Math.round(pr.y) + 'px) translate(-50%,-124%)';
   }
   function setTagColor(node, color) {
     if (!node || !node.querySelector) return;
@@ -271,8 +287,10 @@
   PPD.updateHomeTags = function () {
     if (!el.plMe || !el.plFoe) return;
     const pr = PPD.app && PPD.app.menuProj;
-    if (pr && pr[0]) placeTag(el.plMe, pr[0]);
-    if (pr && pr[1]) placeTag(el.plFoe, pr[1]);
+    if (pr) {
+      placeTag(0, pr[0]);
+      placeTag(1, pr[1]);
+    }
     const meName = ((el.nameInput && el.nameInput.value) || '').trim() || '乒乓球手';
     // 对方名：无尽显示关卡名；其余显示用户自定义名；队名等于默认颜色名（未自定义）时回落「电脑」
     const typedFoe = ((el.teamOppName && el.teamOppName.value) || '').trim();

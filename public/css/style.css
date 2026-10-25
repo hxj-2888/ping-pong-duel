@@ -1891,7 +1891,7 @@ input[type="range"]:focus-visible,
 }
 .home-player:focus { outline: none; }
 .home-tag {
-  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  position: absolute; left: 0; top: 0; will-change: transform; /* 位置由 home.js 每帧 transform 定位（底边贴头顶投影） */
   display: flex; align-items: center; gap: 7px;
   padding: 5px 12px 5px 9px; border-radius: 999px;
   background: rgba(6, 10, 18, 0.82);
@@ -1899,8 +1899,8 @@ input[type="range"]:focus-visible,
   font-size: 14px; font-weight: 700; color: #f1f6f8;
   white-space: nowrap; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.home-player:hover .home-tag,
-.home-player:focus-visible .home-tag {
+.home-tag:hover,
+.home-tag:focus-visible {
   border-color: var(--primary-100);
   box-shadow: 0 0 12px rgba(0, 229, 176, 0.25);
 }
@@ -1913,7 +1913,7 @@ input[type="range"]:focus-visible,
   font-size: 12px; font-weight: 400; color: var(--text-3);
   margin-left: 2px; transition: color var(--dur) var(--ease);
 }
-.home-player:hover .tag-edit, .home-player:focus-visible .tag-edit { color: var(--primary-100); }
+.home-tag:hover .tag-edit, .home-tag:focus-visible .tag-edit { color: var(--primary-100); }
 
 /* 顶部模式 chip：哨子将按此开局 */
 .home-chip {
@@ -1945,7 +1945,7 @@ input[type="range"]:focus-visible,
 .plate {
   position: relative; display: flex; align-items: center; gap: 12px;
   padding: 14px 22px 14px 16px; text-align: left;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(90deg, rgba(7, 11, 20, 0.66), rgba(7, 11, 20, 0.38)); /* 2026-10-25 加深打底：两侧光晕上提升对比 */
   border: none; border-left: 3px solid rgba(255, 255, 255, 0.55);
   clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
   color: var(--text-1); cursor: pointer;
@@ -1955,7 +1955,7 @@ input[type="range"]:focus-visible,
 .home-side.right .plate {
   flex-direction: row-reverse; text-align: right;
   padding: 14px 16px 14px 22px; border-left: 0; border-right: 3px solid rgba(255, 255, 255, 0.55);
-  background: linear-gradient(270deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(270deg, rgba(7, 11, 20, 0.66), rgba(7, 11, 20, 0.38));
   clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
 }
 .plate svg {
@@ -2163,3 +2163,25 @@ input[type="range"]:focus-visible,
 .aiw-pick button small { font-size: 12px; color: var(--text-2); }
 .aiw-pick button:hover { border-color: var(--primary-100); color: var(--primary-100); }
 .sheet-done.ghost { background: #1a2333; color: var(--text-1); }
+
+/* ============================================================
+ * 〔2026-10-25 用户反馈修复〕规则说明卡片（chip 同款，左上角标签正下方）
+ * ============================================================ */
+.home-manual-card {
+  position: absolute; left: clamp(12px, 3vw, 48px); top: 58px;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 10px; cursor: pointer;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: var(--text-1);
+  background: rgba(6, 10, 18, 0.7);
+  border: none; border-left: 3px solid var(--primary-100);
+  transition: background 0.2s, color 0.2s;
+}
+.home-manual-card:hover { background: rgba(0, 229, 176, 0.16); color: var(--primary-100); }
+
+/* 设置按钮放大：与左上角标签同档高度（此前 34px 小图标难以辨认） */
+.home-stage .settings-btn {
+  width: 44px; height: 36px; font-size: 20px; border-radius: 10px;
+  background: rgba(6, 10, 18, 0.7); border: none;
+  border-right: 3px solid rgba(255, 255, 255, 0.55);
+}
+.home-stage .settings-btn:hover { border-right-color: var(--primary-100); background: rgba(0, 229, 176, 0.16); }

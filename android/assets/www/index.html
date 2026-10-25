@@ -20,24 +20,24 @@
   <div id="menu" class="panel home-stage">
     <button id="btnSettings" class="settings-btn" title="设置">⚙</button>
     <!-- 电脑端说明书按钮：设置在设置按钮正下方、同尺寸（手机端入口在触控底栏） -->
-    <button id="btnManualMenu" class="manual-menu-btn" title="说明书" style="display:none">📖</button>
 
     <!-- 主页状态提示（P1 修复：原 statusBar 元素缺失导致主页 setStatus 提示被静默丢弃） -->
     <div id="statusBar" class="status home-toast"></div>
 
     <!-- 顶部当前模式 chip：哨子将按此开局（默认 单机对战 · 当前难度） -->
     <div id="homeChip" class="home-chip">单机对战 · 中等</div>
+    <!-- 规则说明：与模式标签同款卡片，位于其正下方（2026-10-25 用户反馈：入口从右上角移此并放大） -->
+    <button id="btnManualMenu" class="home-manual-card" type="button" title="规则说明" style="display:none">📖 规则说明</button>
 
     <!-- 球衣染色层：左右两侧环境色跟随敌我球衣（--me/--foe 由 home.js 写入） -->
     <div class="home-tint" aria-hidden="true"></div>
 
-    <!-- 球员名字牌 + 点击热区：位置由 app/home.js 每帧按相机投影更新（PPD.app.menuProj） -->
-    <div id="plFoe" class="home-player" role="button" tabindex="0" aria-label="编辑对方球员">
-      <div class="home-tag"><i class="dot"></i><span id="tagFoeName">电脑</span><b class="tag-edit" aria-hidden="true">✎</b></div>
-    </div>
-    <div id="plMe" class="home-player" role="button" tabindex="0" aria-label="编辑我方球员">
-      <div class="home-tag"><i class="dot"></i><span id="tagMeName">乒乓球手</span><b class="tag-edit" aria-hidden="true">✎</b></div>
-    </div>
+    <!-- 球员名字牌（tag，底边贴头顶投影）与点击热区（player，罩住躯干）：
+         位置由 app/home.js 每帧按 PPD.app.menuProj 更新；2026-10-25 名字牌从热区拆出独立定位 -->
+    <div id="tagFoe" class="home-tag" role="button" tabindex="0" aria-label="编辑对方球员"><i class="dot"></i><span id="tagFoeName">电脑</span><b class="tag-edit" aria-hidden="true">✎</b></div>
+    <div id="tagMe" class="home-tag" role="button" tabindex="0" aria-label="编辑我方球员"><i class="dot"></i><span id="tagMeName">乒乓球手</span><b class="tag-edit" aria-hidden="true">✎</b></div>
+    <div id="plFoe" class="home-player" role="button" tabindex="0" aria-label="编辑对方球员"></div>
+    <div id="plMe" class="home-player" role="button" tabindex="0" aria-label="编辑我方球员"></div>
 
     <!-- 左：三个互相独立的入口（成长与体验） -->
     <nav class="home-side left" aria-label="成长与体验">
@@ -153,7 +153,7 @@
 
     <!-- 手机端：下载安卓版 APK（国内用户直接安装；APK 内不显示） -->
     <div class="row apk-row">
-      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v330.apk" download="PingPongDuel-v330.apk" style="display:none">📱 下载安卓版（直接安装）</a>
+      <a id="btnDownloadApk" class="btn small apk-link" href="PingPongDuel-v331.apk" download="PingPongDuel-v331.apk" style="display:none">📱 下载安卓版（直接安装）</a>
       <a id="apkHelpLink" class="apk-help" href="download" style="display:none">下载有问题？</a>
     </div>
   </div>

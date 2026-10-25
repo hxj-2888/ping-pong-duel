@@ -734,11 +734,12 @@
   // P1 将把待机姿势扩成动作集、并让相机参数随视觉稿精调；此处先给可跑的底线版本。
   function makeMenuCam(vw, vh) {
     const cam = new PPD.TTG.Camera();
-    // 对局机位（makeCam：eyeY 7.43 / |z| 10.10 / focal 2.00×vw）的「拉远」变体：
-    // 退后 2.5m + 略抬 + 广角（focal 1.30×vw），两人连同脚下完整入画、留出呼吸边距。
+    // 对局机位（makeCam：eyeY 7.43 / |z| 10.10 / focal 2.00×vw）的「拉远」变体。
+    // 〔2026-10-25 用户反馈〕1.4× 放大（focal 1.30→1.82）：球台约占屏宽 0.30，
+    // 消除空旷感、聚光灯光束更有存在感。
     const eye = PPD.TTG.v3(0, 8.2, -12.6);
     const look = PPD.TTG.v3(0, 0.95, 0.2);
-    cam.set(eye, look, vw / 2, vh / 2, vw * 1.30);
+    cam.set(eye, look, vw / 2, vh / 2, vw * 1.82);
     return cam;
   }
 
@@ -838,13 +839,15 @@
       teamFixed: true,
     };
     view.cam = makeMenuCam(w, h);
-    // 名字牌投影：球员头顶上方（≈1.95m）世界坐标 → 屏幕坐标，
-    // 供 app/home.js 定位 DOM 名字牌与点击热区（每帧随相机/尺寸更新）。
+    // 名字牌投影（P1-b 修正）：head=头顶 1.72m（名字牌底边紧贴此点）、body=躯干 0.95m（点击热区中心）。
+    // 供 app/home.js 每帧定位 DOM（随相机/尺寸更新）。
     try {
       const cam = view.cam;
       PPD.app.menuProj = view.players.map((p) => {
-        const q = cam.project(PPD.TTG.v3(p.x, 1.95, p.z));
-        return q ? { x: q.x, y: q.y, s: q.s } : null;
+        const head = cam.project(PPD.TTG.v3(p.x, 1.72, p.z));
+        const body = cam.project(PPD.TTG.v3(p.x, 0.95, p.z));
+        if (!head || !body) return null;
+        return { x: head.x, y: head.y, bx: body.x, by: body.y, s: head.s };
       });
     } catch (e) { PPD.app.menuProj = null; /* 桩环境无投影 */ }
     // 菜单场景提亮：对局暗场灯光按参考图标定（上缘压暗 0.58 / 四角暗角 0.45），
@@ -858,7 +861,20 @@
     try {
       LA.darkTop = 0.30; LA.darkMid = 0.10; LA.darkBottom = 0.12;
       LA.vigSide = 0.10; LA.vigCorner = 0.26;
+      // 〔2026-10-25 用户反馈〕与对局同管线镜像视口（红方视角约定「屏幕左=己方红」）——
+      // 此前漏镜像导致主页环境色左蓝右红、与正式画面相反，转场时两边颜色互换。
+      PPD.ctx.save();
+      applyViewMirror(PPD.ctx, w);
       PPD.TTG.drawScene(PPD.ctx, view, w, h);
+      PPD.ctx.restore();
+      // 画布已镜像：投影 x 同步翻转，名字牌/热区 DOM 才与画面中的球员对齐
+      if (PPD.app.menuProj) {
+        for (const pr of PPD.app.menuProj) {
+          if (!pr) continue;
+          pr.x = w - pr.x;
+          pr.bx = w - pr.bx;
+        }
+      }
     } finally {
       LA.darkTop = saved.darkTop; LA.darkMid = saved.darkMid; LA.darkBottom = saved.darkBottom;
       LA.vigSide = saved.vigSide; LA.vigCorner = saved.vigCorner;

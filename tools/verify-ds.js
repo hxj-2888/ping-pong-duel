@@ -77,7 +77,7 @@ console.log('哨子脉冲动画:', /@keyframes whistle-pulse/.test(css));
 console.log('通道选中态 .on 青绿点亮:', /\.home-side\.right \.plate\.on\s*\{[^}]*var\(--primary-100\)/.test(css));
 console.log('铭牌悬停青绿渐变:', /\.plate:hover\s*\{[^}]*rgba\(0, 229, 176, 0\.22\)/.test(css));
 console.log('未解锁通道置灰带锁:', /\.plate\.locked[\s\S]{0,200}content:\s*'🔒'/.test(css));
-console.log('名字牌悬停/聚焦青绿描边:', /\.home-player:hover \.home-tag[\s\S]{0,200}border-color:\s*var\(--primary-100\)/.test(css));
+console.log('名字牌悬停/聚焦青绿描边:', /\.home-tag:hover[\s\S]{0,200}border-color:\s*var\(--primary-100\)/.test(css));
 console.log('哨子文案 ✎ 角标常驻:', /tag-edit/.test(html) && /\.tag-edit/.test(css));
 // 主容器透出画布：不透明背景被掀掉、交互子元素恢复指针事件
 console.log('主页容器透明（透出球场画布）:', /\.home-stage\s*\{[^}]*background:\s*none/.test(css));
