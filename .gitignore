@@ -47,3 +47,7 @@ android/release.keystore.old-*
 # 本地提交信息临时文件（勿入库）
 commit-msg.tmp.txt
 
+
+# 本地提交信息临时文件（勿入库）
+docs-commit-msg.txt
+
