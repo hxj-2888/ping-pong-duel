@@ -101,6 +101,8 @@
       PPD.app.fan.cheer[i] = Math.max(0, PPD.app.fan.cheer[i] - dt * 0.6);
       PPD.app.fan.shake[i] = Math.max(0, PPD.app.fan.shake[i] - dt * 0.6);
     }
+    // 镜头反馈（震屏/推近）按真实时间衰减；暂停时也继续收敛，恢复后不会残留抖动
+    if (PPD.fxStep) PPD.fxStep(dt);
     // 回放播放：优先于比赛模式处理（不推进引擎，只推进回放时钟并渲染在 game canvas）
     if (PPD.Replay && PPD.Replay.isActive()) {
       PPD.Replay.frame(dt);

@@ -107,7 +107,7 @@ function makeElement(id) {
 const ELEMENT_IDS = [
   'game', 'menu', 'gameScreen', 'nameInput', 'btnHost', 'btnJoin', 'btnNetMode',
   'joinInput', 'btnSettings', 'btnSettingsGame', 'settingsPanel', 'btnSettingsClose',
-  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'roomCode', 'roomHint', 'statusBar',
+  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'setShakeFx', 'roomCode', 'roomHint', 'statusBar',
   // 联机框（主页「联机通道门」打开，等同新开页面）：模式切换/建房/加入/等待/教程
   'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus', 'netOperate',
   // 联机框 2026-10-25 重构：创建/加入标签、四位输入、双哨子准备、Beta、高级折叠

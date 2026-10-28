@@ -386,6 +386,13 @@
       try { localStorage.setItem('ppd_fx_show', JSON.stringify(PPD.app.fxShow)); } catch (e) { /* ignore */ }
     });
   }
+  // v3.6.0：镜头震动开关（击球/扣杀/得分的一过性震屏）
+  if (PPD.ui.setShakeFx) {
+    PPD.ui.setShakeFx.addEventListener('change', () => {
+      PPD.app.fxShow.shake = PPD.ui.setShakeFx.checked;
+      try { localStorage.setItem('ppd_fx_show', JSON.stringify(PPD.app.fxShow)); } catch (e) { /* ignore */ }
+    });
+  }
 
   function togglePause() {
     if (PPD.app.introActive) return; // 对局开场渲染期间不可暂停

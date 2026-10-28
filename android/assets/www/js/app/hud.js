@@ -25,10 +25,17 @@
         PPD.app.lastEventKeys.delete(first);
       }
       switch (e.c) {
-        case 'hit':
+        case 'hit': {
           PPD.GameAudio.hit();
           // 追踪最后击球者(联机/本地撞击溅射特效按击球者装备渲染,v2.0)
           PPD.app.lastHitter = e.s;
+          // v3.6.0 物理反馈：球拍触球火花 + 镜头震动（速度/扣杀决定强度）
+          const b = engine.ball;
+          const spd = Math.hypot(b.vel.x, b.vel.y, b.vel.z);
+          const smash = b.hitType === 2 || b.counterSmash === 1;
+          const pow = Math.max(0, Math.min(1, (spd - 4) / 16));
+          addFx('hit', b.pos.x, b.pos.y, b.pos.z, engine.t, e.s, smash ? Math.max(pow, 0.75) : pow);
+          if (PPD.fxKick) PPD.fxKick(smash ? 'smash' : 'hit', 0.35 + pow * 0.65);
           // v2.0:感叹号仅在"反击扣杀/低平快球"时触发(wasCounter:推球回击扣杀/低平,AI 也记录):
           // 人机模式玩家(e.s=0)反击 → 电脑;观战(aivai)任一 AI 反击 → 对方 AI;对扣/普通推球不触发
           if (engine.ball.wasCounter === 1) {
@@ -37,13 +44,21 @@
             }
           }
           break;
-        case 'bounce':
+        }
+        case 'bounce': {
           PPD.GameAudio.bounce();
           // 发球阶段落台特效按发球方归属(修复开局 lastHitter 残留导致的波纹+溅射同屏);对打阶段由 addFx 用 lastHitter
           addFx('bounce', engine.ball.pos.x, engine.ball.pos.y, engine.ball.pos.z, engine.t,
-            engine.phase === 'serve' ? engine.server : (PPD.app.lastHitter >= 0 ? PPD.app.lastHitter : -1));
+            engine.phase === 'serve' ? engine.server : (PPD.app.lastHitter >= 0 ? PPD.app.lastHitter : -1),
+            Math.max(0, Math.min(1, (Math.hypot(engine.ball.vel.x, engine.ball.vel.y, engine.ball.vel.z) - 3) / 12)));
+          // 落台轻震（幅度很小，只为"重量感"）
+          if (PPD.fxKick) PPD.fxKick('bounce', 0.6);
           break;
-        case 'net': PPD.GameAudio.net(); break;
+        }
+        case 'net':
+          PPD.GameAudio.net();
+          if (PPD.fxKick) PPD.fxKick('net', 0.8);
+          break;
         case 'serve': PPD.GameAudio.serve(); break;
         case 'serve-ready':
           // 新一轮发球：用最近指针位置恢复瞄准（人机/本地）
@@ -56,6 +71,7 @@
             PPD.GameAudio.score();
             PPD.GameAudio.cheer();   // 得分 → 掌声音效
             PPD.triggerCheer(e.s);   // 得分方观众欢呼、对方摇头
+            if (PPD.fxKick) PPD.fxKick('score', 1); // 得分瞬间镜头一顿
             const winner = winnerName(e.s);
             const reasonText = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网', 'serve-timeout': '发球超时' }[engine.pointReason] || '';
             showPoint(`${winner} 得分${reasonText ? ' · ' + reasonText : ''}`);
@@ -65,6 +81,7 @@
           PPD.GameAudio.over();
           PPD.GameAudio.cheer();   // 终局 → 掌声
           PPD.triggerCheer(e.s);   // 胜方观众欢呼、败方摇头
+          if (PPD.fxKick) PPD.fxKick('over', 1); // 终局：整场最后一记重震
           PPD.app.paused = false;
           PPD.show(PPD.ui.pausePanel, false);
           PPD.updateGameTools();
@@ -134,7 +151,7 @@
     }
   }
 
-  function addFx(type, x, y, z, t0, hitterSide) {
+  function addFx(type, x, y, z, t0, hitterSide, pow) {
     // 撞击特效归属(v2.0):
     // - 本地/人机/观战:装备溅射后不分敌我,双方打出的球落台统一用本机装备特效(修复开局波纹+溅射同屏)
     // - 联机:发球阶段(bounce 传发球方 side)按发球方装备、对打按 lastHitter,双方看到一致;
@@ -149,14 +166,16 @@
     }
     const t = (type === 'bounce' && splashOn) ? 'splash' : type;
     // v2.4 预算：fx 同屏上限 8（原 12）；splash 类型同屏最多 3 个（超出替换最旧溅射，避免连续撞击累积尖峰）
-    if (t === 'splash') {
-      let n = 0, firstSplash = -1;
+    // v3.6.0：击球火花同屏最多 3 个（对拍时两侧各一次，短路回合也不会堆满）
+    if (t === 'splash' || t === 'hit') {
+      const cap = 3;
+      let n = 0, first = -1;
       for (let i = 0; i < PPD.app.fx.length; i++) {
-        if (PPD.app.fx[i].type === 'splash') { n++; if (firstSplash < 0) firstSplash = i; }
+        if (PPD.app.fx[i].type === t) { n++; if (first < 0) first = i; }
       }
-      if (n >= 3 && firstSplash >= 0) PPD.app.fx.splice(firstSplash, 1);
+      if (n >= cap && first >= 0) PPD.app.fx.splice(first, 1);
     }
-    PPD.app.fx.push({ type: t, x, y, z, t0 });
+    PPD.app.fx.push({ type: t, x, y, z, t0, pow });
     if (PPD.app.fx.length > 8) PPD.app.fx.shift();
   }
 

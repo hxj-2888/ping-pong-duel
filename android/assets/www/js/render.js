@@ -1238,7 +1238,8 @@
     return s;
   }
 
-  function drawBall(ctx, cam, pos, spin, time, shadowOnly) {
+  // vel/low 可选：高速球按速度沿反方向拉出渐隐锥形（运动模糊），表现"快"；低画质缩短。
+  function drawBall(ctx, cam, pos, spin, time, shadowOnly, vel, low) {
     // 影子：球在台面上方时投在台面，否则投在地面；球越高影子越大越淡
     const overTable = Math.abs(pos.x) <= R.TABLE_WIDTH / 2 &&
       Math.abs(pos.z) <= R.TABLE_LENGTH / 2;
@@ -1267,6 +1268,26 @@
     const p = cam.project(pos);
     if (!p) return;
     const r = Math.max(1.6, R.BALL_RADIUS * p.s);
+    // 速度拉伸：沿速度反方向画一道向尾端透明的拉丝，高速球在屏幕上"变长"（与尾影互补）
+    const spd = vel ? Math.hypot(vel.x, vel.y, vel.z) : 0;
+    if (spd > 7) {
+      const dir = vnorm(vel);
+      const len = Math.min(0.55, spd * 0.026) * (low ? 0.6 : 1);
+      const pt = cam.project(vsub(pos, vscale(dir, len)));
+      if (pt) {
+        const a = Math.min(0.34, 0.10 + (spd - 7) / 40) * (low ? 0.7 : 1);
+        const g = ctx.createLinearGradient(pt.x, pt.y, p.x, p.y);
+        g.addColorStop(0, 'rgba(210,235,255,0)');
+        g.addColorStop(1, `rgba(235,246,255,${a.toFixed(3)})`);
+        ctx.strokeStyle = g;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1.2, r * 1.25);
+        ctx.beginPath();
+        ctx.moveTo(pt.x, pt.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+    }
     if (crowdCacheSupported()) {
       const sp = ballSprite(r);
       ctx.drawImage(sp.canvas, p.x - sp.size / 2, p.y - sp.size / 2, sp.size, sp.size);
@@ -1300,7 +1321,9 @@
   function drawEffects(ctx, cam, fx, time, low, trailStyle) {
     for (const f of fx || []) {
       const age = time - f.t0;
-      if (age < 0 || age > 0.45) continue;
+      if (age < 0) continue;
+      if (f.type === 'hit') { drawHitSpark(ctx, cam, f, age, low); continue; }
+      if (age > 0.45) continue;
       const k = age / 0.45;
       const p = cam.project(v3(f.x, R.TABLE_HEIGHT + 0.006, f.z));
       if (!p) continue;
@@ -1365,6 +1388,39 @@
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  // 击球火花（v3.6.0）：球拍触球瞬间的放射短线 + 中心闪光，画在真实球位（不贴台面）。
+  // pow=0..1 由出球速度决定；越高火花越长越白（扣杀）。低画质/低档位减少条数。
+  function drawHitSpark(ctx, cam, f, age, low) {
+    const life = 0.30;
+    if (age < 0 || age > life) return;
+    const p = cam.project(v3(f.x, f.y, f.z));
+    if (!p) return;
+    const k = age / life;
+    const pow = clamp(f.pow == null ? 0.7 : f.pow, 0, 1);
+    const tier = fxTier();
+    const n = (low || tier === 'low') ? 4 : tier === 'medium' ? 6 : 9;
+    const fade = 1 - k;
+    const fr = Math.max(1.5, (0.012 + 0.05 * k) * p.s * (0.7 + pow * 0.6));
+    ctx.fillStyle = `rgba(255,244,214,${(0.75 * fade).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, fr, 0, Math.PI * 2);
+    ctx.fill();
+    const seedBase = f.x * 37.1 + f.z * 91.7;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const seed = ((seedBase + i * 0.618) % 1 + 1) % 1;
+      const ang = seed * Math.PI * 2;
+      const d0 = (0.015 + 0.02 * k) * p.s * pow;
+      const d1 = (0.03 + 0.11 * k * (0.5 + seed)) * p.s * (0.6 + pow * 0.7);
+      ctx.strokeStyle = `rgba(255,${Math.round(180 + pow * 50)},${Math.round(120 + pow * 90)},${(0.85 * fade).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, 0.006 * p.s * fade);
+      ctx.beginPath();
+      ctx.moveTo(p.x + Math.cos(ang) * d0, p.y + Math.sin(ang) * d0);
+      ctx.lineTo(p.x + Math.cos(ang) * d1, p.y + Math.sin(ang) * d1);
+      ctx.stroke();
     }
   }
 
@@ -1702,7 +1758,7 @@
           root.TTG.drawCharacter(ctx, cam, o.pl, view.ball, time, view.side, view.hideOwn, view.hideLegs);
         }
       } else if (view.ball) {
-        drawBall(ctx, cam, view.ball.pos, view.ball.spin, time);
+        drawBall(ctx, cam, view.ball.pos, view.ball.spin, time, false, view.ball.vel, low);
       }
     }
     // 球在发球者手中时绘制在角色之后（手部之前会由角色绘制）

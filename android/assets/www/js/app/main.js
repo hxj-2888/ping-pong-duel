@@ -371,6 +371,10 @@
     if (PPD.ui.setShowHitRanges) PPD.ui.setShowHitRanges.checked = PPD.app.showHitRanges;
     // v2.4：判定范围虚线需通关困难解锁——打开设置时同步勾选框禁用态
     if (PPD.syncHitRangeToggle) PPD.syncHitRangeToggle();
+    // v3.6.0：特效开关勾选态回填（此前只写不读，重载后勾选框与记忆值不符）
+    if (PPD.ui.setTrailFx) PPD.ui.setTrailFx.checked = !(PPD.app.fxShow && PPD.app.fxShow.trail === false);
+    if (PPD.ui.setSplashFx) PPD.ui.setSplashFx.checked = !(PPD.app.fxShow && PPD.app.fxShow.splash === false);
+    if (PPD.ui.setShakeFx) PPD.ui.setShakeFx.checked = !(PPD.app.fxShow && PPD.app.fxShow.shake === false);
     if (PPD.ui.setMusic) PPD.ui.setMusic.checked = PPD.GameAudio.isMusicOn();
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
     syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());

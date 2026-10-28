@@ -142,7 +142,10 @@
     btnPlanSave: document.getElementById('btnPlanSave'),
     btnDressupBack: document.getElementById('btnDressupBack'),
     setTrailFx: document.getElementById('setTrailFx'),   // AI 观战暂停:尾影特效开关
-    setSplashFx: document.getElementById('setSplashFx'), // AI 观战暂停:撞击特效开关    touchControls: document.getElementById('touchControls'),    joyBase: document.getElementById('joyBase'),
+    setSplashFx: document.getElementById('setSplashFx'), // AI 观战暂停:撞击特效开关
+    setShakeFx: document.getElementById('setShakeFx'),   // v3.6.0:镜头震动开关
+    touchControls: document.getElementById('touchControls'),
+    joyBase: document.getElementById('joyBase'),
     joyKnob: document.getElementById('joyKnob'),
     joyArea: document.getElementById('joyArea'),   // 摇杆隐形响应热区（竖屏 160×160）
     btnCrouch: document.getElementById('btnCrouch'),    btnPause: document.getElementById('btnPause'),
@@ -226,7 +229,7 @@
     : coarse && phoneSize && !/[?&]desktop=1/.test(location.search);
 
   const app = {
-    version: '3.5.1',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
+    version: '3.6.0',      // 应用版本（与 package.json / AndroidManifest 一致，设置面板显示）
     mode: null,          // 'local' | 'ai' | 'aivai' | 'online'
     aiLevel: 1,
     aiGameType: 'normal', // 'normal' | 'endless'：地狱通关后人机对战拆分
@@ -300,7 +303,7 @@
     plans: [],            // 奖励方案(最多 8):[{ name, trail, splash }]（战功系统 · 战斗奖励）
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
     bonus: { hard: false, hell: false }, // 首次通关奖励已领标记(人机击败困难+50/地狱+100,一次性)
-    fxShow: { trail: true, splash: true }, // v2.7.0：特效显示开关（设置面板 尾影/撞击特效，全局生效并记忆，所有模式通用）
+    fxShow: { trail: true, splash: true, shake: true }, // v2.7.0：特效显示开关（设置面板 尾影/撞击/镜头震动，全局生效并记忆，所有模式通用）
   };
 
   // ---------- 工具 ----------

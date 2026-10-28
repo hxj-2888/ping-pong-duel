@@ -10,6 +10,53 @@
   const TRAIL_MAX = 64;   // 尾影点数上限（桌面）；手机端减半（v2.4 预算）
   let trailCache = [];
 
+  // ---------- 镜头物理反馈（击球/得分的一过性震屏 + 推近） ----------
+  // 纯视觉状态：不参与引擎与联机协议，不发包、不影响判定。
+  // hud.js / net.js 在事件回调里调 fxKick；loop.js 每帧调 fxStep 按真实时间衰减。
+  const juice = { shake: 0, punch: 0 };
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const KICKS = {
+    hit: [0.42, 0.50],    // 普通击球
+    smash: [1.00, 1.00],  // 扣杀（含反击扣杀）
+    bounce: [0.20, 0.10], // 落台
+    net: [0.32, 0.12],    // 触网
+    score: [0.50, 0.60],  // 得分
+    over: [0.80, 0.90],   // 终局
+  };
+  function fxKick(kind, strength) {
+    const s = clamp01(strength == null ? 1 : strength);
+    const k = KICKS[kind] || KICKS.hit;
+    juice.shake = Math.min(1.15, Math.max(juice.shake, k[0] * s));
+    juice.punch = Math.min(1, Math.max(juice.punch, k[1] * s));
+  }
+  function fxStep(dt) {
+    if (!(dt > 0)) return;
+    juice.shake = Math.max(0, juice.shake - dt * 3.2);
+    juice.punch = Math.max(0, juice.punch - dt * 4.0);
+  }
+  const juiceLevel = () => ({ shake: juice.shake, punch: juice.punch });
+  // 把震屏/推近合成到画布变换：围绕视口中心缩放 + 位移；额外底噪缩放保证抖动不露出画布边缘。
+  // 返回是否施加了变换（调用方决定是否传 plate 保持当前变换）。
+  function juiceTransform(ctx, vx, vy, w, h) {
+    const fxShow = PPD.app.fxShow || {};
+    if (fxShow.shake === false) return false; // 设置面板「镜头震动」关闭
+    if (juice.shake <= 0 && juice.punch <= 0) return false;
+    const low = !!(PPD.app.quality && PPD.app.quality.low);
+    const q = low ? 0.5 : 1;
+    const ref = Math.max(240, Math.min(w, h));
+    const amp = juice.shake * q * ref * 0.006;
+    const overscan = amp > 0.05 ? (amp * 2.2) / ref : 0;
+    const zoom = 1 + juice.punch * (low ? 0.008 : 0.016) + overscan;
+    const now = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000;
+    const dx = amp * (Math.sin(now * 91.7) * 0.62 + Math.sin(now * 37.3 + 1.3) * 0.38);
+    const dy = amp * (Math.sin(now * 77.3 + 0.8) * 0.55 + Math.sin(now * 47.9) * 0.45);
+    const cx = vx + w / 2, cy = vy + h / 2;
+    ctx.translate(cx + dx, cy + dy);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-cx, -cy);
+    return true;
+  }
+
   // ---------- 联机视图安全工具 ----------
   // 阶段用英文 id（与引擎 phase 一致；尾影/判定等依赖 'play'），ph 缺失/越界回退 'serve'
   const PHASE_BY_ID = ['serve', 'play', 'point', 'over'];
@@ -486,11 +533,12 @@
   // 镜像视口后按键方向与屏幕方向一致；蓝方（side 1）无需镜像
   /* 铺参考图底板：必须在 applyViewMirror **之前**调用（镜像会把它左右翻反）。
      底板里已经画好球台/球网/光海/光锥/地板/看台，所以后面不再画这些。 */
-  function paintArenaPlate(w, h) {
+  function paintArenaPlate(w, h, keepTransform) {
     const T = PPD.TTG;
     if (T && T.plateReady && T.plateReady()) {
       PPD.ctx.save();
-      PPD.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // keepTransform：震屏/推近时底片必须与球员一起动，否则球员会在静态底片上"滑动"
+      if (!keepTransform) PPD.ctx.setTransform(1, 0, 0, 1, 0, 0);
       T.drawArenaPlate(PPD.ctx, w, h);
       PPD.ctx.restore();
     }
@@ -521,6 +569,7 @@
       PPD.ctx.beginPath();
       PPD.ctx.rect(side === 0 ? 0 : half, 0, half, h);
       PPD.ctx.clip();
+      juiceTransform(PPD.ctx, side === 0 ? 0 : half, 0, half, h);
       if (side === 0) applyViewMirror(PPD.ctx, half);
       // 底片不跟着镜像（否则左橙右青会反），球员/球仍跟着镜像
       view.plateFlip = side === 0;
@@ -705,9 +754,12 @@
     const cam = makeCam(PPD.app.side, myX, 0, 0, w, h);
     view.cam = cam;
     PPD.ctx.save();
+    juiceTransform(PPD.ctx, 0, 0, w, h);
+    PPD.ctx.save();
     if (PPD.app.side === 0) applyViewMirror(PPD.ctx, w);
     view.plateFlip = PPD.app.side === 0;
     PPD.TTG.drawScene(PPD.ctx, view, w, h);
+    PPD.ctx.restore();
     PPD.ctx.restore();
   }
 
@@ -715,7 +767,9 @@
     // 人机模式：单人全屏视角（自己=红方）
     const w = PPD.app.resizeW, h = PPD.app.resizeH;
     PPD.ctx.clearRect(0, 0, w, h);
-    paintArenaPlate(w, h);      // 底片在镜像之外铺
+    PPD.ctx.save();
+    const juiced = juiceTransform(PPD.ctx, 0, 0, w, h);
+    paintArenaPlate(w, h, juiced); // 底片在镜像之外铺；震屏时随画面一起动
     const view = viewModelFromEngine(PPD.app.engine, 0);
     updateTrail(view);
     const cam = makeCam(0, PPD.app.engine.players[0].x, 0, 0, w, h);
@@ -723,6 +777,7 @@
     PPD.ctx.save();
     applyViewMirror(PPD.ctx, w);
     PPD.TTG.drawScene(PPD.ctx, view, w, h);
+    PPD.ctx.restore();
     PPD.ctx.restore();
   }
 
@@ -902,7 +957,10 @@
     const view = viewModelFromEngine(PPD.app.engine, 0);
     updateTrail(view);
     view.cam = makeSideCam(w, h);
+    PPD.ctx.save();
+    juiceTransform(PPD.ctx, 0, 0, w, h);
     PPD.TTG.drawScene(PPD.ctx, view, w, h);
+    PPD.ctx.restore();
   }
 
   // AI对打·球员视角（跟随某一方）：借用该方现有第三人称机位（红方视角镜像、蓝方不镜像）
@@ -916,8 +974,11 @@
     const cam = makeCam(s, PPD.app.engine.players[s].x, 0, 0, w, h);
     view.cam = cam;
     PPD.ctx.save();
+    juiceTransform(PPD.ctx, 0, 0, w, h);
+    PPD.ctx.save();
     if (s === 0) applyViewMirror(PPD.ctx, w);
     PPD.TTG.drawScene(PPD.ctx, view, w, h);
+    PPD.ctx.restore();
     PPD.ctx.restore();
   }
 
@@ -931,6 +992,10 @@
   PPD.renderWatch = renderWatch;         // P3 AI对打·球员视角（跟随甲/乙）
   PPD.updateTrail = updateTrail;       // 回放（replay.js）复用尾影
   PPD.applyViewMirror = applyViewMirror; // 回放复用红方视角镜像
+  PPD.fxKick = fxKick;                 // 事件层（hud/net）触发震屏/推近
+  PPD.fxStep = fxStep;                 // 主循环按真实时间衰减
+  PPD.juiceLevel = juiceLevel;         // 测试/诊断：当前强度
+  PPD.juiceTransform = juiceTransform; // 测试/诊断：变换计算
   PPD.viewModelFromEngine = viewModelFromEngine;
   PPD.viewModelFromSnap = viewModelFromSnap;
   PPD.viewModelFromSnapInterp = viewModelFromSnapInterp;

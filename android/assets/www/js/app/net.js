@@ -396,11 +396,23 @@
         PPD.app.lastEventKeys.add(key);
         if (PPD.app.lastEventKeys.size > 24) PPD.app.lastEventKeys.delete(PPD.app.lastEventKeys.values().next().value);
         switch (e.c) {
-          case 'hit':
+          case 'hit': {
             PPD.GameAudio.hit();
             // 追踪最后击球者(联机撞击溅射特效按击球者装备渲染,v2.0)
             PPD.app.lastHitter = e.s;
+            // v3.6.0 物理反馈：快照球速决定火花强度；快照里带挥拍类型，扣杀(st=2)加强
+            const bh = (m.s && m.s.b) || null;
+            if (bh) {
+              const spd = Math.hypot(bh[3], bh[4], bh[5]);
+              const st = m.s.p && m.s.p[e.s] && m.s.p[e.s].st;
+              const smash = !!(st && st[0] === 2);
+              const pow = Math.max(0, Math.min(1, (spd - 4) / 16));
+              PPD.addFx('hit', bh[0], bh[1], bh[2], (m.s.t || PPD.app.snapB.t) / 1000,
+                e.s, smash ? Math.max(pow, 0.75) : pow);
+              if (PPD.fxKick) PPD.fxKick(smash ? 'smash' : 'hit', 0.35 + pow * 0.65);
+            }
             break;
+          }
           case 'bounce': {
             PPD.GameAudio.bounce();
             const bb = (m.s && m.s.b) || null;
@@ -408,11 +420,16 @@
               // 发球阶段(ph=0)落台特效按发球方归属,修复开局 lastHitter 残留导致的波纹+溅射同屏
               const inServe = m.s.ph === 0;
               const hitterSide = inServe ? m.s.sv : (PPD.app.lastHitter >= 0 ? PPD.app.lastHitter : -1);
-              PPD.addFx('bounce', bb[0], bb[1], bb[2], (m.s.t || PPD.app.snapB.t) / 1000, hitterSide);
+              PPD.addFx('bounce', bb[0], bb[1], bb[2], (m.s.t || PPD.app.snapB.t) / 1000, hitterSide,
+                Math.max(0, Math.min(1, (Math.hypot(bb[3], bb[4], bb[5]) - 3) / 12)));
             }
+            if (PPD.fxKick) PPD.fxKick('bounce', 0.6);
             break;
           }
-          case 'net': PPD.GameAudio.net(); break;
+          case 'net':
+            PPD.GameAudio.net();
+            if (PPD.fxKick) PPD.fxKick('net', 0.8);
+            break;
           case 'serve': PPD.GameAudio.serve(); break;
           case 'serve-ready':
             // 新一轮发球：轮到我就用最近指针位置恢复瞄准（预览由服务端快照 sp 驱动）
@@ -424,6 +441,7 @@
               PPD.GameAudio.score();
               PPD.GameAudio.cheer();   // 得分 → 掌声音效
               PPD.triggerCheer(e.s);   // 得分方观众欢呼、对方摇头
+              if (PPD.fxKick) PPD.fxKick('score', 1); // 得分瞬间镜头一顿
               // 失分原因（含未过网）：与本地/人机同一映射，按快照 pointReason 显示
               const reason = { double: '两次弹跳', out: '出界', 'opp-miss': '未能回球', volley: '违例拦击', 'serve-fault': '发球失误', 'no-cross': '未过网', 'serve-timeout': '发球超时' }[(m.s && m.s.pr) || ''] || '';
               PPD.showPoint(`${e.s === PPD.app.side ? '你' : '对手'} 得分${reason ? ' · ' + reason : ''}`);
@@ -433,6 +451,7 @@
             PPD.GameAudio.over();
             PPD.GameAudio.cheer();   // 终局 → 掌声
             PPD.triggerCheer(e.s);   // 胜方观众欢呼、败方摇头
+            if (PPD.fxKick) PPD.fxKick('over', 1); // 终局：整场最后一记重震
             PPD.app.paused = false;
             PPD.show(PPD.ui.pausePanel, false);
             PPD.updateGameTools();
