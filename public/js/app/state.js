@@ -302,6 +302,7 @@
     fpCam: null,          // 最近一帧的第一人称相机（调试/兼容）
     fpCams: [null, null], // 按 side 存的第一人称相机（本地分屏发球瞄准各用各的）
     fpGaze: {},           // 按 slot 存的第一人称视线平滑状态（分屏两边独立平滑）
+    fpReach: [0, 0],      // 视觉接触的球拍追球权重（分屏两侧独立平滑）
     // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 奖励方案 + 能力训练等级（localStorage 持久化,网页版禁用）
     points: 0,            // 积分余额(ppd_points)；初始 0，靠对战/首次通关奖励赚取（已有本地数据时以本地为准）
     owned: { trail: [], splash: false }, // 持有库存(兑换入库存,不自动装配)；v2.1 特效分离:仅尾影/溅射
@@ -564,6 +565,7 @@
     app.fpCam = null;
     app.fpCams = [null, null];
     app.fpGaze = {};
+    app.fpReach = [0, 0];
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(CAMERA_VIEW_KEY, app.cameraView); } catch (e) { /* ignore */ }
     if (ui.cameraView) ui.cameraView.value = app.cameraView;
   }

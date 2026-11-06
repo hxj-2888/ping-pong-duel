@@ -1765,7 +1765,7 @@
       }
     }
     // 球在发球者手中时绘制在角色之后（手部之前会由角色绘制）
-    if (view.ballInHand) {
+    if (view.ballInHand && !view.hideBallInHand) {
       drawBall(ctx, cam, view.ballInHand, v3(0, 0, 0), time);
     }
     /* 〔2026-10-22 暗场〕overlay 模式：整帧最后画一次「球台避让 + 四角暗角 + 体积光」。

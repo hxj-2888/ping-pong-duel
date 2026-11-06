@@ -798,8 +798,8 @@ async function main() {
       check('本地分屏 FP：相机中心各自对齐半屏中点',
         Math.abs(c0.cx - halfW / 2) < 1 &&
         Math.abs(c1.cx - (halfW + (t.app.resizeW - halfW) / 2)) < 1);
-      const a0 = t.ppd.serveAimFromPointer(320, 420, 0);
-      const a1 = t.ppd.serveAimFromPointer(960, 420, 1);
+      const a0 = t.ppd.serveAimFromPointer(320, 345, 0);
+      const a1 = t.ppd.serveAimFromPointer(960, 345, 1);
       check('本地分屏 FP：P1 发球落点在对方半台（z>0）',
         !!a0 && a0.z > 0.2 && Math.abs(a0.x) <= 0.76);
       check('本地分屏 FP：P2 发球落点在对方半台（z<0，半屏坐标映射）',
@@ -951,10 +951,13 @@ async function main() {
       check('第一人称：设置切换写入 app.cameraView', t.app.cameraView === 'first');
       t.runFrames(30);
       check('第一人称：渲染 30 帧无异常且产出相机', !!t.app.fpCam && t.app.fpCam.f > 0);
-      check('第一人称：眼高约 1.62m（站立）', t.app.fpCam && Math.abs(t.app.fpCam.eye.y - 1.62) < 0.1);
+      check('第一人称：眼高约 1.86m（站立，后上方机位）', t.app.fpCam && Math.abs(t.app.fpCam.eye.y - 1.86) < 0.1);
+      const nearEdge = t.app.fpCam && t.app.fpCam.project({ x: 0, y: TT.RULES.TABLE_HEIGHT, z: -TT.RULES.TABLE_LENGTH / 2 });
+      check('第一人称：能看到近端台沿（投影在画面内）',
+        !!nearEdge && nearEdge.y > 0 && nearEdge.y < t.app.resizeH);
       check('第一人称：广角（焦距 < 屏宽，区别于主视口 2×）', t.app.fpCam && t.app.fpCam.f < t.app.resizeW);
       check('第一人称：相机在红方半场（z<0）', t.app.fpCam && t.app.fpCam.eye.z < 0);
-      const aim = t.ppd.serveAimFromPointer(700, 420, 0);
+      const aim = t.ppd.serveAimFromPointer(700, 370, 0);
       check('第一人称：发球瞄准可解出对方半台落点',
         !!aim && aim.z > 0.2 && Math.abs(aim.x) <= 0.76);
       t.elements.get('cameraView').value = 'third';
@@ -1350,7 +1353,7 @@ async function main() {
     t.elements.get('cameraView').dispatch('change', {});
     t.runFrames(10);
     check('回放 FP：相机产出且眼高正常',
-      !!t.app.fpCams[0] && Math.abs(t.app.fpCams[0].eye.y - 1.62) < 0.1);
+      !!t.app.fpCams[0] && Math.abs(t.app.fpCams[0].eye.y - 1.86) < 0.1);
     t.elements.get('cameraView').value = 'third';
     t.elements.get('cameraView').dispatch('change', {});
     t.runFrames(5);
@@ -1422,7 +1425,7 @@ async function main() {
     t.runFrames(20);
     check('联机 FP：主机相机在 -z', !!t.app.fpCams[0] && t.app.fpCams[0].eye.z < 0);
     check('联机 FP：渲染无异常', !t.app._loopErrWarned);
-    const oa0 = t.ppd.serveAimFromPointer(900, 420, 0);
+    const oa0 = t.ppd.serveAimFromPointer(900, 370, 0);
     check('联机 FP：主机发球瞄准可解出落点', !!oa0 && Math.abs(oa0.x) <= 0.76);
     t.elements.get('cameraView').value = 'third';
     t.elements.get('cameraView').dispatch('change', {});
@@ -1476,7 +1479,7 @@ async function main() {
     t.elements.get('cameraView').dispatch('change', {});
     t.runFrames(20);
     check('联机 FP：加入方相机在 +z', !!t.app.fpCams[1] && t.app.fpCams[1].eye.z > 0);
-    const oa1 = t.ppd.serveAimFromPointer(700, 420, 1);
+    const oa1 = t.ppd.serveAimFromPointer(700, 370, 1);
     check('联机 FP：加入方发球瞄准可解出落点', !!oa1 && Math.abs(oa1.x) <= 0.76);
     t.elements.get('cameraView').value = 'third';
     t.elements.get('cameraView').dispatch('change', {});

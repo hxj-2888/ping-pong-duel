@@ -1023,9 +1023,12 @@
      3. 己方身体：drawScene 前过滤掉己方球员（世界空间火柴人近看会穿帮），
         手臂/球拍改由 drawFirstPersonView 在镜像之外画；文字 HUD 同理不镜像。 */
   const FP = {
-    eyeY: 1.62,
+    eyeY: 1.86,       // 眼位抬高：能同时看到近端台沿与对手
+    back: 1.15,       // 眼位在球员身后（不是贴着脸/台面）
     ahead: 2.6,
     gazeY: 1.05,
+    leanMax: 0.10,    // W/S 上身/球拍前倾幅度（过大易晕）
+    follow: 0.06,     // 跟球权重（1.0=完全追球；越小越稳）
   };
 
   function fpDamp(cur, target, rate, dt) {
@@ -1044,19 +1047,26 @@
     const crouch = player.crouch || 0;
     const speed = Math.hypot(player.vx || 0, player.vz || 0);
     const t = Number.isFinite(viewCtx.time) ? viewCtx.time : now;
-    const bob = Math.sin(t * 2.3) * 0.004 + Math.sin(t * 8.7) * 0.0025 * Math.min(1, speed / 3);
-    const eyeY = FP.eyeY - 0.16 * crouch + bob;
-    const eyeZ = player.z + f * 0.08;
-    const ex = fresh ? player.x : fpDamp(st.ex, player.x, 16, dt);
+    const bob = Math.sin(t * 2.3) * 0.002 + Math.sin(t * 8.7) * 0.0012 * Math.min(1, speed / 3);
     // 发球方持球：视线锁定（不跟球、不跟瞄准），保证反投影落点稳定
     const serving = viewCtx.phase === 'serve' && viewCtx.server === side;
-    let tx = player.x, ty = FP.gazeY, tz = player.z + f * FP.ahead;
+    /* W/S 上身/球拍前倾：脚仍受台面禁区限制，只让眼位与接球点前探/后坐。
+       vz 是引擎/快照里的前后速度（side 0 向网为 +，side 1 向网为 -），乘 f 统一成“向网前”为正。
+       发球相锁定为 0，避免准星随移动漂；幅度压小，减少晕 3D。 */
+    const fwdLean = T.clamp((player.vz || 0) * f / 3.2, -1, 1);
+    const lean = serving ? 0 : fwdLean;
+    const leanZ = lean * FP.leanMax;
+    const eyeY = FP.eyeY - 0.16 * crouch + bob - 0.02 * Math.max(0, lean);
+    // 眼位在球员身后 FP.back（保留原来 +0.08 的前移修正），前倾时向网前挪 leanZ
+    const eyeZ = player.z + f * (0.08 - FP.back + leanZ);
+    const ex = fresh ? player.x : fpDamp(st.ex, player.x, 22, dt);
+    let tx = player.x, ty = FP.gazeY, tz = eyeZ + f * FP.ahead;
     const ball = viewCtx.ball;
     if (!serving && ball && viewCtx.phase === 'play') {
-      // 轻微跟球：横向 0.30 / 纵向 0.35 / 纵深 0.28——能看见快球，又不会把台面甩出画
-      tx = tx * 0.70 + ball.x * 0.30;
-      ty = ty + T.clamp(ball.y - 1.0, -0.35, 1.0) * 0.35;
-      tz = tz + (ball.z - tz) * 0.28;
+      // 轻微跟球（权重 0.10）：只做提示，不再大幅甩头
+      tx = tx * (1 - FP.follow) + ball.x * FP.follow;
+      ty = ty + T.clamp(ball.y - 1.0, -0.35, 1.0) * 0.12;
+      tz = tz + (ball.z - tz) * FP.follow;
     }
     ty = T.clamp(ty, 0.72, 1.45);
     if (fresh) {
@@ -1075,8 +1085,8 @@
     const cam = new T.Camera();
     const eye = T.v3(st.ex, st.ey, st.ez);
     const look = T.v3(st.tx, st.ty, st.tz);
-    // 竖屏按宽、横屏按高取焦距，目标约 88° 水平 FOV（不能沿用主视口的 2.0×屏宽长焦）
-    const focal = Math.max(vw * 0.52, Math.min(vh * 0.92, vw * 0.95));
+    // 视野略收窄（约 84° 水平），减少广角边缘的眩晕感
+    const focal = Math.max(vw * 0.56, Math.min(vh * 0.95, vw * 0.95));
     cam.set(eye, look, vx + vw / 2, vy + vh / 2, focal);
     return cam;
   }
@@ -1116,20 +1126,59 @@
     const sw = st.active ? Math.sin(prog * Math.PI) : 0;
     const drive = st.type === 2 || st.type === 3;
     const back = T.clamp(pl.sb || 0, 0, 1.2);
+    // W/S 上身/球拍前倾：脚不动，视图模型前探/后坐（发球相不倾，保持持球稳定）
+    const fwd = (view && view.phase === 'serve')
+      ? 0
+      : T.clamp((pl.vz || 0) * (mirrored ? 1 : -1) / 3.2, -1, 1);
+    const leanLift = fwd * 0.018 * vh;
     const baseX = vx + vw * (mirrored ? 0.64 : 0.36);
-    const baseY = vy + vh * 0.84;
+    const baseY = vy + vh * 0.84 - leanLift;
     const scale = Math.min(vw, vh) / 720;
-    const size = 128 * scale;
+    const sizeBase = 128 * scale * (1 + fwd * 0.03);
     const dir = mirrored ? -1 : 1; // 挥拍时向身体中线收
-    const px = baseX + dir * sw * (drive ? 0.035 : 0.018) * vw;
-    const py = baseY + T.clamp(pl.crouch || 0, 0, 1) * 0.035 * vh -
+    let px = baseX + dir * sw * (drive ? 0.035 : 0.018) * vw;
+    let py = baseY + T.clamp(pl.crouch || 0, 0, 1) * 0.035 * vh -
       sw * (drive ? 0.10 : 0.055) * vh + back * 0.02 * vh;
+
+    /* 视觉接触：球在接球箱内或挥拍命中时，球拍/手臂追到球的屏幕投影。
+       判定仍是引擎的接球箱（不改物理）；这里只补“手碰到球”的视觉。
+       reach 做平滑：挥拍时快速伸手，收拍后缓慢收回，避免一帧大跳。 */
+    let targetReach = 0;
+    let rtx = px, rty = py;
+    const ball = view && view.ball;
+    if (ball && view.phase === 'play' && view.cam) {
+      const R = PPD.TT.RULES;
+      const hz = pl.z + (pl.facing || 0) * R.HITBOX_Z_OFF;
+      const yTop = pl.crouch ? R.CROUCH_HITBOX_Y_TOP : R.HITBOX_Y_TOP;
+      const yBottom = pl.crouch ? R.CROUCH_HITBOX_Y_BOTTOM : R.HITBOX_Y_BOTTOM;
+      const inBox = Math.abs(ball.pos.x - pl.x) < R.HITBOX_HX &&
+        Math.abs(ball.pos.z - hz) < R.HITBOX_HZ &&
+        ball.pos.y > yBottom && ball.pos.y < yTop;
+      if (inBox || (st.active && st.hit)) {
+        const q = view.cam.project(ball.pos);
+        if (q) {
+          const sx = fpAnchorX(mirrored, vx, vw, q.x);
+          const sy = q.y;
+          rtx = T.clamp(sx, vx + vw * 0.16, vx + vw * 0.84);
+          rty = T.clamp(sy, vy + vh * 0.50, vy + vh * 0.82);
+          targetReach = st.hit ? 1 : (st.active ? T.clamp(prog * 1.6, 0, 0.85) : 0.45);
+        }
+      }
+    }
+    if (!PPD.app.fpReach) PPD.app.fpReach = [0, 0];
+    const prevReach = PPD.app.fpReach[side] || 0;
+    const reach = prevReach + (targetReach - prevReach) * (targetReach > prevReach ? 0.35 : 0.18);
+    PPD.app.fpReach[side] = reach;
+    px += (rtx - px) * reach;
+    py += (rty - py) * reach;
+    // 手伸到球附近时按距离缩小拍面：128px 是“贴近镜头”的尺寸，伸到台面中部只用约 60%
+    const size = sizeBase * (1 - reach * 0.42);
     const rot = (mirrored ? 1 : -1) * (-0.22 + sw * (drive ? 0.55 : 0.30) + back * 0.10);
     const handleD = size * 0.52;
     const hx = px - Math.sin(rot) * handleD;
     const hy = py + Math.cos(rot) * handleD;
     const armX = baseX + (mirrored ? vw * 0.30 : -vw * 0.30);
-    const armY = vy + vh * 1.10;
+    const armY = vy + vh * 1.10 - leanLift;
     const ctrlX = hx + (armX - hx) * 0.45 + (mirrored ? -vw * 0.03 : vw * 0.03);
     const ctrlY = hy + (armY - hy) * 0.42;
 
@@ -1199,8 +1248,8 @@
     ctx.stroke();
     ctx.restore();
 
-    // 持球（发球）：球在拍面上方
-    if (view && view.ballInHand) {
+    // 持球（发球）：只有己方发球时，球才在自己拍面上方（对手持球不画到自己手里）
+    if (view && view.ballInHand && view.server === side) {
       const bx = px + (mirrored ? -1 : 1) * size * 0.05;
       const by = py - size * 0.58;
       ctx.beginPath();
@@ -1482,6 +1531,8 @@
     view.noCrowd = true;   // 观众席缓存 key 不含相机朝向，第一人称先关观众
     view.noPlate = true;   // 底板按主视口标定，第一人称强制程序化场景
     view.plateFlip = false;
+    // 己方发球时，世界层的持球由视图模型画在自己拍面上；隐藏世界层那颗，避免一球两画
+    view.hideBallInHand = view.server === s;
     // 只让发球方的视口显示发球轨迹/落点环（分屏/观战两边都不该替对手看落点）
     if (view.servePath && view.server !== s) view.servePath = null;
     // 己方身体过滤掉（世界空间火柴人贴脸会穿帮）；手臂/球拍由视图模型接管
@@ -1493,7 +1544,7 @@
        （key 含 eye.x 桶）才不会被横移每 0.06m 打掉。地板是柔和径向渐变，
        固定站位与真实眼位的差别不可见；球台/球员/球仍用真实 cam。 */
     const floorCam = new PPD.TTG.Camera();
-    const fEye = PPD.TTG.v3(0, FP.eyeY, s === 0 ? -1.65 : 1.65);
+    const fEye = PPD.TTG.v3(0, FP.eyeY, s === 0 ? -(1.65 + FP.back - 0.08) : (1.65 + FP.back - 0.08));
     const fLook = PPD.TTG.v3(0, FP.gazeY, fEye.z + (s === 0 ? FP.ahead : -FP.ahead));
     floorCam.set(fEye, fLook, vx + vw / 2, vy + vh / 2, cam.f);
     view.floorCam = floorCam;
