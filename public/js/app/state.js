@@ -111,6 +111,7 @@
     bhCursor: document.getElementById('bhCursor'),
     quality: document.getElementById('quality'),
     setNoCrowd: document.getElementById('setNoCrowd'),
+    cameraView: document.getElementById('cameraView'), // 第一人称/第三人称（设置面板）
     appVersion: document.getElementById('appVersion'),
     frameRate: document.getElementById('frameRate'),
     serverLine: document.getElementById('setServerLine'), // v2.5:联机服务器线路（线路一 Cloudflare / 线路二 ECS）
@@ -296,6 +297,11 @@
     // frameRate=渲染帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率，物理仍 120Hz 步进）
     quality: { mode: 'high', low: false, frameMs: 16.67, frameRate: 'unlimited' },
     noCrowd: true, // 关闭环境观众（设置面板勾选框，默认关闭；低画质/联机恒为无观众）
+    // 比赛视角：'third'=现有高位第三人称（默认） / 'first'=第一人称（全对战模式）
+    cameraView: 'third',
+    fpCam: null,          // 最近一帧的第一人称相机（调试/兼容）
+    fpCams: [null, null], // 按 side 存的第一人称相机（本地分屏发球瞄准各用各的）
+    fpGaze: {},           // 按 slot 存的第一人称视线平滑状态（分屏两边独立平滑）
     // 养成系统(v2.0)：对战积分 + 持有库存/当前装配 + 奖励方案 + 能力训练等级（localStorage 持久化,网页版禁用）
     points: 0,            // 积分余额(ppd_points)；初始 0，靠对战/首次通关奖励赚取（已有本地数据时以本地为准）
     owned: { trail: [], splash: false }, // 持有库存(兑换入库存,不自动装配)；v2.1 特效分离:仅尾影/溅射
@@ -372,6 +378,14 @@
     ui.setNoCrowd.checked = app.noCrowd;
     ui.setNoCrowd.disabled = app.quality.low; // 低画质观众恒关，勾选框置灰
   }
+
+  // ---------- 比赛视角（默认第三人称；localStorage 记忆） ----------
+  const CAMERA_VIEW_KEY = 'ppd_camera_view';
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(CAMERA_VIEW_KEY) : null;
+    if (v === 'first' || v === 'third') app.cameraView = v;
+  } catch (e) { /* ignore */ }
+  if (ui.cameraView) ui.cameraView.value = app.cameraView;
 
   // ---------- 帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率；localStorage 记忆） ----------
   const FRAME_RATE_KEY = 'ppd_frame_rate';
@@ -543,6 +557,17 @@
     if (PPD.TTG && PPD.TTG.clearCrowdCache) PPD.TTG.clearCrowdCache();
   }
 
+  // 比赛视角切换：只影响渲染层，不动物理/联机协议；第一人称覆盖全部对战模式。
+  // 切视角时清空视线平滑状态与按 side 的相机，下一帧按新机位重建。
+  function setCameraView(v) {
+    app.cameraView = v === 'first' ? 'first' : 'third';
+    app.fpCam = null;
+    app.fpCams = [null, null];
+    app.fpGaze = {};
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(CAMERA_VIEW_KEY, app.cameraView); } catch (e) { /* ignore */ }
+    if (ui.cameraView) ui.cameraView.value = app.cameraView;
+  }
+
   // 切换帧率上限（30/60/无上限）：渲染门控即时生效（物理仍 120Hz；无上限=每帧 RAF 都渲染）
   function setFrameRate(f) {
     app.quality.frameRate = f === 30 || f === 60 || f === 'unlimited' ? f : 'unlimited';
@@ -671,6 +696,7 @@
     isHellCleared, markHellCleared, syncHellOptions,
     getEndlessHighest, getEndlessUnlocked, setEndlessHighest, setEndlessUnlocked, advanceEndless, resetEndless,
     setQuality, setFrameRate, setNoCrowd,
+    setCameraView,
     getPlayerName, loadAINames, saveAINames,
     savePoints, saveOwned, saveEquip, savePlans, saveBonus, saveTraining,
     triggerCheer, updateMusicIntensity,

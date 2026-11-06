@@ -135,7 +135,7 @@ const ELEMENT_IDS = [
   'teamA', 'teamAName', 'teamFlagA', 'teamB', 'teamBName', 'teamFlagB',
   'flagP1', 'flagP2', 'teamIntro', 'tiFlagL', 'tiFlagR', 'tiNameL', 'tiNameR',
   'pauseAITune', 'tuneOppReact', 'tuneOppCatch', 'tuneOppSmash', 'tuneOppAgility', // 人机：地狱通关后的电脑 AI 数值调控
-  'quality', 'setNoCrowd', 'frameRate', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/60/无上限)
+  'quality', 'setNoCrowd', 'frameRate', 'cameraView', // 画质(高/低) + 关闭环境观众勾选框 + 帧率上限(30/60/无上限) + 比赛视角
   'bgmAudio', // raw 游戏音乐 <audio> 元素（audio.js loadBGM 挂接）
   'dressupPanel', 'btnDressupBack', 'btnDressup', // 战功系统页（入口 btnDressup 的网页版置灰态在 2.7 段断言）
   'honorsRewardTab', 'btnHonorsReward', 'careerStats', 'careerList', 'careerPageLabel', 'btnCareerPrev', 'btnCareerNext', // 战功合并页（P1-b：战斗奖励 + 生涯战绩 + 历史回放）
@@ -786,6 +786,30 @@ async function main() {
     t.runFrames(30);
     check('前后移动后渲染无异常', true);
 
+    // 本地分屏第一人称：两半各一台 FP 相机 + P2 半屏发球瞄准映射
+    {
+      t.elements.get('cameraView').value = 'first';
+      t.elements.get('cameraView').dispatch('change', {});
+      t.runFrames(30);
+      const c0 = t.app.fpCams[0], c1 = t.app.fpCams[1];
+      const halfW = Math.floor(t.app.resizeW / 2);
+      check('本地分屏 FP：两半各一台相机', !!c0 && !!c1);
+      check('本地分屏 FP：红半在 -z / 蓝半在 +z', c0.eye.z < 0 && c1.eye.z > 0);
+      check('本地分屏 FP：相机中心各自对齐半屏中点',
+        Math.abs(c0.cx - halfW / 2) < 1 &&
+        Math.abs(c1.cx - (halfW + (t.app.resizeW - halfW) / 2)) < 1);
+      const a0 = t.ppd.serveAimFromPointer(320, 420, 0);
+      const a1 = t.ppd.serveAimFromPointer(960, 420, 1);
+      check('本地分屏 FP：P1 发球落点在对方半台（z>0）',
+        !!a0 && a0.z > 0.2 && Math.abs(a0.x) <= 0.76);
+      check('本地分屏 FP：P2 发球落点在对方半台（z<0，半屏坐标映射）',
+        !!a1 && a1.z < -0.2 && Math.abs(a1.x) <= 0.76);
+      t.elements.get('cameraView').value = 'third';
+      t.elements.get('cameraView').dispatch('change', {});
+      t.runFrames(10);
+      check('本地分屏切回第三人称：渲染正常', t.app.cameraView === 'third');
+    }
+
     // 键盘推球/扣球：P1 用鼠标单击发球（W/S 已不再触发挥拍）
     TT.resetMatch(t.app.engine);
     t.runFrames(40);
@@ -919,6 +943,26 @@ async function main() {
     check('AI 模式：电脑自动发球', served);
     t.runFrames(300);
     check('AI 模式渲染 300 帧无异常', true);
+
+    // 第一人称（人机）：设置切视角 → 眼高/广角相机 + 渲染无异常；发球反投影仍可解出落点
+    {
+      t.elements.get('cameraView').value = 'first';
+      t.elements.get('cameraView').dispatch('change', {});
+      check('第一人称：设置切换写入 app.cameraView', t.app.cameraView === 'first');
+      t.runFrames(30);
+      check('第一人称：渲染 30 帧无异常且产出相机', !!t.app.fpCam && t.app.fpCam.f > 0);
+      check('第一人称：眼高约 1.62m（站立）', t.app.fpCam && Math.abs(t.app.fpCam.eye.y - 1.62) < 0.1);
+      check('第一人称：广角（焦距 < 屏宽，区别于主视口 2×）', t.app.fpCam && t.app.fpCam.f < t.app.resizeW);
+      check('第一人称：相机在红方半场（z<0）', t.app.fpCam && t.app.fpCam.eye.z < 0);
+      const aim = t.ppd.serveAimFromPointer(700, 420, 0);
+      check('第一人称：发球瞄准可解出对方半台落点',
+        !!aim && aim.z > 0.2 && Math.abs(aim.x) <= 0.76);
+      t.elements.get('cameraView').value = 'third';
+      t.elements.get('cameraView').dispatch('change', {});
+      t.runFrames(10);
+      check('切回第三人称：渲染正常', t.app.cameraView === 'third');
+    }
+
     check('AI 模式难度显示', t.elements.get('netInfo').textContent.indexOf('人机对战') === 0);
     // 桌面操作说明：极简键位说明（移动/推球/扣球/蹲下），且不含手机端"摇杆/按钮"
     check('桌面操作说明：极简键位且无摇杆/蹲按钮',
@@ -1013,6 +1057,19 @@ async function main() {
     check('模拟推演：双方 AI 自动对打', played);
     t.runFrames(300);
     check('模拟推演渲染 300 帧无异常', true);
+
+    // AI 观战第一人称：球员视角·甲 / 乙都能走 FP
+    t.elements.get('cameraView').value = 'first';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(20);
+    check('AI 观战 FP：跟随甲相机在 -z', !!t.app.fpCams[0] && t.app.fpCams[0].eye.z < 0);
+    t.app.aiFollowSide = 1;
+    t.runFrames(20);
+    check('AI 观战 FP：跟随乙相机在 +z', !!t.app.fpCams[1] && t.app.fpCams[1].eye.z > 0);
+    t.app.aiFollowSide = 0;
+    t.elements.get('cameraView').value = 'third';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(5);
     // 模拟推演虚线面板：实时计算球高（v2.4 已移除碰撞箱数字与扣杀/高吊行）
     t.app.showHitRanges = true;
     t.runFrames(10);
@@ -1287,6 +1344,16 @@ async function main() {
     t.elements.get('btnReplayPlay').dispatch('click', {});
     t.runFrames(30);
     check('回放播放中：按钮变为暂停', t.elements.get('btnReplayPlay').textContent === '⏸ 暂停');
+
+    // 回放第一人称：快照视图走 FP
+    t.elements.get('cameraView').value = 'first';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(10);
+    check('回放 FP：相机产出且眼高正常',
+      !!t.app.fpCams[0] && Math.abs(t.app.fpCams[0].eye.y - 1.62) < 0.1);
+    t.elements.get('cameraView').value = 'third';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(5);
     t.elements.get('btnReplayBack').dispatch('click', {});
     check('回放播放器关闭返回结算页', t.elements.get('replayPanel').style.display === 'none' &&
       t.elements.get('gameOver').style.display !== 'none');
@@ -1349,6 +1416,18 @@ async function main() {
     check('HUD 显示双方昵称', t.elements.get('hudP1').textContent === '房主' && t.elements.get('hudP2').textContent === '小红');
     check('HUD 比分按服务器侧显示', t.elements.get('score1').textContent === '3' && t.elements.get('score2').textContent === '7');
 
+    // 联机第一人称（主机 side 0）：快照视图走 FP；发球瞄准可解
+    t.elements.get('cameraView').value = 'first';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(20);
+    check('联机 FP：主机相机在 -z', !!t.app.fpCams[0] && t.app.fpCams[0].eye.z < 0);
+    check('联机 FP：渲染无异常', !t.app._loopErrWarned);
+    const oa0 = t.ppd.serveAimFromPointer(900, 420, 0);
+    check('联机 FP：主机发球瞄准可解出落点', !!oa0 && Math.abs(oa0.x) <= 0.76);
+    t.elements.get('cameraView').value = 'third';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(5);
+
     t.key('KeyD'); t.runFrames(5);
     check('联机输入已发送（位掩码 k.r=bit1）', t.sentMessages.some((m) => m.t === 'in' && typeof m.k === 'number' && (m.k & 2) === 2));
     t.key('KeyD', false);
@@ -1391,6 +1470,17 @@ async function main() {
     check('加入方 HUD 昵称调换（自己=小蓝）', t.elements.get('hudP1').textContent === '小蓝' && t.elements.get('hudP2').textContent === '房主');
     check('加入方 HUD 比分调换（自己=9）', t.elements.get('score1').textContent === '9' && t.elements.get('score2').textContent === '2');
     check('发球点显示在对方（房主）一侧', t.elements.get('serveDot').style.left.indexOf('+') >= 0);
+
+    // 联机第一人称（加入方 side 1）：相机在 +z；发球瞄准非镜像映射
+    t.elements.get('cameraView').value = 'first';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(20);
+    check('联机 FP：加入方相机在 +z', !!t.app.fpCams[1] && t.app.fpCams[1].eye.z > 0);
+    const oa1 = t.ppd.serveAimFromPointer(700, 420, 1);
+    check('联机 FP：加入方发球瞄准可解出落点', !!oa1 && Math.abs(oa1.x) <= 0.76);
+    t.elements.get('cameraView').value = 'third';
+    t.elements.get('cameraView').dispatch('change', {});
+    t.runFrames(5);
 
     t.key('Comma'); t.runFrames(5);
     check('加入方按 , 推球已发送（位掩码 k.pu=bit2）', t.sentMessages.some((m) => m.t === 'in' && typeof m.k === 'number' && (m.k & 4) === 4));

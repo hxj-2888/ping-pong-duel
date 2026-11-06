@@ -504,19 +504,27 @@
         ctxX = half - clientX; // 红方视口已镜像
       } else {
         clientX = clampN(clientX, half, w);
-        ctxX = clientX - half;
+        // 右半屏不镜像：相机 cx 含半屏偏移，必须用画布绝对坐标
+        // （旧实现 ctxX=clientX-half 会让 P2 落点整体偏到台外）
+        ctxX = clientX;
       }
-      cam = makeCam(side, eng ? eng.players[side].x : 0, side === 0 ? 0 : half, 0, half, h);
+      const fp = PPD.app.cameraView === 'first' && PPD.app.fpCams ? PPD.app.fpCams[side] : null;
+      cam = fp || makeCam(side, eng ? eng.players[side].x : 0, side === 0 ? 0 : half, 0, half, h);
     } else if (PPD.app.mode === 'ai') {
       clientX = clampN(clientX, 0, w);
       ctxX = w - clientX; // 红方视口已镜像
-      cam = makeCam(0, PPD.app.engine ? PPD.app.engine.players[0].x : 0, 0, 0, w, h);
+      // 第一人称：复用本帧渲染相机（视线在发球相锁定，反投影稳定）；无帧时退回第三人称
+      const fp = PPD.app.cameraView === 'first'
+        ? (PPD.app.fpCams ? PPD.app.fpCams[0] : null) || PPD.app.fpCam
+        : null;
+      cam = fp || makeCam(0, PPD.app.engine ? PPD.app.engine.players[0].x : 0, 0, 0, w, h);
     } else {
       clientX = clampN(clientX, 0, w);
       ctxX = side === 0 ? w - clientX : clientX;
       const snap = PPD.app.snapB;
       const myX = snap && snap.p && snap.p[side] ? snap.p[side].x : 0;
-      cam = makeCam(side, myX, 0, 0, w, h);
+      const fp = PPD.app.cameraView === 'first' && PPD.app.fpCams ? PPD.app.fpCams[side] : null;
+      cam = fp || makeCam(side, myX, 0, 0, w, h);
     }
     const world = unprojectToTable(cam, ctxX, clientY);
     if (!world) return null;
@@ -544,8 +552,9 @@
     }
   }
 
-  function applyViewMirror(ctx, w) {
-    ctx.translate(w, 0);
+  function applyViewMirror(ctx, w, vx) {
+    // 视口镜像：绕视口右边界翻；vx=0 时与原来的 translate(w) 等价
+    ctx.translate(2 * (vx || 0) + w, 0);
     ctx.scale(-1, 1);
   }
 
@@ -553,6 +562,23 @@
     const w = PPD.app.resizeW, h = PPD.app.resizeH;
     const half = Math.floor(w / 2);
     PPD.ctx.clearRect(0, 0, w, h);
+    if (PPD.app.cameraView === 'first') {
+      // 本地分屏第一人称：两半各一台 FP 相机 + 各自的视线平滑/视图模型/3D HUD
+      const view0 = viewModelFromEngine(PPD.app.engine, 0);
+      updateTrail(view0);
+      const view1 = viewModelFromEngine(PPD.app.engine, 1);
+      view1.trail = view0.trail;
+      renderFirstPersonView(view0, 0, 0, 0, half, h, { key: PPD.app.engine, slot: 'local:0' });
+      renderFirstPersonView(view1, 1, half, 0, w - half, h, { key: PPD.app.engine, slot: 'local:1' });
+      // 分隔线画在视口渲染之外（否则会被各自的镜像/裁剪吃掉）。
+      // P1/P2 的“视角”小字在 FP 下省略：DOM 比分栏已标名字，且顶部左右角被
+      // netInfo 与设置/退出按钮占用，硬放会压字。
+      PPD.ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      PPD.ctx.lineWidth = 2;
+      PPD.ctx.beginPath();
+      PPD.ctx.moveTo(half, 0); PPD.ctx.lineTo(half, h); PPD.ctx.stroke();
+      return;
+    }
     // 两个视角共享同一份尾影（只记录一次）
     const view0 = viewModelFromEngine(PPD.app.engine, 0);
     updateTrail(view0);
@@ -750,6 +776,11 @@
     // （否则对方半台出现瞄准线/落点标记，观感像"球/点在自己身前"）
     view.servePath = snap.sv === PPD.app.side ? servePathFromSnap(snap) : null;
     updateTrail(view); // 联机用插值/外推位置，也能看到尾影
+    if (PPD.app.cameraView === 'first') {
+      // 联机第一人称：view 用快照插值/本地预测，其余与 AI/本地共用视口渲染
+      renderFirstPersonView(view, PPD.app.side, 0, 0, w, h, { key: 'online', slot: 'online:' + PPD.app.side });
+      return;
+    }
     const myX = PPD.app.pred ? PPD.app.pred.x : snap.p[PPD.app.side].x;
     const cam = makeCam(PPD.app.side, myX, 0, 0, w, h);
     view.cam = cam;
@@ -764,7 +795,8 @@
   }
 
   function renderSingle() {
-    // 人机模式：单人全屏视角（自己=红方）
+    // 人机模式：单人全屏视角（自己=红方）；第一人称走独立渲染入口
+    if (PPD.app.cameraView === 'first') { renderFirstPerson(0); return; }
     const w = PPD.app.resizeW, h = PPD.app.resizeH;
     PPD.ctx.clearRect(0, 0, w, h);
     PPD.ctx.save();
@@ -966,6 +998,7 @@
   // AI对打·球员视角（跟随某一方）：借用该方现有第三人称机位（红方视角镜像、蓝方不镜像）
   function renderWatch() {
     const s = PPD.app.aiFollowSide === 1 ? 1 : 0;
+    if (PPD.app.cameraView === 'first') { renderFirstPerson(s); return; }
     const w = PPD.app.resizeW, h = PPD.app.resizeH;
     if (!w || !h) return;
     PPD.ctx.clearRect(0, 0, w, h);
@@ -980,6 +1013,523 @@
     PPD.TTG.drawScene(PPD.ctx, view, w, h);
     PPD.ctx.restore();
     PPD.ctx.restore();
+  }
+
+  // ---------- 第一人称（人机 / 本地分屏 / 联机 / AI 观战 / 回放） ----------
+  /* 只切渲染机位，不动物理/联机协议。三个关键取舍：
+     1. 视线：眼高 ~1.62m，注视点固定落在网后 2.6m、台面高度附近；球在台上时轻微跟球。
+        发球相锁定固定视线——发球瞄准靠 unprojectToTable 反投影，相机一跟球准星就会漂。
+     2. 视野：主视口是 2.0×屏宽长焦，第一人称必须换广角（约 80° 水平 FOV），否则对手/台面只剩一条。
+     3. 己方身体：drawScene 前过滤掉己方球员（世界空间火柴人近看会穿帮），
+        手臂/球拍改由 drawFirstPersonView 在镜像之外画；文字 HUD 同理不镜像。 */
+  const FP = {
+    eyeY: 1.62,
+    ahead: 2.6,
+    gazeY: 1.05,
+  };
+
+  function fpDamp(cur, target, rate, dt) {
+    return cur + (target - cur) * Math.min(1, Math.max(0, dt) * rate);
+  }
+
+  function makeFirstPersonCam(side, player, viewCtx, vx, vy, vw, vh, slot) {
+    const T = PPD.TTG;
+    const f = side === 0 ? 1 : -1;
+    const now = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000;
+    if (!PPD.app.fpGaze) PPD.app.fpGaze = {};
+    const key = viewCtx.key;
+    let st = PPD.app.fpGaze[slot];
+    const fresh = !st || st.key !== key || st.side !== side;
+    const dt = fresh ? 0.016 : Math.min(0.05, Math.max(0.001, now - st.t));
+    const crouch = player.crouch || 0;
+    const speed = Math.hypot(player.vx || 0, player.vz || 0);
+    const t = Number.isFinite(viewCtx.time) ? viewCtx.time : now;
+    const bob = Math.sin(t * 2.3) * 0.004 + Math.sin(t * 8.7) * 0.0025 * Math.min(1, speed / 3);
+    const eyeY = FP.eyeY - 0.16 * crouch + bob;
+    const eyeZ = player.z + f * 0.08;
+    const ex = fresh ? player.x : fpDamp(st.ex, player.x, 16, dt);
+    // 发球方持球：视线锁定（不跟球、不跟瞄准），保证反投影落点稳定
+    const serving = viewCtx.phase === 'serve' && viewCtx.server === side;
+    let tx = player.x, ty = FP.gazeY, tz = player.z + f * FP.ahead;
+    const ball = viewCtx.ball;
+    if (!serving && ball && viewCtx.phase === 'play') {
+      // 轻微跟球：横向 0.30 / 纵向 0.35 / 纵深 0.28——能看见快球，又不会把台面甩出画
+      tx = tx * 0.70 + ball.x * 0.30;
+      ty = ty + T.clamp(ball.y - 1.0, -0.35, 1.0) * 0.35;
+      tz = tz + (ball.z - tz) * 0.28;
+    }
+    ty = T.clamp(ty, 0.72, 1.45);
+    if (fresh) {
+      st = { key, side, ex, ey: eyeY, ez: eyeZ, tx, ty, tz, t: now };
+      PPD.app.fpGaze[slot] = st;
+    } else {
+      st.ex = ex;
+      st.ey = eyeY;
+      st.ez = eyeZ;
+      // 发球相直接吸附（视线固定）；对打/得分相平滑跟球
+      st.tx = serving ? tx : fpDamp(st.tx, tx, 4.2, dt);
+      st.ty = serving ? ty : fpDamp(st.ty, ty, 4.2, dt);
+      st.tz = serving ? tz : fpDamp(st.tz, tz, 4.2, dt);
+      st.t = now;
+    }
+    const cam = new T.Camera();
+    const eye = T.v3(st.ex, st.ey, st.ez);
+    const look = T.v3(st.tx, st.ty, st.tz);
+    // 竖屏按宽、横屏按高取焦距，目标约 88° 水平 FOV（不能沿用主视口的 2.0×屏宽长焦）
+    const focal = Math.max(vw * 0.52, Math.min(vh * 0.92, vw * 0.95));
+    cam.set(eye, look, vx + vw / 2, vy + vh / 2, focal);
+    return cam;
+  }
+
+  function fpRoundRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
+  }
+
+  function fpTextW(ctx, text, fs) {
+    try {
+      const m = ctx.measureText ? ctx.measureText(String(text)) : null;
+      if (m && Number.isFinite(m.width)) return m.width;
+    } catch (e) { /* 测试桩无 measureText 返回值 */ }
+    return String(text).length * fs * 0.6;
+  }
+
+  // 第一人称手臂 + 球拍：屏幕空间视图模型，不参与世界投影/碰撞判定。
+  // 位置/挥拍幅度由 paddle.p / stroke / sb 驱动——与第三人称看到的是同一套动作。
+  function drawFirstPersonView(ctx, side, pl, view, vx, vy, vw, vh) {
+    if (!pl) return;
+    const T = PPD.TTG;
+    const mirrored = side === 0;
+    const team = pl.teamColor || (side === 0 ? '#d0321e' : '#2563eb');
+    const st = pl.stroke || { active: false, type: 0, t: 0, dur: 0.4, hit: false };
+    const prog = st.active ? T.clamp(st.t / (st.dur || 0.4), 0, 1) : 0;
+    const sw = st.active ? Math.sin(prog * Math.PI) : 0;
+    const drive = st.type === 2 || st.type === 3;
+    const back = T.clamp(pl.sb || 0, 0, 1.2);
+    const baseX = vx + vw * (mirrored ? 0.64 : 0.36);
+    const baseY = vy + vh * 0.84;
+    const scale = Math.min(vw, vh) / 720;
+    const size = 128 * scale;
+    const dir = mirrored ? -1 : 1; // 挥拍时向身体中线收
+    const px = baseX + dir * sw * (drive ? 0.035 : 0.018) * vw;
+    const py = baseY + T.clamp(pl.crouch || 0, 0, 1) * 0.035 * vh -
+      sw * (drive ? 0.10 : 0.055) * vh + back * 0.02 * vh;
+    const rot = (mirrored ? 1 : -1) * (-0.22 + sw * (drive ? 0.55 : 0.30) + back * 0.10);
+    const handleD = size * 0.52;
+    const hx = px - Math.sin(rot) * handleD;
+    const hy = py + Math.cos(rot) * handleD;
+    const armX = baseX + (mirrored ? vw * 0.30 : -vw * 0.30);
+    const armY = vy + vh * 1.10;
+    const ctrlX = hx + (armX - hx) * 0.45 + (mirrored ? -vw * 0.03 : vw * 0.03);
+    const ctrlY = hy + (armY - hy) * 0.42;
+
+    ctx.save();
+    // 前臂：深色骨线 + 浅色轮廓，暗场里也能看清
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(armX, armY);
+    ctx.quadraticCurveTo(ctrlX, ctrlY, hx, hy);
+    ctx.strokeStyle = 'rgba(8,12,18,0.96)';
+    ctx.lineWidth = size * 0.20;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = Math.max(1, size * 0.035);
+    ctx.stroke();
+
+    // 球拍：背向玩家 → 深色底 + 队色边缘/内圈；手柄朝手臂方向
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(rot);
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = size * 0.22;
+    ctx.shadowOffsetY = size * 0.10;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.50, size * 0.42, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20,26,34,0.96)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(240,246,255,0.20)';
+    ctx.lineWidth = Math.max(1, size * 0.022);
+    ctx.stroke();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    // 队色内面（背向玩家时仍能一眼认出这是谁的拍）
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.41, size * 0.33, 0, 0, Math.PI * 2);
+    ctx.globalAlpha = 0.24;
+    ctx.fillStyle = team;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = team;
+    ctx.lineWidth = Math.max(2, size * 0.055);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.40, size * 0.32, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = Math.max(1, size * 0.018);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-size * 0.14, -size * 0.12, size * 0.20, Math.PI * 1.05, Math.PI * 1.62);
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = Math.max(1, size * 0.025);
+    ctx.stroke();
+    fpRoundRect(ctx, -size * 0.075, size * 0.36, size * 0.15, size * 0.30, size * 0.05);
+    ctx.fillStyle = '#8a5a34';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(15,20,30,0.65)';
+    ctx.lineWidth = Math.max(1, size * 0.018);
+    ctx.stroke();
+    // 握拍手：拍柄末端一个深色拳点，避免手臂像一根悬空的杆
+    ctx.beginPath();
+    ctx.arc(0, size * 0.70, size * 0.12, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(12,16,22,0.95)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = Math.max(1, size * 0.02);
+    ctx.stroke();
+    ctx.restore();
+
+    // 持球（发球）：球在拍面上方
+    if (view && view.ballInHand) {
+      const bx = px + (mirrored ? -1 : 1) * size * 0.05;
+      const by = py - size * 0.58;
+      ctx.beginPath();
+      ctx.arc(bx, by, size * 0.072, 0, Math.PI * 2);
+      ctx.fillStyle = '#f4f7fb';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15,20,30,0.35)';
+      ctx.lineWidth = Math.max(1, size * 0.012);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bx - size * 0.02, by - size * 0.025, size * 0.022, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fill();
+    }
+    // 击球瞬间的拍面闪光
+    if (st.active && st.hit && prog < 0.55) {
+      ctx.beginPath();
+      ctx.arc(px, py, size * 0.62, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,220,150,${(0.22 * (1 - prog / 0.55)).toFixed(3)})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ---------- 世界锚定 3D HUD ----------
+  /* 世界层（红方）是镜像绘制的，文字层在镜像之外画 → 锚点 x 要按镜像翻一次。
+     HUD 只读 view/cam，不参与判定；原型阶段固定开启。 */
+  function fpAnchorX(mirrored, vx, vw, x) {
+    return mirrored ? (2 * vx + vw - x) : x;
+  }
+
+  function fpPill(ctx, x, y, text, fs, dotColor, alpha) {
+    const padX = fs * 0.7, padY = fs * 0.38;
+    const tw = fpTextW(ctx, text, fs);
+    const pw = tw + padX * 2 + (dotColor ? fs * 1.05 : 0);
+    const ph = fs + padY * 2;
+    const left = x - pw / 2, top = y - ph / 2;
+    ctx.globalAlpha = alpha == null ? 0.9 : alpha;
+    fpRoundRect(ctx, left, top, pw, ph, ph / 2);
+    ctx.fillStyle = 'rgba(8,12,20,0.72)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    let tx = left + padX;
+    if (dotColor) {
+      ctx.beginPath();
+      ctx.arc(tx + fs * 0.30, y, fs * 0.30, 0, Math.PI * 2);
+      ctx.fillStyle = dotColor;
+      ctx.fill();
+      tx += fs * 1.05;
+    }
+    ctx.font = `600 ${fs}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#eaf1ff';
+    ctx.fillText(text, tx, y + 0.5);
+    ctx.globalAlpha = 1;
+    return pw;
+  }
+
+  function fpNameTag(ctx, x, y, text, color, fs, dim) {
+    const padX = fs * 0.7, h = fs * 1.9;
+    const tw = fpTextW(ctx, text, fs);
+    const w = tw + padX * 2 + fs * 0.95;
+    const left = x - w / 2, top = y - h;
+    ctx.globalAlpha = dim;
+    fpRoundRect(ctx, left, top, w, h, h * 0.34);
+    ctx.fillStyle = 'rgba(8,12,20,0.78)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // 指向头顶的小三角
+    ctx.beginPath();
+    ctx.moveTo(x - fs * 0.32, top + h);
+    ctx.lineTo(x + fs * 0.32, top + h);
+    ctx.lineTo(x, top + h + fs * 0.34);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(8,12,20,0.78)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(left + padX + fs * 0.28, top + h / 2, fs * 0.28, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.font = `700 ${fs}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f2f7ff';
+    ctx.fillText(text, left + padX + fs * 0.95, top + h / 2 + 0.5);
+    ctx.globalAlpha = 1;
+  }
+
+  function fpBallReadout(ctx, x, y, speed, spin, fs) {
+    const parts = [];
+    if (speed > 1.2) parts.push(Math.round(speed * 3.6) + ' km/h');
+    const spinY = spin ? spin.y : 0;
+    if (Math.abs(spinY) > 1.5) parts.push(spinY > 0 ? '↻' : '↺');
+    if (!parts.length) return;
+    fpPill(ctx, x, y, parts.join('  '), fs, null, 0.78);
+  }
+
+  function fpLandingReticle(ctx, cam, vx, vy, vw, vh, mirrored, pt) {
+    if (!pt) return;
+    const R = PPD.TT.RULES;
+    const y = R.TABLE_HEIGHT + 0.004;
+    const rad = 0.09;
+    const N = 24;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const p = cam.project(PPD.TTG.v3(pt.x + Math.cos(a) * rad, y, pt.z + Math.sin(a) * rad));
+      if (!p) return;
+      pts.push({ x: fpAnchorX(mirrored, vx, vw, p.x), y: p.y });
+    }
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(255,196,120,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const c = cam.project(PPD.TTG.v3(pt.x, y, pt.z));
+    if (c) {
+      const cx = fpAnchorX(mirrored, vx, vw, c.x);
+      ctx.beginPath();
+      ctx.arc(cx, c.y, Math.max(2, 0.018 * c.s), 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,196,120,0.95)';
+      ctx.fill();
+      // 落点上方竖起一小段，帮助判断落点纵深（第一人称最缺深度线索）
+      const top = cam.project(PPD.TTG.v3(pt.x, y + 0.22, pt.z));
+      if (top) {
+        ctx.beginPath();
+        ctx.moveTo(cx, c.y);
+        ctx.lineTo(fpAnchorX(mirrored, vx, vw, top.x), top.y);
+        ctx.strokeStyle = 'rgba(255,196,120,0.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // 球出画（或钻到相机身后）时，在屏幕边缘给方向箭头——第一人称没有这个会完全丢失球
+  function fpOffscreenBall(ctx, cam, vx, vy, vw, vh, mirrored, ball, time) {
+    if (!ball) return false;
+    const T = PPD.TTG;
+    const p = cam.project(ball.pos);
+    const margin = 18;
+    if (p && p.x > vx - margin && p.x < vx + vw + margin && p.y > vy - margin && p.y < vy + vh + margin) return false;
+    const d = T.vsub(ball.pos, cam.eye);
+    let ux = T.vdot(d, cam.right);
+    let uy = -T.vdot(d, cam.up);
+    const z = T.vdot(d, cam.fwd);
+    if (z <= 0.12) {
+      // 球在身后：只指向最近的一侧，避免箭头绕圈
+      ux = ux >= 0 ? 1 : -1;
+      uy = 0.15;
+    }
+    if (Math.abs(ux) < 1e-6 && Math.abs(uy) < 1e-6) return false;
+    const len = Math.hypot(ux, uy) || 1;
+    ux /= len; uy /= len;
+    if (mirrored) ux = -ux;
+    const rx = Math.min(vw, vh) * 0.44;
+    const sx = T.clamp(vx + vw / 2 + ux * rx, vx + 26, vx + vw - 26);
+    const sy = T.clamp(vy + vh / 2 + uy * rx, vy + 80, vy + vh - 26);
+    const ang = Math.atan2(uy, ux);
+    const pulse = 0.72 + 0.28 * Math.sin((time || 0) * 8);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(ang);
+    ctx.globalAlpha = pulse;
+    ctx.beginPath();
+    ctx.moveTo(16, 0);
+    ctx.lineTo(-9, -9);
+    ctx.lineTo(-4, 0);
+    ctx.lineTo(-9, 9);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(235,246,255,0.92)';
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    // 外圈脉冲：球在画面外时也足够醒目（第一人称最怕不知道球在哪）
+    ctx.beginPath();
+    ctx.arc(sx, sy, 21, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(235,246,255,${(0.18 + 0.16 * pulse).toFixed(3)})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(sx - ux * 20, sy - uy * 20, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(235,246,255,0.85)';
+    ctx.fill();
+    return true;
+  }
+
+  function drawFirstPersonHud(ctx, side, view, cam, vx, vy, vw, vh) {
+    ctx.save();
+    const mirrored = side === 0;
+    const phase = view.phase; // AI/本地=引擎相位；联机/回放=快照相位
+    const opp = view.players && view.players.length ? view.players[0] : null;
+    // 对手名牌（世界锚定在头顶上方；放在头部右侧，避开顶部比分栏与阶段横幅）
+    if (opp) {
+      const q = cam.project(PPD.TTG.v3(opp.x, 1.88, opp.z));
+      if (q && q.x > vx - 40 && q.x < vx + vw + 40 && q.y > vy - 40 && q.y < vy + vh + 40) {
+        const headX = fpAnchorX(mirrored, vx, vw, q.x);
+        const headY = q.y + Math.max(2, 0.02 * q.s);
+        const tagX = PPD.TTG.clamp(headX + 52, vx + 150, vx + vw - 150);
+        // 下限按 DOM 顶部 HUD（比分栏 ~64px + 提示条 ~76~100px）留出空间，
+        // 否则跟球俯视时对手上移，名牌会钻到提示条后面
+        const tagY = Math.max(vy + 136, q.y - Math.max(4, 0.02 * q.s));
+        const fs = PPD.TTG.clamp(0.075 * q.s, 11, 19);
+        const name = (PPD.app.names && PPD.app.names[1 - side]) || '对手';
+        // 头部到名牌的引线（名牌会盖住末端）
+        ctx.beginPath();
+        ctx.moveTo(headX, headY);
+        ctx.lineTo(tagX, tagY);
+        ctx.strokeStyle = 'rgba(235,246,255,0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        fpNameTag(ctx, tagX, tagY, name, opp.teamColor || (side === 0 ? '#2563eb' : '#d0321e'), fs, 0.9);
+      }
+    }
+    // 球速/旋转 + 球外圈（世界锚定）
+    if (view.ball && phase === 'play') {
+      const q = cam.project(view.ball.pos);
+      if (q && q.x > vx && q.x < vx + vw && q.y > vy && q.y < vy + vh) {
+        const sx = fpAnchorX(mirrored, vx, vw, q.x);
+        const speed = Math.hypot(view.ball.vel.x, view.ball.vel.y, view.ball.vel.z);
+        const fs = PPD.TTG.clamp(0.045 * q.s, 9, 12);
+        fpBallReadout(ctx, sx + Math.max(16, 0.05 * q.s), q.y - Math.max(18, 0.06 * q.s), speed, view.ball.spin, fs);
+        ctx.beginPath();
+        ctx.arc(sx, q.y, Math.max(7, 0.035 * q.s), 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(235,246,255,0.28)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // 球贴脸时会被视图模型球拍遮住：HUD 层补一个亮核，保证最后一段仍能看到球
+        ctx.beginPath();
+        ctx.arc(sx, q.y, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(10,16,24,0.55)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+    // 发球落点环：世界锚定在台面上
+    if (view.servePath && view.servePath.length > 1) {
+      fpLandingReticle(ctx, cam, vx, vy, vw, vh, mirrored, view.servePath[view.servePath.length - 1]);
+    }
+    // 球出画箭头
+    if (view.ball && phase === 'play') {
+      fpOffscreenBall(ctx, cam, vx, vy, vw, vh, mirrored, view.ball, view.time);
+    }
+    ctx.restore();
+  }
+
+  /* 视口级第一人称渲染：AI/本地/联机/回放共用。
+     vx/vy/vw/vh 是画布绝对坐标；本地分屏两半各调一次，各自独立相机与视线平滑。
+     opts.key 变化（换局/换模式）自动重置视线；opts.slot 区分同一帧里的多个视角。 */
+  function renderFirstPersonView(view, side, vx, vy, vw, vh, opts) {
+    const ctx = PPD.ctx;
+    if (!ctx || !view || !vw || !vh) return null;
+    const s = side === 1 ? 1 : 0;
+    const own = view.players ? view.players.find((p) => p.side === s) : null;
+    if (!own) return null;
+    const o = opts || {};
+    const cam = makeFirstPersonCam(s, own, {
+      ball: view.ball ? view.ball.pos : null,
+      phase: view.phase,
+      server: view.server,
+      time: view.time,
+      key: o.key == null ? 'view' : o.key,
+    }, vx, vy, vw, vh, o.slot || ('fp:' + s));
+    view.cam = cam;
+    view.side = s;
+    view.fp = true;
+    view.noCrowd = true;   // 观众席缓存 key 不含相机朝向，第一人称先关观众
+    view.noPlate = true;   // 底板按主视口标定，第一人称强制程序化场景
+    view.plateFlip = false;
+    // 只让发球方的视口显示发球轨迹/落点环（分屏/观战两边都不该替对手看落点）
+    if (view.servePath && view.server !== s) view.servePath = null;
+    // 己方身体过滤掉（世界空间火柴人贴脸会穿帮）；手臂/球拍由视图模型接管
+    view.players = view.players.filter((p) => p.side !== s);
+    PPD.app.fpCam = cam;
+    if (!PPD.app.fpCams) PPD.app.fpCams = [null, null];
+    PPD.app.fpCams[s] = cam;
+    /* 地板/灯光用固定站位的 floorCam：相机 x 不跟球员，drawFloor 的静态缓存
+       （key 含 eye.x 桶）才不会被横移每 0.06m 打掉。地板是柔和径向渐变，
+       固定站位与真实眼位的差别不可见；球台/球员/球仍用真实 cam。 */
+    const floorCam = new PPD.TTG.Camera();
+    const fEye = PPD.TTG.v3(0, FP.eyeY, s === 0 ? -1.65 : 1.65);
+    const fLook = PPD.TTG.v3(0, FP.gazeY, fEye.z + (s === 0 ? FP.ahead : -FP.ahead));
+    floorCam.set(fEye, fLook, vx + vw / 2, vy + vh / 2, cam.f);
+    view.floorCam = floorCam;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(vx, vy, vw, vh);
+    ctx.clip();
+    juiceTransform(ctx, vx, vy, vw, vh);
+    ctx.save();
+    if (s === 0) applyViewMirror(ctx, vw, vx);
+    PPD.TTG.drawScene(ctx, view, vw, vh);
+    ctx.restore();
+    // 视图模型与 3D HUD 画在镜像之外：文字不反、球拍保持在惯用手一侧
+    drawFirstPersonView(ctx, s, {
+      ...own,
+      teamColor: own.teamColor || ((PPD.app.matchTeams && PPD.app.matchTeams[s]) ? PPD.app.matchTeams[s].color : null),
+    }, view, vx, vy, vw, vh);
+    drawFirstPersonHud(ctx, s, view, cam, vx, vy, vw, vh);
+    ctx.restore();
+    return cam;
+  }
+
+  function renderFirstPersonFromEngine(side) {
+    const w = PPD.app.resizeW, h = PPD.app.resizeH;
+    const eng = PPD.app.engine;
+    if (!w || !h || !eng) return null;
+    const s = side === 1 ? 1 : 0;
+    PPD.ctx.clearRect(0, 0, w, h);
+    const view = viewModelFromEngine(eng, s);
+    updateTrail(view);
+    return renderFirstPersonView(view, s, 0, 0, w, h, { key: eng, slot: 'solo:' + s });
+  }
+
+  // 兼容旧入口（AI 人机 / AI 观战球员视角）
+  function renderFirstPerson(side) {
+    return renderFirstPersonFromEngine(side);
   }
 
   PPD.renderLocal = renderLocal;
@@ -1003,4 +1553,8 @@
   PPD.makeCam = makeCam;
   PPD.unprojectToTable = unprojectToTable;
   PPD.serveAimFromPointer = serveAimFromPointer;
+  PPD.renderFirstPerson = renderFirstPerson;
+  PPD.renderFirstPersonFromEngine = renderFirstPersonFromEngine;
+  PPD.renderFirstPersonView = renderFirstPersonView;
+  PPD.makeFirstPersonCam = makeFirstPersonCam;
 })();

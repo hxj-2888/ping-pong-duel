@@ -964,7 +964,7 @@
     }
   }
 
-  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low, density, noCrowd, teamFixed) {
+  function drawFloor(ctx, cam, vw, vh, time, viewSide, fan, low, density, noCrowd, teamFixed, cacheTag) {
     /* 布局缓存：密度或「相机侧」变化才重建。
        相机侧很关键——端看台只生成在镜头对面那一侧，换边（本地双人 P2 视口）必须重建，
        否则 P2 会看到"背对镜头"的那排（竖屏下会糊在球台前面）。 */
@@ -986,7 +986,7 @@
       // 并入静态层缓存 key：模式切换自动触发重建（动画开始/结束各重建一次静态层）。
       const anim = crowdAnimActive(fan);
       const crowdMode = (low || noCrowd) ? 'off' : (anim ? 'anim' : 'static');
-      const key = `${viewSide}:${vx}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}:${crowdMode}:${LIGHTING.world ? 1 : 0}${LIGHTING.overlay ? 1 : 0}:`;
+      const key = `${viewSide}:${vx}:${Math.round(cam.eye.x / CROWD_CAM_BUCKET)}:${vw}:${vh}:${backing}:${crowdMode}:${LIGHTING.world ? 1 : 0}${LIGHTING.overlay ? 1 : 0}:${cacheTag || ''}:`;
       // 按 viewSide 取/建本视口的静态+动画缓存（本地双人两视口互不踢缓存）
       let entry = crowdCaches[viewSide];
       if (!entry) {
@@ -1695,9 +1695,12 @@
     /* 〔2026-10-23 参考图底板〕底片由 app 层在**镜像之外**先铺好（见 drawArenaPlate 注释），
        这里只负责"底板模式不画地板/看台/球台/球网"。
        贴图没就绪时自动退回原来的程序化场景（保证任何情况下都有画面）。 */
-    const usePlate = plateReady();
+    const usePlate = plateReady() && !view.noPlate;
     if (!usePlate) {
-      drawFloor(ctx, cam, vw, vh, time, view.side, view.fan, low, view.density, view.noCrowd, view.teamFixed);
+      // 第一人称：地板/灯光用固定站位的 floorCam（相机 x 不跟球员），
+      // 否则观众席缓存 key 里的 eye.x 桶会随横移每 0.06m 重建一次地板（实测 16.7→18.9ms/帧）
+      const floorCam = view.floorCam || cam;
+      drawFloor(ctx, floorCam, vw, vh, time, view.side, view.fan, low, view.density, view.noCrowd, view.teamFixed, view.fp ? 'fp' : '');
     }
     drawPlayerShadows(ctx, cam, view.players);
 

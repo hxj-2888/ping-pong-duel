@@ -615,13 +615,18 @@
     }
     if (PPD.servePathFromSnap && next.sv === side) view.servePath = PPD.servePathFromSnap(next);
     if (PPD.updateTrail) PPD.updateTrail(view);
-    const myX = next.p && next.p[side] ? next.p[side].x : 0;
-    const cam = PPD.makeCam ? PPD.makeCam(side, myX, 0, 0, w, h) : null;
-    if (cam) view.cam = cam;
-    ctx.save();
-    if (side === 0 && PPD.applyViewMirror) PPD.applyViewMirror(ctx, w);
-    if (PPD.TTG && PPD.TTG.drawScene) PPD.TTG.drawScene(ctx, view, w, h);
-    ctx.restore();
+    if (PPD.app.cameraView === 'first' && PPD.renderFirstPersonView) {
+      // 回放第一人称：复用快照视图；视线状态按 side 分开
+      PPD.renderFirstPersonView(view, side, 0, 0, w, h, { key: 'replay', slot: 'replay:' + side });
+    } else {
+      const myX = next.p && next.p[side] ? next.p[side].x : 0;
+      const cam = PPD.makeCam ? PPD.makeCam(side, myX, 0, 0, w, h) : null;
+      if (cam) view.cam = cam;
+      ctx.save();
+      if (side === 0 && PPD.applyViewMirror) PPD.applyViewMirror(ctx, w);
+      if (PPD.TTG && PPD.TTG.drawScene) PPD.TTG.drawScene(ctx, view, w, h);
+      ctx.restore();
+    }
     // canvas 内比分/时间（DOM HUD 已隐藏，导出视频时可见）
     const sc = next.sc || [0, 0];
     ctx.font = 'bold 30px system-ui, "Microsoft YaHei"';

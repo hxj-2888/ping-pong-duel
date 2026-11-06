@@ -432,6 +432,15 @@
         <div class="shell-context"><span class="app-version">版本 <span id="appVersion"></span></span></div>
       </div>
       <div class="shell-body">
+        <!-- 视角（第一人称）：只切渲染机位，不动物理/联机协议；人机/本地分屏/联机/AI 观战/回放生效 -->
+        <div class="settings-group-title">视角</div>
+        <div class="setting-row">比赛视角 <span class="segmented-host" data-segmented-for="cameraView"></span>
+          <select id="cameraView" class="visually-hidden">
+            <option value="third" selected>第三人称</option>
+            <option value="first">第一人称（全模式）</option>
+          </select>
+        </div>
+        <div class="settings-note">第一人称：人机 / 本地分屏 / 联机 / AI 观战 / 回放生效；观众席暂关（专用背景层后续）</div>
         <!-- 画面特效分组 -->
         <div class="settings-group-title">画面特效</div>
         <label class="toggle-label">
