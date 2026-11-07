@@ -77,6 +77,7 @@
     setSound: document.getElementById('setSound'),
     setMusicVol: document.getElementById('setMusicVol'),
     setSfxVol: document.getElementById('setSfxVol'),
+    setKeyHints: document.getElementById('setKeyHints'), // 按键指示（比分下方操作提示）开关
     roomCode: document.getElementById('roomCode'),
     roomHint: document.getElementById('roomHint'),
     lanUrls: document.getElementById('lanUrls'),
@@ -311,6 +312,7 @@
     training: { speed: 0, windup: 0, dur: 0, hitbox: 0 },   // 能力等级 0~5(仅本地/人机生效,不同步真人)
     bonus: { hard: false, hell: false }, // 首次通关奖励已领标记(人机击败困难+50/地狱+100,一次性)
     fxShow: { trail: true, splash: true, shake: true }, // v2.7.0：特效显示开关（设置面板 尾影/撞击/镜头震动，全局生效并记忆，所有模式通用）
+    showKeyHints: true,  // 设置面板「按键指示」：控制比分下方操作提示条，localStorage 记忆
   };
 
   // ---------- 工具 ----------
@@ -387,6 +389,24 @@
     if (v === 'first' || v === 'third') app.cameraView = v;
   } catch (e) { /* ignore */ }
   if (ui.cameraView) ui.cameraView.value = app.cameraView;
+
+  // ---------- 按键指示（比分下方操作提示；默认显示，localStorage 记忆） ----------
+  const KEY_HINTS_KEY = 'ppd_key_hints';
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY_HINTS_KEY) : null;
+    if (v === '0' || v === '1') app.showKeyHints = v === '1';
+  } catch (e) { /* ignore */ }
+  function applyKeyHints() {
+    if (ui.hintBar && ui.hintBar.style) ui.hintBar.style.display = app.showKeyHints ? '' : 'none';
+  }
+  function setKeyHints(v) {
+    app.showKeyHints = !!v;
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(KEY_HINTS_KEY, app.showKeyHints ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (ui.setKeyHints) ui.setKeyHints.checked = app.showKeyHints;
+    applyKeyHints();
+  }
+  if (ui.setKeyHints) ui.setKeyHints.checked = app.showKeyHints;
+  applyKeyHints();
 
   // ---------- 帧率上限（30/60/无上限，默认无上限自动匹配设备刷新率；localStorage 记忆） ----------
   const FRAME_RATE_KEY = 'ppd_frame_rate';
@@ -698,7 +718,7 @@
     isHellCleared, markHellCleared, syncHellOptions,
     getEndlessHighest, getEndlessUnlocked, setEndlessHighest, setEndlessUnlocked, advanceEndless, resetEndless,
     setQuality, setFrameRate, setNoCrowd,
-    setCameraView,
+    setCameraView, setKeyHints,
     getPlayerName, loadAINames, saveAINames,
     savePoints, saveOwned, saveEquip, savePlans, saveBonus, saveTraining,
     triggerCheer, updateMusicIntensity,

@@ -107,7 +107,7 @@ function makeElement(id) {
 const ELEMENT_IDS = [
   'game', 'menu', 'gameScreen', 'nameInput', 'btnHost', 'btnJoin', 'btnNetMode',
   'joinInput', 'btnSettings', 'btnSettingsGame', 'settingsPanel', 'btnSettingsClose',
-  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'setShakeFx', 'roomCode', 'roomHint', 'statusBar',
+  'setShowHitRanges', 'setMusic', 'setSound', 'setMusicVol', 'setSfxVol', 'setShakeFx', 'setKeyHints', 'roomCode', 'roomHint', 'statusBar',
   // 联机框（主页「联机通道门」打开，等同新开页面）：模式切换/建房/加入/等待/教程
   'netPanel', 'btnNetBack', 'btnNetWarn', 'netWarnNote', 'netWait', 'netStatus', 'netOperate',
   // 联机框 2026-10-25 重构：创建/加入标签、四位输入、双哨子准备、Beta、高级折叠
@@ -786,6 +786,43 @@ async function main() {
     t.runFrames(30);
     check('前后移动后渲染无异常', true);
 
+    // 本地双人完整按键：F/G、,/.、左/右 Ctrl、左/右 Shift 分属两名球员
+    t.key('KeyF');
+    check('本地双人按键：P1 F=推球（P2 不受影响）', t.app.keyP1.pu === 1 && t.app.keyP2.pu === 0);
+    t.key('KeyF', false);
+    t.key('KeyG');
+    check('本地双人按键：P1 G=扣球（P2 不受影响）', t.app.keyP1.sm === 1 && t.app.keyP2.sm === 0);
+    t.key('KeyG', false);
+    t.key('Comma');
+    check('本地双人按键：, = P2 推球（P1 不受影响）', t.app.keyP2.pu === 1 && t.app.keyP1.pu === 0);
+    t.key('Comma', false);
+    t.key('Period');
+    check('本地双人按键：. = P2 扣球（P1 不受影响）', t.app.keyP2.sm === 1 && t.app.keyP1.sm === 0);
+    t.key('Period', false);
+    t.key('ControlLeft');
+    check('本地双人按键：左 Ctrl=仅 P1 蹲下', t.app.keyP1.crouch === 1 && t.app.keyP2.crouch === 0);
+    t.key('ControlLeft', false);
+    t.key('ControlRight');
+    check('本地双人按键：右 Ctrl=仅 P2 蹲下', t.app.keyP2.crouch === 1 && t.app.keyP1.crouch === 0);
+    t.key('ControlRight', false);
+    t.key('ShiftLeft');
+    check('本地双人按键：左 Shift=仅 P1 跑步', t.app.keyP1.run === 1 && t.app.keyP2.run === 0);
+    t.key('ShiftLeft', false);
+    t.key('ShiftRight');
+    check('本地双人按键：右 Shift=仅 P2 跑步', t.app.keyP2.run === 1 && t.app.keyP1.run === 0);
+    t.key('ShiftRight', false);
+
+    // 设置：按键指示开关（关闭隐藏 hintBar，并记忆）
+    t.elements.get('setKeyHints').checked = false;
+    t.elements.get('setKeyHints').dispatch('change', {});
+    check('设置：按键指示可关闭（hintBar 隐藏并记忆）',
+      t.app.showKeyHints === false && t.elements.get('hintBar').style.display === 'none' &&
+      t.localStorage.getItem('ppd_key_hints') === '0');
+    t.elements.get('setKeyHints').checked = true;
+    t.elements.get('setKeyHints').dispatch('change', {});
+    check('设置：按键指示可恢复（hintBar 显示）',
+      t.app.showKeyHints === true && t.elements.get('hintBar').style.display === '');
+
     // 本地分屏第一人称：两半各一台 FP 相机 + P2 半屏发球瞄准映射
     {
       t.elements.get('cameraView').value = 'first';
@@ -804,6 +841,33 @@ async function main() {
         !!a0 && a0.z > 0.2 && Math.abs(a0.x) <= 0.76);
       check('本地分屏 FP：P2 发球落点在对方半台（z<0，半屏坐标映射）',
         !!a1 && a1.z < -0.2 && Math.abs(a1.x) <= 0.76);
+      // 双手独立：P1/P2 的 view-model reach 各自驱动，互不牵连
+      const engL = t.app.engine;
+      const R = TT.RULES;
+      const idleStroke = { active: false, type: 0, t: 0, dur: 0.4, hit: false };
+      engL.phase = 'play';
+      engL.ball.inHand = false;
+      engL.ball.vis = true;
+      engL.ball.vel = { x: 0, y: 0, z: 0 };
+      const pL0 = engL.players[0], pL1 = engL.players[1];
+      pL0.stroke = { ...idleStroke };
+      pL1.stroke = { ...idleStroke };
+      pL0.stroke = { active: true, type: 2, t: 0.10, dur: 0.4, hit: true };
+      engL.ball.pos = { x: pL0.x, y: 1.0, z: pL0.z + pL0.facing * R.HITBOX_Z_OFF };
+      t.app.fpReach = [0, 0];
+      t.ppd.renderLocal();
+      check('本地分屏 FP：P1 挥拍只驱动 P1 手（P2 手不动）',
+        t.app.fpReach[0] > 0 && t.app.fpReach[1] === 0);
+      pL0.stroke = { ...idleStroke };
+      pL1.stroke = { active: true, type: 2, t: 0.10, dur: 0.4, hit: true };
+      engL.ball.pos = { x: pL1.x, y: 1.0, z: pL1.z + pL1.facing * R.HITBOX_Z_OFF };
+      t.app.fpReach = [0, 0];
+      t.ppd.renderLocal();
+      check('本地分屏 FP：P2 挥拍只驱动 P2 手（P1 手不动）',
+        t.app.fpReach[1] > 0 && t.app.fpReach[0] === 0);
+      pL0.stroke = { ...idleStroke };
+      pL1.stroke = { ...idleStroke };
+      TT.resetMatch(engL);
       t.elements.get('cameraView').value = 'third';
       t.elements.get('cameraView').dispatch('change', {});
       t.runFrames(10);

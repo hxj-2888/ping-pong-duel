@@ -174,7 +174,7 @@
     PPD.show(PPD.ui.netWait, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
+      'WASD/方向键=移动 · 左键/F=推球 · 右键/G=扣球 · Ctrl=蹲下 · Shift=跑步 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML = '摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';
     }
@@ -209,7 +209,8 @@
     // P2：开场页（teamIntro）由拨开式转场取代——切场景在转场黑屏段完成（app/home.js cineTransition）
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      'P1: WASD=移动 · 左键=推球 · 右键=扣球 ｜ P2: 方向键=移动 · ,=推球 · .=扣球';
+      'P1: WASD=移动 · 左键/F=推球 · 右键/G=扣球 · 左Ctrl=蹲 · 左Shift=跑<br>' +
+      'P2: 方向键=移动 · ,=推球 · .=扣球 · 右Ctrl=蹲 · 右Shift=跑';
     PPD.GameAudio.ensure();
     PPD.showTouch(true);
     if (PPD.Replay) PPD.Replay.begin({ mode: 'local', difficulty: 1, side: 0 });
@@ -268,7 +269,7 @@
     PPD.updateGameTools();
     const L = PPD.AIC.LEVELS[PPD.app.aiLevel];
     PPD.ui.hintBar.innerHTML =
-      'WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
+      'WASD/方向键=移动 · 左键/F=推球 · 右键/G=扣球 · Ctrl=蹲下 · Shift=跑步 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML =
         '摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';
@@ -304,7 +305,7 @@
     PPD.show(PPD.ui.pausePanel, false);
     PPD.updateGameTools();
     PPD.ui.hintBar.innerHTML =
-      '无尽-' + lvl + ' · WASD/方向键=移动 · 左键=推球 · 右键=扣球 · Ctrl=蹲下 · 单击=发球';
+      '无尽-' + lvl + ' · WASD/方向键=移动 · 左键/F=推球 · 右键/G=扣球 · Ctrl=蹲下 · Shift=跑步 · 单击=发球';
     if (PPD.isTouch) {
       PPD.ui.hintBar.innerHTML =
         '无尽-' + lvl + ' · 摇杆=移动 · 单击=推球 · 上滑=扣球 · 蹲=蹲下 · 发球=点两下';

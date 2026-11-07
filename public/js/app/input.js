@@ -8,11 +8,12 @@
   // ---------- 输入 ----------
   const KEYMAP = {
     KeyA: 'P1L', KeyD: 'P1R', KeyW: 'P1F', KeyS: 'P1B',
+    KeyF: 'P1U', KeyG: 'P1D', // P1 键盘推/扣（鼠标左右键之外的完整键盘方案）
     // 电脑端适配：方向键四向移动（↑/↓ 为前后移动方向键）；P2 推球/扣球改到 ,/.（右手区）
     ArrowLeft: 'P2L', ArrowRight: 'P2R', ArrowUp: 'P2F', ArrowDown: 'P2B',
     Comma: 'P2U', Period: 'P2D',
-    ControlLeft: 'P1C', ControlRight: 'P1C',  // Ctrl 蹲下
-    ShiftLeft: 'P1S', ShiftRight: 'P1S',      // Shift 跑步
+    ControlLeft: 'P1C', ControlRight: 'P2C',  // 左 Ctrl=P1 蹲下 / 右 Ctrl=P2 蹲下
+    ShiftLeft: 'P1S', ShiftRight: 'P2S',      // 左 Shift=P1 跑步 / 右 Shift=P2 跑步
   };
 
   // v2.6.0：蹲下按键看门狗计时——Ctrl keyup 可能被浏览器吞掉（Ctrl+W/Tab、切标签页、IME 等），
@@ -391,6 +392,12 @@
     PPD.ui.setShakeFx.addEventListener('change', () => {
       PPD.app.fxShow.shake = PPD.ui.setShakeFx.checked;
       try { localStorage.setItem('ppd_fx_show', JSON.stringify(PPD.app.fxShow)); } catch (e) { /* ignore */ }
+    });
+  }
+  // 按键指示（比分下方操作提示）开关：即时隐藏/显示并记忆
+  if (PPD.ui.setKeyHints) {
+    PPD.ui.setKeyHints.addEventListener('change', () => {
+      PPD.setKeyHints(PPD.ui.setKeyHints.checked);
     });
   }
 

@@ -375,6 +375,7 @@
     if (PPD.ui.setTrailFx) PPD.ui.setTrailFx.checked = !(PPD.app.fxShow && PPD.app.fxShow.trail === false);
     if (PPD.ui.setSplashFx) PPD.ui.setSplashFx.checked = !(PPD.app.fxShow && PPD.app.fxShow.splash === false);
     if (PPD.ui.setShakeFx) PPD.ui.setShakeFx.checked = !(PPD.app.fxShow && PPD.app.fxShow.shake === false);
+    if (PPD.ui.setKeyHints) PPD.ui.setKeyHints.checked = PPD.app.showKeyHints !== false;
     if (PPD.ui.setMusic) PPD.ui.setMusic.checked = PPD.GameAudio.isMusicOn();
     if (PPD.ui.setSound) PPD.ui.setSound.checked = !PPD.GameAudio.isMuted();
     syncVolSlider(PPD.ui.setMusicVol, PPD.GameAudio.getMusicVol());
@@ -656,6 +657,7 @@
     syncHellOptions: PPD.syncHellOptions,
     viewModelFromEngine: PPD.viewModelFromEngine,
     viewModelFromSnap: PPD.viewModelFromSnap,
+    renderLocal: PPD.renderLocal,
     servePathFromSnap: PPD.servePathFromSnap,
     serveAimFromPointer: PPD.serveAimFromPointer,
     myServeSide: PPD.myServeSide,

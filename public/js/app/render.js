@@ -1131,11 +1131,13 @@
       ? 0
       : T.clamp((pl.vz || 0) * (mirrored ? 1 : -1) / 3.2, -1, 1);
     const leanLift = fwd * 0.018 * vh;
-    const baseX = vx + vw * (mirrored ? 0.64 : 0.36);
+    /* 两名球员都是右手持拍：第一人称手位统一在各自半屏的右侧，与第三人称右臂一致。
+       旧代码按 side 镜像（P2 手在左），分屏时两只手都挤在分隔线附近，且 P2 看起来是左手持拍。 */
+    const baseX = vx + vw * 0.64;
     const baseY = vy + vh * 0.84 - leanLift;
     const scale = Math.min(vw, vh) / 720;
     const sizeBase = 128 * scale * (1 + fwd * 0.03);
-    const dir = mirrored ? -1 : 1; // 挥拍时向身体中线收
+    const dir = -1; // 挥拍时向身体中线收（右手持拍：向左收）
     let px = baseX + dir * sw * (drive ? 0.035 : 0.018) * vw;
     let py = baseY + T.clamp(pl.crouch || 0, 0, 1) * 0.035 * vh -
       sw * (drive ? 0.10 : 0.055) * vh + back * 0.02 * vh;
@@ -1173,13 +1175,13 @@
     py += (rty - py) * reach;
     // 手伸到球附近时按距离缩小拍面：128px 是“贴近镜头”的尺寸，伸到台面中部只用约 60%
     const size = sizeBase * (1 - reach * 0.42);
-    const rot = (mirrored ? 1 : -1) * (-0.22 + sw * (drive ? 0.55 : 0.30) + back * 0.10);
+    const rot = -0.22 + sw * (drive ? 0.55 : 0.30) + back * 0.10;
     const handleD = size * 0.52;
     const hx = px - Math.sin(rot) * handleD;
     const hy = py + Math.cos(rot) * handleD;
-    const armX = baseX + (mirrored ? vw * 0.30 : -vw * 0.30);
+    const armX = baseX + vw * 0.30;
     const armY = vy + vh * 1.10 - leanLift;
-    const ctrlX = hx + (armX - hx) * 0.45 + (mirrored ? -vw * 0.03 : vw * 0.03);
+    const ctrlX = hx + (armX - hx) * 0.45 - vw * 0.03;
     const ctrlY = hy + (armY - hy) * 0.42;
 
     ctx.save();
@@ -1250,7 +1252,7 @@
 
     // 持球（发球）：只有己方发球时，球才在自己拍面上方（对手持球不画到自己手里）
     if (view && view.ballInHand && view.server === side) {
-      const bx = px + (mirrored ? -1 : 1) * size * 0.05;
+      const bx = px - size * 0.05;
       const by = py - size * 0.58;
       ctx.beginPath();
       ctx.arc(bx, by, size * 0.072, 0, Math.PI * 2);
@@ -1343,13 +1345,10 @@
     ctx.globalAlpha = 1;
   }
 
-  function fpBallReadout(ctx, x, y, speed, spin, fs) {
-    const parts = [];
-    if (speed > 1.2) parts.push(Math.round(speed * 3.6) + ' km/h');
+  function fpBallReadout(ctx, x, y, spin, fs) {
     const spinY = spin ? spin.y : 0;
-    if (Math.abs(spinY) > 1.5) parts.push(spinY > 0 ? '↻' : '↺');
-    if (!parts.length) return;
-    fpPill(ctx, x, y, parts.join('  '), fs, null, 0.78);
+    if (Math.abs(spinY) <= 1.5) return;
+    fpPill(ctx, x, y, spinY > 0 ? '↻' : '↺', fs, null, 0.78);
   }
 
   function fpLandingReticle(ctx, cam, vx, vy, vw, vh, mirrored, pt) {
@@ -1474,14 +1473,13 @@
         fpNameTag(ctx, tagX, tagY, name, opp.teamColor || (side === 0 ? '#2563eb' : '#d0321e'), fs, 0.9);
       }
     }
-    // 球速/旋转 + 球外圈（世界锚定）
+    // 球旋转 + 球外圈（世界锚定；不显示球速）
     if (view.ball && phase === 'play') {
       const q = cam.project(view.ball.pos);
       if (q && q.x > vx && q.x < vx + vw && q.y > vy && q.y < vy + vh) {
         const sx = fpAnchorX(mirrored, vx, vw, q.x);
-        const speed = Math.hypot(view.ball.vel.x, view.ball.vel.y, view.ball.vel.z);
         const fs = PPD.TTG.clamp(0.045 * q.s, 9, 12);
-        fpBallReadout(ctx, sx + Math.max(16, 0.05 * q.s), q.y - Math.max(18, 0.06 * q.s), speed, view.ball.spin, fs);
+        fpBallReadout(ctx, sx + Math.max(16, 0.05 * q.s), q.y - Math.max(18, 0.06 * q.s), view.ball.spin, fs);
         ctx.beginPath();
         ctx.arc(sx, q.y, Math.max(7, 0.035 * q.s), 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(235,246,255,0.28)';
