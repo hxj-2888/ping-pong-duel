@@ -32,6 +32,14 @@
 | 部署 | `npm run deploy:all`（先 DO Worker 再 Pages） |
 | 文档死链 | `node tools/check-docs.cjs` |
 
+### PowerShell 7（强制）
+
+- **只在需要调用命令行时使用**：能用专用工具、API 或直接编辑完成的操作，直接用对应工具，不要为了用命令行而用命令行。
+- 需要调用命令行时，统一用 **PowerShell 7**：`pwsh` / `pwsh.exe`；**不要用 Windows PowerShell 5.1**（`powershell.exe`）。
+- 默认不用 Git Bash / `cmd.exe`；仅当项目脚本明确依赖 POSIX 工具且无法用 PowerShell 等价实现时，先说明原因再使用。
+- 多行脚本写成临时 `.ps1`，用 `pwsh -NoProfile -File` 调用；环境变量用 `$env:VAR='...'`，路径含空格时加引号。
+- 校验：`pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'` 应输出 7.x（本机 7.6.5），不是 5.1。
+
 ### 什么算"绿"
 
 - `npm run test:all` **32 项全过，零失败**（2026-10-28 起；此前长期存在的两项失败已修，见下）。
