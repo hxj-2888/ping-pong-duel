@@ -1,0 +1,17 @@
+# 乒乓对决联机 DO 宿主 Worker：game-room
+# 定义/托管 GameRoom Durable Object（Pages 项目通过 script_name 绑定，见 wrangler.toml）
+# 部署：wrangler deploy --config wrangler.room.toml
+# 本地调试（独立验证 DO）：wrangler dev --config wrangler.room.toml --port 8789
+name = "game-room"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# 全局游戏房间 DO：所有连接进入 idFromName('global') 单实例，内部维护 rooms Map
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+# 免费档仅支持 SQLite 后端（new_sqlite_classes）
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]

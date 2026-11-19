@@ -1,0 +1,13 @@
+# 乒乓对决 Cloudflare Pages 配置（高级模式 _worker.js）
+# 静态页面 + WebSocket 联机；DO 类托管在独立 Worker "game-room"（见 wrangler.room.toml）
+# 部署：wrangler deploy --config wrangler.room.toml && wrangler pages deploy public
+# 本地调试：wrangler pages dev public --port 8788
+name = "ping-pong-duel"
+pages_build_output_dir = "public"
+compatibility_date = "2026-01-01"
+
+# 绑定 game-room Worker 的全局游戏房间 DO（内部网络访问，不经过公网 workers.dev）
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+script_name = "game-room"

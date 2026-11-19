@@ -1,0 +1,485 @@
+/* ============================================================
+ * room-core.js — 房间核心逻辑（纯逻辑，不依赖 Cloudflare 运行时）
+ * 镜像本地 server.js 的房间逻辑：create/join/in/rematch/ping、
+ * 消息驱动模拟、快照广播、断线通知。
+ * GameRoom Durable Object（room.js）薄包装委托本类。
+ * 本模块可在 Node 中直接测试（test/do-smoke.js）。
+ * ============================================================ */
+'use strict';
+
+import TT from './engine.js';
+
+const TICK_HZ = 60; // 物理模拟固定步长：不要调小！
+// 调低会破坏发球/碰撞判定（引擎 step 内部把 dt clamp 到 0.05：TICK_HZ=10 时每步只推进 0.05s，
+// 引擎时间只剩 0.5x 慢动作，且 0.1s 大步长下台面碰撞/发球合法性校验失准——公网"进房卡死/发不出球"的直接原因）。
+// 节省 CPU 靠的是下面的广播节流，而不是降低物理步长。
+const BROADCAST_HZ = 20; // 快照广播速率：物理仍 60Hz 内部步进，广播节流到 20Hz（省带宽/CPU）。
+// 20Hz 是公网手感的关键：插值窗口 50ms、对手渲染更平滑；CPU 开销远低于输入消息量，实测无压力。
+// 客户端 net.js 用实测帧间隔（interpGap）自适应插值滞后，无需与 BROADCAST_MS 硬同步。
+const BROADCAST_MS = 1000 / BROADCAST_HZ; // v2.7.0-fix:50ms：相邻快照间隔（原注释误写 100ms），客户端据此插值平滑
+const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混 I/L/O/0/1
+
+// 审计 M2(2026-08-29):房间总数上限。全局单 DO(idFromName('global'))承载全部房间，
+// 每个房间持有 engine 对象并每 2s 全量序列化进 DO storage；rooms 原本无容量上限，
+// 攻击者用多 IP/多连接持续 create 即可撑爆单 DO 的内存与存储配额，
+// 影响所有在线对局（全局单实例放大了危害）。正常并发远低于此（2 人 1 房），500 留足余量。
+const MAX_ROOMS = 500;
+
+// 审计 M4(2026-08-29):联机玩家名过滤，与本地 server.js / room.js 的 sanitizeRecord 对齐。
+// 名字随 room / state 广播给对手；HUD 用 textContent 渲染（当前安全），
+// 但不清洗等于把 XSS 载荷存下来广播，未来渲染方式一改就会被引爆。
+function sanitizeName(s, fallback) {
+  return String(s || fallback).replace(/[<>]/g, '').slice(0, 12);
+}
+
+// 校验并规整客户端上报的装扮(联机皮肤同步):只接受白名单 id,防注入。
+// v2.1 特效分离:装扮仅 尾影/溅射 特效;球衣与拍面恒=队服(旗帜队色),球拍/上衣装扮已删除
+function sanitizeSkin(s) {
+  if (!s || typeof s !== 'object') return null;
+  const ok = { trail: null, splash: false };
+  if (typeof s.trail === 'string' && /^(yellow|black|red)$/.test(s.trail)) ok.trail = s.trail;
+  ok.splash = !!s.splash;
+  return ok;
+}
+
+export class RoomCore {
+  constructor() {
+    this.rooms = new Map(); // code -> { engine, clients:[ws|null,ws|null], names:[,], lastSnap, lastStep }
+  }
+
+  // 时间源（默认 Date.now；测试可覆写 RoomCore._clock 为可推进的假时钟，
+  // 保证消息驱动步进在同步 feed 下也按真实 60Hz 间隔推进、测试确定性）
+  _now() { return RoomCore._clock ? RoomCore._clock() : Date.now(); }
+
+  // ---------- 消息处理 ----------
+  handleMessage(ws, rawOrMsg, att) {
+    let msg = rawOrMsg;
+    if (typeof rawOrMsg === 'string') {
+      try { msg = JSON.parse(rawOrMsg); } catch (e) { return; }
+    } else if (rawOrMsg instanceof ArrayBuffer || rawOrMsg instanceof Uint8Array) {
+      try { msg = JSON.parse(new TextDecoder().decode(rawOrMsg)); } catch (e) { return; }
+    }
+    if (!msg || typeof msg !== 'object') return;
+    if (!att) att = {};
+    this._notes = []; // 本消息产生的诊断事件（重挂/接管/清扫），由 room.js 记录到 diag
+    // DO 驱逐恢复后，旧连接靠持久化的 attachment（room/side）重挂回席位。
+    // 幂等规则：仅当席位无存活连接（空/已关闭/静默超时）时才接管，
+    // 避免"旧连接复活"把重连后的新连接顶掉（重连走 handleJoin 的 side 接管路径）。
+    if (att.room) {
+      const r = this.rooms.get(att.room);
+      if (r && att.side >= 0) {
+        const now = this._now();
+        const cur = r.clients[att.side];
+        if (cur === ws) {
+          // 同一连接：仅刷新活跃时刻
+          r.lastSeen[att.side] = now;
+        } else if (!cur || cur.readyState !== 1 || now - r.lastSeen[att.side] > 20000) {
+          const wasNull = !cur;
+          if (cur) { try { cur.close(4000, 'replaced'); } catch (e) { /* ignore */ } }
+          r.clients[att.side] = ws;
+          // 席位曾被断线清扫器释放过：按 attachment 重新占回（含名字）
+          if (!r.slots[att.side]) {
+            r.slots[att.side] = true;
+            r.names[att.side] = r.names[att.side] || att.name || '';
+          }
+          r.lastSeen[att.side] = now;
+          this._notes.push('重挂 room=' + r.code + ' side=' + att.side);
+          // 满员 + 本次重挂填补了空席位：向双方已挂载连接补发 room wait:false，
+          // 让双方（驱逐后可能互为孤儿）同时进入对局，不再依赖各自下一次心跳
+          if (wasNull && r.slots[0] && r.slots[1]) {
+            for (let i = 0; i < 2; i++) {
+              if (r.clients[i]) this.send(r.clients[i], { t: 'room', code: r.code, side: i, name: r.names[i] || '', wait: false });
+            }
+          }
+        }
+      }
+    }
+    if (msg.t === 'create') this.handleCreate(ws, msg, att);
+    else if (msg.t === 'join') this.handleJoin(ws, msg, att);
+    else if (msg.t === 'ping') this.send(ws, { t: 'pong', st: Date.now() });
+    else if (att.room && msg.t === 'in') {
+      const room = this.rooms.get(att.room);
+      if (room && att.side >= 0) {
+        // v2.7.0-fix:输入帧序号（per-connection 水印挂在 ws 上）：丢弃乱序/重放帧
+        //（仍走下方 stepRoom 推进引擎）；无 seq 的旧客户端照常处理（兼容）
+        let stale = false;
+        if (typeof msg.seq === 'number') {
+          const last = ws._inSeq || 0;
+          if (msg.seq <= last) stale = true;
+          else ws._inSeq = msg.seq;
+        }
+        if (!stale) {
+          // 输入位掩码 k（客户端压缩：8 键 → 1 数，位 0=l 1=r 2=pu 3=sm 4=f 5=b 6=crouch 7=run）；
+          // 兼容旧客户端发 i 对象（未升级端仍可玩）
+          let l = 0, r = 0, f = 0, b = 0, pu = 0, sm = 0, c = 0, rn = 0;
+          if (typeof msg.k === 'number') {
+            l = (msg.k & 1) ? 1 : 0;
+            r = (msg.k & 2) ? 1 : 0;
+            pu = (msg.k & 4) ? 1 : 0;
+            sm = (msg.k & 8) ? 1 : 0;
+            f = (msg.k & 16) ? 1 : 0;
+            b = (msg.k & 32) ? 1 : 0;
+            c = (msg.k & 64) ? 1 : 0;
+            rn = (msg.k & 128) ? 1 : 0;
+          } else {
+            const i = msg.i || {};
+            l = i.l ? 1 : 0; r = i.r ? 1 : 0; f = i.f ? 1 : 0; b = i.b ? 1 : 0;
+            pu = i.pu ? 1 : 0; sm = i.sm ? 1 : 0; c = i.c ? 1 : 0; rn = i.rn ? 1 : 0;
+          }
+          TT.setInput(room.engine, att.side, {
+            l, r, f, b, pu, sm,
+            lb: c && pu, // 蹲下+推球 = 高吊（推球进阶技巧，服务端推导，无需新按键）
+            crouch: c, run: rn,
+          });
+          room.lastInputAt[att.side] = this._now(); // v2.7.0-fix:输入超时判定的最后输入时刻（stale 帧不刷新）
+          // 鼠标/手指瞄准：目标落点（世界坐标）随输入帧上报，服务端求解发球方案并随快照返回
+          if (Array.isArray(msg.a) && msg.a.length === 2) {
+            const ax = Number(msg.a[0]), az = Number(msg.a[1]);
+            if (Number.isFinite(ax) && Number.isFinite(az)) {
+              TT.setServeAim(room.engine, att.side, ax, az);
+            }
+          }
+        }
+      }
+    } else if (att.room && msg.t === 'ready') {
+      // 〔2026-10-25 双哨子〕配对后的准备：一方吹哨 → 广播 ready；双方都吹 → 广播 start 开局。
+      // readyStarted 后不再处理（重连走 state 快照路径，不回准备视图）。
+      const rroom = this.rooms.get(att.room);
+      if (rroom && att.side >= 0 && !rroom.readyStarted) {
+        rroom.ready[att.side] = true;
+        this.broadcast(rroom, { t: 'ready', side: att.side });
+        if (rroom.ready[0] && rroom.ready[1] && rroom.slots[0] && rroom.slots[1]) {
+          rroom.readyStarted = true;
+          this.broadcast(rroom, { t: 'start' });
+        }
+      }
+    } else if (att.room && msg.t === 'rematch') {
+      const room = this.rooms.get(att.room);
+      if (room && room.engine.phase === 'over') {
+        TT.resetMatch(room.engine);
+        this.broadcast(room, { t: 'rematch' });
+      }
+    }
+    // 每次消息后推进引擎并广播（消息驱动 tick，替代 setInterval）
+    if (att.room) this.stepRoom(this.rooms.get(att.room));
+    return this._notes;
+  }
+
+  // ---------- 房间逻辑（镜像 server.js） ----------
+  // 审计 #13:create/join 限速(镜像本地 server.js rateLimited):按连接滚动 60s 窗口,
+  // create ≤8 次 / join ≤30 次,超限拒绝——正常客户端(含断线重连、本地测试)远低于此,
+  // 枚举房间码/刷房占 DO 存储的行为被挡。驱逐恢复后计数清零,可接受。
+  _rateLimited(ws, kind, limit) {
+    const now = this._now();
+    const rec = ws._rate || (ws._rate = {});
+    rec[kind] = (rec[kind] || []).filter((t) => now - t < 60000);
+    if (rec[kind].length >= limit) return true;
+    rec[kind].push(now);
+    return false;
+  }
+
+  handleCreate(ws, msg, att) {
+    if (att.room) return;
+    if (this._rateLimited(ws, 'create', 8)) { this.send(ws, { t: 'error', e: '操作过于频繁，请稍后再试' }); return; }
+    // 审计 M2:全局房间数达上限直接拒绝新建（防多 IP 持续 create 撑爆单 DO 内存/存储）
+    if (this.rooms.size >= MAX_ROOMS) { this.send(ws, { t: 'error', e: '服务器繁忙，请稍后再试' }); return; }
+    const code = this.newRoomCode();
+    // 审计 #13:碰撞耗尽兜底不再回退固定码 'ABCD'(不查重会被 rooms.set 顶掉活房)——
+    // 返回 null 时报错重试。50 次碰撞概率≈0,纯防御性分支。
+    if (!code) { this.send(ws, { t: 'error', e: '创建失败，请重试' }); return; }
+    const room = {
+      code,
+      engine: TT.createEngine(),
+      slots: [false, false], // 已占用席位（持久化，驱逐恢复后据此分配/判满）
+      ready: [false, false], // 〔2026-10-25 双哨子〕配对后的准备状态（开局前使用）
+      readyStarted: false,   // 双方已 ready 且已广播 start（此后不再走准备流程）
+      clients: [null, null],
+      names: ['', ''],
+      lastSnap: '',
+      lastStep: Date.now(), // P2-1：初始为当前时刻——旧值 0 会让首次 stepRoom 把 (now-0) 累进 accTime 并补 0.5s/30 帧（开局引擎时间快进半秒，与注释不符）；改为从当前时刻起算，首拍即按真实经过步进
+      lastSeen: [Date.now(), Date.now()], // 每席位最近消息时刻（Alarm 断线清扫依据）
+      lastInputAt: [Date.now(), Date.now()], // v2.7.0-fix:每席位最后输入时刻（1s 输入超时清零依据，与 server.js 对齐）
+      lastBroadcastAt: 0, // 最近广播时刻（Alarm 兜底广播依据，保证 ≥2Hz 数据流）
+      skins: [null, null], // 联机皮肤同步(v2.0):双方装配的装扮,随 room/state 广播给对手
+    };
+    room.slots[0] = true;
+    room.clients[0] = ws;
+    room.names[0] = sanitizeName(msg.name, '玩家1');
+    room.lastSeen[0] = this._now();
+    room.skins[0] = sanitizeSkin(msg.skin);
+    this.setAtt(ws, { room: code, side: 0, name: room.names[0] });
+    this.rooms.set(code, room);
+    this.broadcast(room, { t: 'room', code, side: 0, name: room.names[0], wait: true, skins: room.skins });
+    this.stepRoom(room);
+  }
+
+  handleJoin(ws, msg, att) {
+    if (att.room) return;
+    if (this._rateLimited(ws, 'join', 30)) { this.send(ws, { t: 'error', e: '操作过于频繁，请稍后再试' }); return; }
+    const code = String(msg.room || '').toUpperCase().trim();
+    const room = this.rooms.get(code);
+    if (!room) { this.send(ws, { t: 'error', e: '房间不存在' }); return; }
+    const now = this._now();
+    // 带 side 提示（客户端重连夺回原席位）：优先复用自己的旧席位——
+    // 仅当该席位当前无存活连接（空/已关闭/静默超时）时允许，安全不顶掉在线对手。
+    let side = room.slots[0] ? 1 : 0;
+    const hint = Number(msg.side);
+    if (hint === 0 || hint === 1) {
+      const cur = room.clients[hint];
+      const curDead = !cur || cur.readyState !== 1 || (now - room.lastSeen[hint] > 20000);
+      if (curDead) {
+        side = hint;
+        if (this._notes) this._notes.push('join 夺回 room=' + code + ' side=' + side);
+      } else {
+        this.send(ws, { t: 'error', e: '房间已满' }); return;
+      }
+    } else if (room.slots[0] && room.slots[1]) {
+      this.send(ws, { t: 'error', e: '房间已满' }); return;
+    }
+    const name = sanitizeName(msg.name, '玩家2');
+    room.slots[side] = true;
+    // 接管被判定为已死的旧连接：主动关闭，避免其后续消息重新挂载干扰
+    if (room.clients[side] && room.clients[side] !== ws) {
+      try { room.clients[side].close(4000, 'replaced'); } catch (e) { /* ignore */ }
+    }
+    room.clients[side] = ws;
+    room.names[side] = name;
+    room.lastSeen[side] = now;
+    room.skins[side] = sanitizeSkin(msg.skin); // 联机皮肤同步(v2.0)
+    this.setAtt(ws, { room: code, side, name });
+    // 〔2026-10-25 双哨子〕已开局房间（readyStarted）：join 响应带 started，客户端跳过准备视图
+    // 仅 1 人在房时为等待态（wait:true）——覆盖"房主重连到空房/对手离开后只剩一人"，
+    // 让该客户端回到等待面板而不是孤身进入对局
+    const waiting = !(room.slots[0] && room.slots[1]);
+    this.broadcast(room, { t: 'room', code, side, name, wait: waiting, skins: room.skins, started: room.readyStarted });
+    this.stepRoom(room);
+  }
+
+  newRoomCode() {
+    const buf = new Uint32Array(1);
+    for (let tries = 0; tries < 50; tries++) {
+      let code = '';
+      for (let i = 0; i < 4; i++) {
+        crypto.getRandomValues(buf);
+        code += CHARS[buf[0] % CHARS.length];
+      }
+      if (!this.rooms.has(code)) return code;
+    }
+    // 审计 #13:50 次碰撞后不回退固定码 'ABCD'(不查重会顶掉活房),由 handleCreate 报错重试
+    return null;
+  }
+
+  // ---------- 模拟推进 + 快照广播（消息驱动，按真实时间差追赶固定步长） ----------
+  // 与本地 server.js（60Hz setInterval 恒定步进）保持一致：无论消息多稀疏/密集，
+  // 都按真实时间差拆成 1/60 固定步长推进，物理稳定 60Hz、游戏时间不落后于墙钟。
+  // 原先"clamp 单帧"的问题：消息间隔 >50ms 时 dt 被压到 0.05 → 游戏时间比真实慢
+  // （球速变慢、操作延迟——公网联机"能进但很卡"的直接原因）。
+  stepRoom(room) {
+    if (!room) return;
+    const now = this._now();
+    const step = 1 / TICK_HZ; // 固定 60Hz 步长（与本地 server.js 一致）
+    // 累计器：把"距上次调用的真实经过时间"累积起来，凑满一帧才步进。
+    // 消息驱动下同一时间窗口会被多次调用（2 客户端各 60Hz 输入 + Alarm 每 50ms），
+    // 绝不能"每消息至少一帧"——那会把游戏时间跑成 2 倍速（双方操作越快游戏越快）。
+    // 累计器保证游戏时间始终贴近墙钟 1x：无论消息多密集/稀疏都按真实时间差推进。
+    // v2.7.1-fix:人满前冻结引擎推进（问题3：开房间等待期就开始比赛）。
+    // 仅 1 人在房（等待对手）时不推进物理、不累时间——避免等待期引擎空转触发发球/计时，
+    // 对手加入时引擎仍停在开局状态，双方从同一起跑线开始。仍重置 lastStep/accTime，
+    // 保证人满后从当前时刻起算（不补等待期的"欠账"）。
+    const full = room.slots[0] && room.slots[1];
+    if (!full) {
+      room.lastStep = now;
+      room.accTime = 0;
+    } else {
+      // v2.7.0-fix:追赶上限 0.5s→2.0s——断流/卡顿 >0.5s 后游戏时间不再永久落后墙钟
+      //（恢复后最多一次补齐 2s，避免极端情况下瞬间追赶爆炸）
+      room.accTime = Math.min(2.0, (room.accTime || 0) + (now - room.lastStep) / 1000);
+      room.lastStep = now;
+      // 上限：长时间无消息（DO 休眠/网络中断）只追 2.0s，避免恢复时瞬间追赶爆炸
+      let n = 0;
+      while (room.accTime >= step && n < 60) {
+        TT.step(room.engine, step);
+        room.accTime -= step;
+        n++;
+      }
+    }
+    // 快照广播节流：物理仍 60Hz 步进，但快照最多每 BROADCAST_MS（20Hz=50ms）发一次。
+    // 省 3 倍带宽/序列化 CPU（相对 60Hz）；客户端对相邻快照做插值平滑（见 render.js 的 interp 逻辑）。
+    // 空闲期由 Alarm 每 50ms 调用本函数，广播保 20Hz 地板（ALARM_MS=50，v2.7.0-fix 恢复），足够看门狗判定与等待面板刷新。
+    if (now - room.lastBroadcastAt >= BROADCAST_MS) {
+      const snap = TT.snapshot(room.engine);
+      const data = JSON.stringify({ t: 'state', s: snap, n: room.names, my: -1, skins: room.skins });
+      room.lastSnap = data;
+      room.lastBroadcastAt = now;
+      for (const c of room.clients) if (c) this.send(c, data);
+    }
+    // v2.7.0-fix:输入超时（与 server.js 对齐）——客户端静默 >1s 未发输入 → 清零该席位输入
+    //（防蹲姿/移动残留：断线、后台 rAF 冻结、keyup 丢失等场景，服务器不再保持陈旧姿态广播给对手）
+    for (let i = 0; i < 2; i++) {
+      if (room.slots[i] && room.clients[i] && now - (room.lastInputAt[i] || now) > 1000) {
+        TT.setInput(room.engine, i, { l: 0, r: 0, f: 0, b: 0, pu: 0, sm: 0, lb: 0, crouch: 0, run: 0 });
+        room.lastInputAt[i] = now;
+      }
+    }
+    // 双方都空则删房
+    if (!room.slots[0] && !room.slots[1]) this.rooms.delete(room.code);
+  }
+
+  // ---------- Alarm 兜底：推进 + 断线清扫（配合 room.js 的 alarm 定时调用） ----------
+  // 消息驱动 tick 在"客户端停发消息"时会停摆（半死连接/后台节流/DO 驱逐），
+  // Alarm 每拍调用本组方法：推进物理、兜底广播（20Hz 地板）、清理死连接与僵尸席位。
+
+  // 释放某席位（断线事件丢失后的僵尸占位）：清空并通知对手
+  freeSlot(room, side, now) {
+    room.slots[side] = false;
+    room.names[side] = '';
+    room.clients[side] = null;
+    room.lastSeen[side] = now;
+    const otherIdx = room.slots[0] ? 0 : (room.slots[1] ? 1 : -1);
+    const other = otherIdx >= 0 ? room.clients[otherIdx] : null;
+    if (other) {
+      this.send(other, { t: 'peer_left', side });
+      const snap = TT.snapshot(room.engine);
+      const att2 = this.getAtt(other) || {};
+      this.send(other, { t: 'state', s: snap, n: room.names, my: att2.side });
+    }
+  }
+
+  // 断线清扫（每拍 Alarm 调用）：
+  // - 断线宽限到期：连接已摘除（clients[i]===null）且 lastSeen 超过 15s 未重挂 → 释放席位并通知对手；
+  // - 静默 >15s 的存活连接 → 主动关闭（触发客户端重连/提示）；
+  // - 占位但无消息 >30s 的僵尸席位 → 直接释放（驱逐期 close 丢失的兜底）。
+  // 返回 { closed, freed } 供 room.js 记录诊断日志。
+  sweepStale(now) {
+    const res = { closed: [], freed: [] };
+    for (const [code, room] of this.rooms) {
+      for (let i = 0; i < 2; i++) {
+        if (!room.slots[i]) continue;
+        const ws = room.clients[i];
+        if (now - room.lastSeen[i] > 30000) {
+          // 超 30s 无消息：关连接（若还在）并直接释放席位
+          if (ws && ws.readyState === 1) { try { ws.close(4000, 'idle timeout'); } catch (e) { /* ignore */ } }
+          this.freeSlot(room, i, now);
+          res.freed.push(code + '#' + i);
+        } else if (!ws && now - room.lastSeen[i] > 15000) {
+          // 断线宽限期（15s）到期仍未重挂：释放席位并通知对手
+          this.freeSlot(room, i, now);
+          res.freed.push(code + '#' + i);
+        } else if (ws && now - room.lastSeen[i] > 15000) {
+          // 静默 15s 的存活连接：先关连接，席位由 handleClose 进入宽限或下一轮 30s 清理
+          try { ws.close(4000, 'idle timeout'); } catch (e) { /* ignore */ }
+          res.closed.push(code + '#' + i);
+        }
+      }
+    }
+    // 清空房（宽限到期释放/双方都断线后的兜底）
+    for (const [code, room] of this.rooms) {
+      if (!room.slots[0] && !room.slots[1]) this.rooms.delete(code);
+    }
+    return res;
+  }
+
+  // Alarm 每拍调用：清扫 + 推进所有房间 + 兜底广播（10Hz 地板由 stepRoom 内部保证）。
+  // 返回 { alive: 剩余房间数, notes: 诊断事件 }，room.js 据此续期 Alarm / 写 diag。
+  tickAll(now) {
+    const sweep = this.sweepStale(now);
+    this._notes = [];
+    for (const room of this.rooms.values()) {
+      this.stepRoom(room); // 内含 20Hz 广播地板
+    }
+    // stepRoom/broadcast 可能已删空房，兜底清理
+    for (const [code, room] of this.rooms) {
+      if (!room.slots[0] && !room.slots[1]) this.rooms.delete(code);
+    }
+    if (sweep.closed.length || sweep.freed.length) {
+      this._notes.push('alarm 清扫 closed=[' + sweep.closed.join(',') + '] freed=[' + sweep.freed.join(',') + ']');
+    }
+    return { alive: this.rooms.size, notes: this._notes };
+  }
+
+  // ---------- 断线处理（重连宽限期） ----------
+  // 断线不立即释放席位、不通知对手"已离开"：先进入重连宽限期（席位保留、名字保留），
+  // 玩家在宽限期内重连（重挂/join 接管）则对局无缝恢复；宽限到期（sweepStale）才
+  // 释放席位并通知对手——避免一次网络抖动就把整局打崩成"对手已离开"。
+  handleClose(ws, att) {
+    const codeStr = att && att.room;
+    if (!codeStr) return;
+    const room = this.rooms.get(codeStr);
+    if (!room) return;
+    // 优先用 attachment 里的 side（驱逐恢复后 clients 可能还是 null，indexOf 找不到）
+    const idx = att.side >= 0 ? att.side : room.clients.indexOf(ws);
+    // 幂等：只有当前占位确实是本连接才摘除——避免"被夺回/重连替换的旧连接"close 时
+    // 摘掉新连接的席位（重连/夺回路径见 handleJoin 与 handleMessage 的重挂块）
+    if (idx >= 0 && room.clients[idx] === ws) {
+      room.clients[idx] = null;
+      // slots/names 保留；宽限期从断线时刻起算（sweepStale 按 lastSeen 判定）
+      room.lastSeen[idx] = Date.now();
+    }
+    // 宽限期内不删房、不发 peer_left；到期后的清理与通知交给 sweepStale
+  }
+
+  // ---------- 持久化（DO 驱逐恢复） ----------
+  // 序列化所有房间（不含 WebSocket 引用；席位占用用 slots 记录）。
+  serialize() {
+    const arr = [];
+    for (const room of this.rooms.values()) {
+      arr.push({
+        code: room.code,
+        engine: room.engine,
+        slots: room.slots,
+        names: room.names,
+        skins: room.skins, // 联机皮肤随房间持久化（restore 不补会丢装扮）
+        lastSnap: room.lastSnap,
+        lastStep: room.lastStep,
+      });
+    }
+    return arr;
+  }
+
+  // 从持久化数据重建房间；clients 置空，等旧连接的下一条消息按 attachment 重挂
+  restore(arr) {
+    this.rooms.clear();
+    const now = this._now();
+    for (const r of arr || []) {
+      if (!r || !r.code || !r.slots || (!r.slots[0] && !r.slots[1])) continue;
+      this.rooms.set(r.code, {
+        code: r.code,
+        engine: r.engine,
+        slots: r.slots,
+        clients: [null, null],
+        names: r.names || ['', ''],
+        // skins 必须兜底初始化：旧格式存档/字段缺失时 handleJoin 写 room.skins[side] 会 TypeError，
+        // 表现为"DO 驱逐恢复后加入房间即失败"（2026-08-29 修复，do-persist 覆盖）
+        skins: r.skins || [null, null],
+        lastSnap: r.lastSnap || '',
+        lastStep: r.lastStep || 0,
+        lastSeen: [now, now], // 从当前时刻起算活跃：避免清扫器误杀恢复中的孤儿连接
+        lastInputAt: [now, now], // v2.7.0-fix:恢复后输入超时从当前时刻起算（等旧连接重挂补发输入）
+        lastBroadcastAt: 0,   // 恢复后立即允许兜底广播（首拍即补发快照）
+      });
+    }
+  }
+
+  // ---------- 发送工具（子类可覆写以适配 DO WebSocket） ----------
+  send(ws, data) {
+    try {
+      if (ws && ws.readyState === 1) { // WebSocket.OPEN
+        ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  broadcast(room, msg) {
+    const data = JSON.stringify(msg);
+    for (const c of room.clients) if (c) this.send(c, data);
+  }
+
+  // 连接附加状态（子类可覆写：DO 用 serializeAttachment）
+  setAtt(ws, att) {
+    if (ws && ws.serializeAttachment) ws.serializeAttachment(att);
+  }
+  getAtt(ws) {
+    if (ws && ws.deserializeAttachment) return ws.deserializeAttachment() || {};
+    return {};
+  }
+}
